@@ -26,6 +26,20 @@ function toast(message, kind = 'info') {
   toastTimer = setTimeout(() => { el.hidden = true; }, 5000);
 }
 
+const ERROR_KEYS = {
+  invalid_credentials: 'auth.errCredentials',
+  invalid_code: 'auth.errCode',
+  challenge_expired: 'auth.errExpired',
+  locked: 'auth.errLocked',
+};
+
+function describe(error) {
+  const key = ERROR_KEYS[error.code];
+  if (!key) return error.message;
+  const minutes = Math.ceil((error.retryInSeconds || 0) / 60);
+  return t(key, { minutes });
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     credentials: 'same-origin',
@@ -36,7 +50,12 @@ async function api(path, options = {}) {
   const payload = response.headers.get('content-type')?.includes('application/json')
     ? await response.json()
     : {};
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(payload.error || `HTTP ${response.status}`);
+    error.code = payload.code;
+    error.retryInSeconds = payload.retryInSeconds;
+    throw error;
+  }
   return payload;
 }
 
@@ -63,10 +82,7 @@ function renderLogin() {
         <input class="inp" name="username" autocomplete="username" autofocus required></label>
       <label class="fld"><span class="fld-l">${t('auth.password')}</span>
         <input class="inp" name="password" type="password" autocomplete="current-password" required></label>
-      <label class="fld"><span class="fld-l">${t('auth.code')}</span>
-        <input class="inp" name="token" inputmode="numeric" autocomplete="one-time-code"
-               placeholder="${t('auth.codePlaceholder')}"></label>
-      <button class="btn primary" type="submit">${t('auth.signIn')}</button>
+      <button class="btn primary" type="submit">${t('auth.continue')}</button>
     </form>`;
   id('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -76,10 +92,48 @@ function renderLogin() {
     button.disabled = true;
     try {
       const result = await api('/api/auth/login', { method: 'POST', body: data });
-      window.location.href = result.totpEnrolmentRequired ? '/setup' : '/';
+      // The password alone never opens a session: either the account still has
+      // to enrol a second factor, or a code is required now.
+      if (result.step === 'otp') renderLoginCode(result.username);
+      else window.location.href = result.totpEnrolmentRequired ? '/setup' : '/';
     } catch (error) {
-      showError(error.message);
+      showError(describe(error));
       button.disabled = false;
+    }
+  });
+}
+
+function renderLoginCode(username) {
+  card().innerHTML = `${header(t('auth.totpTitle'), t('auth.otpSubtitle', { name: username }), 'shield-check')}
+    <div class="auth-err" id="auth-error" hidden></div>
+    <form class="dlg" id="code-form">
+      <label class="fld"><span class="fld-l">${t('auth.code')}</span>
+        <input class="inp" name="token" inputmode="numeric" autocomplete="one-time-code"
+               placeholder="${t('auth.codePlaceholder')}" autofocus required></label>
+      <button class="btn primary" type="submit">${t('auth.verify')}</button>
+      <button class="btn ghost" type="button" id="other-account">${t('auth.otherAccount')}</button>
+    </form>`;
+  id('other-account').addEventListener('click', async () => {
+    await api('/api/auth/login/cancel', { method: 'POST' }).catch(() => {});
+    renderLogin();
+  });
+  id('code-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    showError('');
+    const data = Object.fromEntries(new FormData(event.target));
+    const button = event.target.querySelector('button');
+    button.disabled = true;
+    try {
+      await api('/api/auth/login/verify', { method: 'POST', body: data });
+      window.location.href = '/';
+    } catch (error) {
+      showError(describe(error));
+      // An expired challenge cannot be retried: send the user back to step one.
+      if (error.code === 'challenge_expired') setTimeout(renderLogin, 1800);
+      else {
+        button.disabled = false;
+        event.target.token.select();
+      }
     }
   });
 }

@@ -26,9 +26,10 @@ reaches the browser, and no request goes out to a service you did not enable.
   directly on the page. Folders group shortcuts behind a modal.
 - **Server-side configuration** — the same dashboard on every device; nothing
   lives in browser storage except your light/dark preference.
-- **Native authentication** — username, password (argon2id) and TOTP, with QR
-  enrolment, single-use recovery codes, signed `HttpOnly` session cookies and a
-  temporary lockout after repeated failures. Only the login page is public.
+- **Native authentication** — a two-step sign-in (password, then TOTP) with QR
+  enrolment, single-use recovery codes, argon2id hashing, signed `HttpOnly`
+  session cookies and a temporary lockout after repeated failures. Only the
+  login page is public.
 - **Optional integrations** — weather (Open-Meteo) and GeoRide motorcycle
   tracking. A disabled or unconfigured integration never breaks the page: the
   tile explains what is missing, and the rest of the dashboard carries on.
@@ -213,6 +214,10 @@ glassboard/
 - Passwords are hashed with argon2id; TOTP secrets and integration credentials
   are encrypted with AES-256-GCM.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` over HTTPS.
+- Signing in takes two steps. A correct password opens no session: it issues a
+  single-use challenge, valid five minutes, that grants nothing but the right to
+  present a second factor for that one account. Both steps share the same
+  lockout counter, so the code step cannot be brute-forced either.
 - Every page and every API route requires a session, except the login and
   first-run setup screens.
 - Shortcut URLs are restricted to `http:` and `https:`, in the browser and on

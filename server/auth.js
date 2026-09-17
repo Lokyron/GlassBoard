@@ -12,6 +12,8 @@ import {
 } from './env.js';
 
 export const SESSION_COOKIE = 'glassboard_session';
+export const PENDING_COOKIE = 'glassboard_pending';
+const CHALLENGE_TTL_MINUTES = 5;
 const TOTP_ISSUER = 'Glassboard';
 const TOTP_TOLERANCE_SECONDS = 30; // one time step of drift either way, per RFC 6238 §5.2
 
@@ -209,6 +211,43 @@ export function resolveSession(signedValue) {
   const user = findUserById(session.user_id);
   if (!user) return null;
   return { session, user };
+}
+
+/* --------------------------- login challenges ---------------------------- */
+/* Between the password step and the second-factor step the browser holds a
+   challenge, not a session: it grants nothing but the right to present a code
+   for one specific account, once, within a few minutes. */
+
+export function createChallenge(userId) {
+  const id = randomId(32);
+  const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MINUTES * 60_000).toISOString();
+  db.prepare(
+    'INSERT INTO login_challenges (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'
+  ).run(id, userId, now(), expiresAt);
+  purgeExpiredChallenges();
+  return { id, expiresAt, ttlSeconds: CHALLENGE_TTL_MINUTES * 60 };
+}
+
+export function resolveChallenge(signedValue) {
+  const id = unsign(signedValue);
+  if (!id) return null;
+  const row = db.prepare('SELECT * FROM login_challenges WHERE id = ?').get(id);
+  if (!row) return null;
+  if (new Date(row.expires_at) < new Date()) {
+    destroyChallenge(id);
+    return null;
+  }
+  const user = findUserById(row.user_id);
+  if (!user) return null;
+  return { challenge: row, user };
+}
+
+export function destroyChallenge(id) {
+  if (id) db.prepare('DELETE FROM login_challenges WHERE id = ?').run(id);
+}
+
+export function purgeExpiredChallenges() {
+  db.prepare("DELETE FROM login_challenges WHERE expires_at < datetime('now')").run();
 }
 
 export function sessionCookieOptions(req, maxAgeMs) {

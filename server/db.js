@@ -52,6 +52,15 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_agent TEXT
 );
 
+-- Short-lived proof that the password step succeeded. It is NOT a session:
+-- it only allows presenting a second factor, once, within a few minutes.
+CREATE TABLE IF NOT EXISTS login_challenges (
+  id         TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS login_attempts (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
   bucket  TEXT NOT NULL,
