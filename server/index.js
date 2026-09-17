@@ -38,12 +38,14 @@ app.use((_req, res, next) => {
   res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=()');
   // Tiles and shortcut targets are the only external resources; everything else
   // is served from this origin. Inline styles are required because tile and
-  // shortcut colours are applied through style attributes.
+  // shortcut colours are applied through style attributes. form-action allows
+  // http: as well, because a self-hosted search engine on the LAN is a normal
+  // thing to point the search box at.
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; " +
       "script-src 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'self'; " +
-      "base-uri 'none'; form-action 'self' https:"
+      "base-uri 'none'; form-action 'self' https: http:"
   );
   next();
 });

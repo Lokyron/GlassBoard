@@ -636,6 +636,10 @@ function renderChrome() {
   searchCard.hidden = !config.search.enabled;
   const form = id('search-form');
   form.setAttribute('action', config.search.action || 'https://duckduckgo.com/');
+  // Undefined means "not set yet" on a configuration saved before this option
+  // existed, and a dashboard is meant to stay open: default to a new tab.
+  form.target = config.search.newTab === false ? '_self' : '_blank';
+  form.rel = 'noopener';
   const input = id('search-input');
   input.name = config.search.param || 'q';
   input.placeholder = config.search.placeholder || t('search.placeholder');

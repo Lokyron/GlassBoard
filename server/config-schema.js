@@ -169,6 +169,7 @@ export function validateConfig(input) {
       action: search.action === undefined ? 'https://duckduckgo.com/' : v.url(search.action, 'search.action', { required: false }),
       param: v.str(search.param, 'search.param', { max: 20, fallback: 'q' }) || 'q',
       placeholder: v.str(search.placeholder, 'search.placeholder', { max: 60, fallback: 'Quick search…' }),
+      newTab: v.bool(search.newTab, true),
     },
     tiles: [],
     links: [],

@@ -60,7 +60,8 @@ An import only restores secrets when it is explicitly asked to.
     "enabled": true,
     "action": "https://duckduckgo.com/",
     "param": "q",
-    "placeholder": "Quick search…"
+    "placeholder": "Quick search…",
+    "newTab": true
   },
   "tiles": [
     { "id": "tile-local", "type": "weather-local", "span": 1.1, "settings": { "label": "" } }
@@ -109,6 +110,10 @@ as wide as one with `span: 1`. Accepted range: `0.4` to `4`.
 
 `site.sectionTitle` and `search.placeholder` are labels you can override. Left
 empty, they follow the chosen language instead of being frozen in one.
+
+`search.newTab` sends the query to a new browser tab, which keeps the dashboard
+open behind it. It defaults to `true`, including for a configuration saved
+before the option existed.
 
 ### Links
 

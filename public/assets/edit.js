@@ -465,6 +465,7 @@ function generalPane(draft) {
   pane.appendChild(checkbox(t('set.searchEnabled'), draft.search.enabled, (value) => { draft.search.enabled = value; }));
   pane.appendChild(field(t('set.searchAction'), textInput(draft.search.action, { oninput: (e) => { draft.search.action = e.target.value; } })));
   pane.appendChild(field(t('set.searchParam'), textInput(draft.search.param, { oninput: (e) => { draft.search.param = e.target.value; } })));
+  pane.appendChild(checkbox(t('set.searchNewTab'), draft.search.newTab !== false, (value) => { draft.search.newTab = value; }));
   return pane;
 }
 

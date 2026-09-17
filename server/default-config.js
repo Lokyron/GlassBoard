@@ -19,6 +19,7 @@ export function defaultConfig() {
       action: 'https://duckduckgo.com/',
       param: 'q',
       placeholder: '',
+      newTab: true,
     },
     tiles: [
       { id: 'tile-weather-local', type: 'weather-local', span: 1.1, settings: { label: '' } },
