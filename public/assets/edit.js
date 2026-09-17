@@ -252,7 +252,7 @@ function openTileDialog(index) {
     body.appendChild(field(t('dlg.title'), textInput(tile.settings.heading, { oninput: (e) => { tile.settings.heading = e.target.value; } })));
     const area = el('textarea', { class: 'inp', rows: '4', oninput: (e) => { tile.settings.body = e.target.value; } });
     area.value = tile.settings.body || '';
-    body.appendChild(field('Texte', area));
+    body.appendChild(field(t('dlg.text'), area));
   } else if (tile.type === 'weather-secondary') {
     body.appendChild(field(t('dlg.name'), textInput(tile.settings.name, { oninput: (e) => { tile.settings.name = e.target.value; } })));
     body.appendChild(field('Latitude', textInput(tile.settings.latitude, { type: 'number', step: '0.0001', oninput: (e) => { tile.settings.latitude = Number(e.target.value); } })));
@@ -455,7 +455,7 @@ function generalPane(draft) {
 
   const locale = el('select', { class: 'inp', onchange: (e) => { draft.site.locale = e.target.value; } });
   availableLocales().forEach((code) => {
-    const option = el('option', { value: code, text: code.toUpperCase() });
+    const option = el('option', { value: code, text: localeName(code) });
     if (code === draft.site.locale) option.selected = true;
     locale.appendChild(option);
   });
@@ -634,7 +634,7 @@ function openImportDialog() {
     try {
       payload = JSON.parse(await file.text());
     } catch {
-      toast('Invalid JSON file.', 'error');
+      toast(t('msg.invalidJson'), 'error');
       return;
     }
     try {

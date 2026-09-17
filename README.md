@@ -34,6 +34,9 @@ reaches the browser, and no request goes out to a service you did not enable.
   tile explains what is missing, and the rest of the dashboard carries on.
 - **Backup and restore** — a single versioned JSON file, from the interface or
   from the command line, with automatic snapshots before every import.
+- **Seven interface languages** — English, French, Spanish, German, Italian,
+  Portuguese and Dutch. The dashboard follows the language you pick in the
+  settings; the sign-in screens follow the browser.
 - **Light footprint** — no front-end framework, no build step, no CDN. Two
   vendored libraries, four runtime dependencies, one SQLite file.
 
@@ -216,6 +219,18 @@ glassboard/
   the server, so an imported file cannot inject a `javascript:` link.
 - Losing `APP_SECRET` means losing the sessions and the stored credentials —
   the dashboard configuration itself stays readable.
+
+## Languages
+
+The interface ships in **English (`en`), French (`fr`), Spanish (`es`), German
+(`de`), Italian (`it`), Portuguese (`pt`) and Dutch (`nl`)**. Pick one in
+**Settings → General → Language**; it also drives date and time formatting. The
+login and first-run screens run before any configuration exists, so they follow
+the browser's preferred language instead.
+
+Adding a language is one file: in `public/assets/i18n.js`, add an entry to
+`LOCALE_NAMES` and copy the `en` table. Missing keys fall back to English one by
+one, so a partial translation is perfectly usable — no key ever shows up raw.
 
 ## Credits
 

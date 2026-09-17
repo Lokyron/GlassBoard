@@ -104,6 +104,12 @@ as wide as one with `span: 1`. Accepted range: `0.4` to `4`.
 | `georide` | yes | — (configured under `integrations.georide`) |
 | `note` | no | `heading`, `body` |
 
+`site.locale` selects the interface language and the date/time formatting:
+`en`, `fr`, `es`, `de`, `it`, `pt` or `nl`. An unknown value falls back to `en`.
+
+`site.sectionTitle` and `search.placeholder` are labels you can override. Left
+empty, they follow the chosen language instead of being frozen in one.
+
 ### Links
 
 An entry is either a **shortcut** (it has `url`) or a **folder** (it has

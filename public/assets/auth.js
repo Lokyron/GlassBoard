@@ -14,6 +14,8 @@ try {
   setTheme(true);
 }
 
+setLocale(detectLocale());
+
 let toastTimer = null;
 function toast(message, kind = 'info') {
   const el = id('toast');
@@ -54,17 +56,17 @@ const showError = (message) => {
 /* --------------------------------- login --------------------------------- */
 
 function renderLogin() {
-  card().innerHTML = `${header('Glassboard', 'Sign in to your dashboard', 'lock-key')}
+  card().innerHTML = `${header('Glassboard', t('auth.signInSubtitle'), 'lock-key')}
     <div class="auth-err" id="auth-error" hidden></div>
     <form class="dlg" id="login-form">
-      <label class="fld"><span class="fld-l">Username</span>
+      <label class="fld"><span class="fld-l">${t('auth.username')}</span>
         <input class="inp" name="username" autocomplete="username" autofocus required></label>
-      <label class="fld"><span class="fld-l">Password</span>
+      <label class="fld"><span class="fld-l">${t('auth.password')}</span>
         <input class="inp" name="password" type="password" autocomplete="current-password" required></label>
-      <label class="fld"><span class="fld-l">Authentication code</span>
+      <label class="fld"><span class="fld-l">${t('auth.code')}</span>
         <input class="inp" name="token" inputmode="numeric" autocomplete="one-time-code"
-               placeholder="123456 or a recovery code"></label>
-      <button class="btn primary" type="submit">Sign in</button>
+               placeholder="${t('auth.codePlaceholder')}"></label>
+      <button class="btn primary" type="submit">${t('auth.signIn')}</button>
     </form>`;
   id('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -85,15 +87,15 @@ function renderLogin() {
 /* --------------------------------- setup --------------------------------- */
 
 function renderCreateAccount() {
-  card().innerHTML = `${header('Welcome to Glassboard', 'Create the administrator account', 'user-circle')}
+  card().innerHTML = `${header(t('auth.setupTitle'), t('auth.setupSubtitle'), 'user-circle')}
     <div class="auth-err" id="auth-error" hidden></div>
     <form class="dlg" id="setup-form">
-      <label class="fld"><span class="fld-l">Username</span>
+      <label class="fld"><span class="fld-l">${t('auth.username')}</span>
         <input class="inp" name="username" autocomplete="username" autofocus required></label>
-      <label class="fld"><span class="fld-l">Password</span>
+      <label class="fld"><span class="fld-l">${t('auth.password')}</span>
         <input class="inp" name="password" type="password" autocomplete="new-password" required>
-        <span class="fld-h">At least 12 characters. There is no default account and no default password.</span></label>
-      <button class="btn primary" type="submit">Create account</button>
+        <span class="fld-h">${t('auth.passwordHint')}</span></label>
+      <button class="btn primary" type="submit">${t('auth.createAccount')}</button>
     </form>`;
   id('setup-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -112,16 +114,16 @@ function renderCreateAccount() {
 }
 
 async function renderTotpEnrolment() {
-  card().innerHTML = `${header('Two-factor authentication', 'Scan this code with your authenticator app', 'shield-check')}
+  card().innerHTML = `${header(t('auth.totpTitle'), t('auth.totpSubtitle'), 'shield-check')}
     <div class="auth-err" id="auth-error" hidden></div>
     <div class="auth-steps">
       <div class="qr" id="qr">…</div>
       <div class="secret" id="secret">…</div>
-      <span class="fld-h">Works with Google Authenticator, Aegis, Bitwarden, 1Password and any other TOTP app.</span>
+      <span class="fld-h">${t('auth.totpApps')}</span>
       <form class="dlg" id="totp-form">
-        <label class="fld"><span class="fld-l">Code from the app</span>
+        <label class="fld"><span class="fld-l">${t('auth.totpCode')}</span>
           <input class="inp" name="token" inputmode="numeric" autocomplete="one-time-code" required></label>
-        <button class="btn primary" type="submit">Enable two-factor authentication</button>
+        <button class="btn primary" type="submit">${t('auth.totpEnable')}</button>
       </form>
     </div>`;
   try {
@@ -148,19 +150,19 @@ async function renderTotpEnrolment() {
 }
 
 function renderRecoveryCodes(codes) {
-  card().innerHTML = `${header('Recovery codes', 'Store these somewhere safe — each one works once', 'key')}
+  card().innerHTML = `${header(t('auth.recoveryTitle'), t('auth.recoverySubtitle'), 'key')}
     <div class="codes">${codes.map((code) => `<code>${code}</code>`).join('')}</div>
     <div class="row">
-      <button class="btn ghost" id="copy-codes" type="button">Copy</button>
-      <button class="btn primary" id="go-dashboard" type="button">Open the dashboard</button>
+      <button class="btn ghost" id="copy-codes" type="button">${t('auth.copy')}</button>
+      <button class="btn primary" id="go-dashboard" type="button">${t('auth.openDashboard')}</button>
     </div>
-    <span class="fld-h">If you lose your authenticator, one of these codes lets you sign in again.</span>`;
+    <span class="fld-h">${t('auth.recoveryHint')}</span>`;
   id('copy-codes').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(codes.join('\n'));
-      toast('Recovery codes copied.');
+      toast(t('msg.copied'));
     } catch {
-      toast('Copy failed — select the codes manually.', 'error');
+      toast(t('msg.copyFailed'), 'error');
     }
   });
   id('go-dashboard').addEventListener('click', () => { window.location.href = '/'; });

@@ -9,7 +9,7 @@ export function defaultConfig() {
       title: 'Dashboard',
       subtitle: 'Home',
       greeting: '',
-      sectionTitle: 'Applications & folders',
+      sectionTitle: '',
       locale: 'en',
       clockTimezone: 'UTC',
       clockLabel: 'UTC',
@@ -18,7 +18,7 @@ export function defaultConfig() {
       enabled: true,
       action: 'https://duckduckgo.com/',
       param: 'q',
-      placeholder: 'Quick search…',
+      placeholder: '',
     },
     tiles: [
       { id: 'tile-weather-local', type: 'weather-local', span: 1.1, settings: { label: '' } },

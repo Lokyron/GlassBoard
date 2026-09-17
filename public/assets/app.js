@@ -638,7 +638,7 @@ function renderChrome() {
   form.setAttribute('action', config.search.action || 'https://duckduckgo.com/');
   const input = id('search-input');
   input.name = config.search.param || 'q';
-  input.placeholder = config.search.placeholder || '';
+  input.placeholder = config.search.placeholder || t('search.placeholder');
 }
 
 function renderAll() {
