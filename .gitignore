@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# User data — never versioned
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Exports and backups
+*.glassboard.json
+backups/
+
+# Build / OS noise
+dist/
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Editors
+.vscode/
+.idea/

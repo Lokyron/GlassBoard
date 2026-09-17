@@ -1,0 +1,23 @@
+{
+  "name": "glassboard",
+  "version": "1.0.0",
+  "description": "Self-hosted, live-editable service dashboard with native TOTP authentication and pluggable integrations.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "config:export": "node scripts/config-export.mjs",
+    "config:import": "node scripts/config-import.mjs"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "express": "^5.1.0",
+    "otplib": "^13.5.0",
+    "qrcode": "^1.5.4"
+  }
+}

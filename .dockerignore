@@ -1,0 +1,10 @@
+node_modules
+data
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+docs
+*.log
+*.json.bak

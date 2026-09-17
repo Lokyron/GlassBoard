@@ -1,0 +1,137 @@
+# Configuration and export format
+
+Glassboard stores its whole configuration as a single JSON document. Exports
+wrap that document with a little metadata. Both are versioned independently:
+
+- `formatVersion` — the envelope of an export file. Currently `1`.
+- `version` (inside `config`) — the configuration document itself. Currently `1`.
+
+An instance refuses a file whose `formatVersion` is higher than it understands,
+and migrates older documents forward on import.
+
+## Export envelope
+
+```json
+{
+  "app": "glassboard",
+  "formatVersion": 1,
+  "configVersion": 1,
+  "exportedAt": "2026-01-31T09:12:44.081Z",
+  "containsSecrets": false,
+  "config": { "...": "the document below" },
+  "secrets": null
+}
+```
+
+`app` and `formatVersion` are mandatory — a file without them is rejected.
+
+When exported with secrets, `containsSecrets` is `true`, `secrets` holds the
+credentials **in plain text**, and a `WARNING` field spells out what is inside:
+
+```json
+{
+  "containsSecrets": true,
+  "secrets": {
+    "georide.email": "…",
+    "georide.password": "…",
+    "georide.token": "…"
+  },
+  "WARNING": "This file contains PLAINTEXT credentials (…)."
+}
+```
+
+An import only restores secrets when it is explicitly asked to.
+
+## Configuration document
+
+```json
+{
+  "version": 1,
+  "site": {
+    "title": "Dashboard",
+    "subtitle": "Home",
+    "greeting": "",
+    "sectionTitle": "Applications & folders",
+    "locale": "en",
+    "clockTimezone": "UTC",
+    "clockLabel": "UTC"
+  },
+  "search": {
+    "enabled": true,
+    "action": "https://duckduckgo.com/",
+    "param": "q",
+    "placeholder": "Quick search…"
+  },
+  "tiles": [
+    { "id": "tile-local", "type": "weather-local", "span": 1.1, "settings": { "label": "" } }
+  ],
+  "links": [
+    { "id": "lnk-1", "title": "Router", "url": "http://192.168.1.1/", "color": "#0a84ff", "icon": "wifi-high" },
+    { "id": "fld-1", "title": "Media", "color": "#ea580c", "icon": "folder",
+      "items": [
+        { "id": "sub-1", "title": "Library", "url": "https://example.org/", "color": "#ea580c", "icon": "film-strip" }
+      ] }
+  ],
+  "integrations": {
+    "weather": {
+      "enabled": true,
+      "useBrowserGeolocation": true,
+      "fallback": { "latitude": 48.8566, "longitude": 2.3522 },
+      "reverseGeocoding": true,
+      "refreshMinutes": 30
+    },
+    "georide": {
+      "enabled": false,
+      "trackerId": null,
+      "trackerName": "",
+      "periodDays": 7,
+      "refreshMinutes": 5,
+      "showMap": true
+    }
+  }
+}
+```
+
+### Tiles
+
+`span` is the column weight inside the CSS grid: a tile with `span: 2` is twice
+as wide as one with `span: 1`. Accepted range: `0.4` to `4`.
+
+| `type` | Singleton | `settings` |
+|---|---|---|
+| `weather-local` | yes | `label` |
+| `weather-secondary` | yes | `name`, `latitude`, `longitude`, `timezone` |
+| `georide` | yes | — (configured under `integrations.georide`) |
+| `note` | no | `heading`, `body` |
+
+### Links
+
+An entry is either a **shortcut** (it has `url`) or a **folder** (it has
+`items`), never both. Folders are one level deep. `icon` is a
+[Phosphor](https://phosphoricons.com) name as bundled in
+`public/assets/icons.js` and `icons-extra.js`; an unknown name falls back to a
+generic link icon. `color` must be `#rrggbb`.
+
+`url` must be absolute and use `http:` or `https:`. Anything else is refused.
+
+## Validation
+
+Imports and saves go through the same validator
+(`server/config-schema.js`). It:
+
+- rejects a document that is not an object, or whose `links`/`tiles` are not arrays;
+- drops unknown fields rather than storing them;
+- clamps numbers to their allowed range and reports it;
+- replaces a malformed optional value with a safe default and reports it;
+- fails the whole operation when a required value is unusable — for example a
+  shortcut with a `javascript:` URL.
+
+Errors are returned as a list of `path: problem` strings, so a hand-edited file
+tells you exactly which entry to fix.
+
+## Revisions
+
+Every save appends a revision in the database; the last 20 are kept. They are
+listed at `GET /api/config/revisions` and restored with
+`POST /api/config/revisions/:id/restore` — a safety net for an edit you regret,
+independent of the export files.

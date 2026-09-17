@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%230a84ff'>
+<link rel="stylesheet" href="/assets/vendor/leaflet.css" />
+<link rel="stylesheet" href="/assets/base.css" />
+<link rel="stylesheet" href="/assets/app-extra.css" />
+</head>
+<body>
+<div id="wall"></div><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+
+<div class="topbar glass">
+  <div class="tb-l"><span class="tb-dot"></span><span id="brand-title">Dashboard</span><span class="sep" id="brand-subtitle"></span></div>
+  <div class="tb-c" id="header-date-top">…</div>
+  <div class="tb-r"><span class="tb-clock" id="digital-clock-top">--:--:--</span>
+    <button id="account-toggle" class="iconbtn" aria-label="Account" aria-haspopup="menu" aria-expanded="false"><svg class="i" style="font-size:18px" viewBox="0 0 256 256" fill="currentColor" data-i="user-circle"></svg></button>
+    <button id="theme-toggle-top" class="iconbtn" aria-label="Theme"><svg id="theme-icon" class="i" style="font-size:18px" viewBox="0 0 256 256" fill="currentColor" data-i="moon"></svg></button></div>
+</div>
+
+<div id="account-menu" class="glass" role="menu" hidden>
+  <button class="menu-item" data-action="edit" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="pencil-simple"></svg><span data-t="menu.edit">Edit dashboard</span></button>
+  <button class="menu-item" data-action="settings" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="gear-six"></svg><span data-t="menu.settings">Settings</span></button>
+  <button class="menu-item" data-action="export" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="download-simple"></svg><span data-t="menu.export">Export configuration</span></button>
+  <button class="menu-item" data-action="import" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="upload-simple"></svg><span data-t="menu.import">Import configuration</span></button>
+  <div class="menu-sep"></div>
+  <button class="menu-item" data-action="logout" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="sign-out"></svg><span data-t="menu.logout">Sign out</span></button>
+</div>
+
+<div id="editbar" class="glass" hidden>
+  <span class="editbar-label"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="pencil-simple"></svg><span data-t="edit.mode">Edit mode</span></span>
+  <span class="editbar-hint" data-t="edit.hint">Drag to reorder, use the grip to resize.</span>
+  <button class="btn ghost" id="edit-cancel" data-t="edit.cancel">Cancel</button>
+  <button class="btn primary" id="edit-save" data-t="edit.save">Save</button>
+</div>
+
+<main class="shell">
+  <aside class="sidebar glass rise">
+    <div class="side-head"><div class="brand"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="house"></svg></div>
+      <div><h1 id="greeting">…</h1><p id="header-date">…</p></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="wcard-s" id="search-card"><div class="lbl" data-t="side.search">Search</div>
+      <form class="search" id="search-form" method="get">
+        <svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="magnifying-glass"></svg>
+        <input type="text" id="search-input" name="q" placeholder="" autocomplete="off"></form></div>
+    <div class="wcard-s"><div class="lbl" data-t="side.realtime">Real time</div>
+      <div class="minirow"><div class="minik" data-t="side.time">Time</div><div class="miniv" id="digital-clock">--:--:--</div></div>
+      <div class="minirow" id="alt-clock-row"><div class="minik" id="alt-clock-label"></div><div class="miniv" id="alt-clock">--:--</div></div></div>
+    <div class="wcard-s"><div class="lbl" data-t="side.year">Year progress</div>
+      <div class="year-big" id="year-percent">--%</div>
+      <div class="year-sub"><span data-t="side.day">Day</span> <span id="day-count">--</span> / <span id="total-days">365</span></div>
+      <div class="prog"><div id="year-progress-bar"></div></div></div>
+  </aside>
+
+  <section class="stack" id="overview">
+    <section class="wgrid" id="tiles"></section>
+
+    <section class="apps glass rise" style="animation-delay:.2s" id="apps-section">
+      <div class="apps-head"><h3 id="apps-title">Applications</h3><div class="count" id="apps-count"></div></div>
+      <div id="links-grid" class="links"></div>
+    </section>
+  </section>
+</main>
+
+<div id="weather-modal" class="modal">
+  <div class="sheet glass">
+    <div class="m-head"><div><h3 id="modal-city">City</h3><div class="muted" data-t="wx.detailed">Detailed forecast</div></div><div id="modal-day-selector" class="days"></div></div>
+    <div class="m-body">
+      <div class="wxgrid">
+        <div class="box"><div class="k" id="modal-date-label">Today</div><div class="big"><div class="t" id="modal-temp">--°</div><div class="e" id="modal-icon">☀️</div></div></div>
+        <div class="mini2"><div class="box"><div class="k" data-t="wx.gusts">Wind gusts</div><div class="v"><span id="modal-wind">--</span> <small>km/h</small></div></div>
+          <div class="box" id="modal-rain-box"><div class="k" data-t="wx.rain">Rain</div><div class="v"><span id="modal-rain">--</span> <small>%</small></div></div></div>
+      </div>
+      <div class="cgrid">
+        <div><div class="clab" data-t="wx.temperature">Temperature</div><div class="cbox"><canvas id="modalChartTemp"></canvas></div></div>
+        <div><div class="clab" data-t="wx.rain">Rain</div><div class="cbox"><canvas id="modalChartRain"></canvas></div></div>
+        <div><div class="clab" data-t="wx.wind">Wind</div><div class="cbox"><canvas id="modalChartWind"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="folder-modal" class="modal">
+  <div class="sheet glass" style="width:min(760px,100%)">
+    <div class="m-head"><div class="tb-l"><div id="folder-modal-icon-bg" class="appic" style="width:40px;height:40px;border-radius:12px;font-size:20px"><svg id="folder-modal-icon" class="i" viewBox="0 0 256 256" fill="currentColor" data-i="folder"></svg></div><div><h3 id="folder-modal-title" style="font-size:1.2rem">Folder</h3></div></div>
+      <button class="iconbtn" id="folder-modal-close" aria-label="Close"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="x"></svg></button></div>
+    <div class="m-body"><div id="folder-links-grid" class="links"></div></div>
+  </div>
+</div>
+
+<div id="dialog-modal" class="modal">
+  <div class="sheet glass" style="width:min(620px,100%)">
+    <div class="m-head"><div><h3 id="dialog-title">…</h3><div class="muted" id="dialog-subtitle"></div></div>
+      <button class="iconbtn" id="dialog-close" aria-label="Close"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="x"></svg></button></div>
+    <div class="m-body" id="dialog-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="glass" hidden></div>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+
+<script src="/assets/icons.js"></script>
+<script src="/assets/icons-extra.js"></script>
+<script src="/assets/vendor/leaflet.js"></script>
+<script src="/assets/i18n.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/edit.js"></script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+/* Additions layered on top of the original stylesheet.
+   Everything here is either hidden in read mode or scoped to .editing, so the
+   read-mode rendering is byte-for-byte the original design. */
+
+/* The [hidden] attribute must win over the display values set below. */
+[hidden]{display:none!important}
+
+/* ------------------------------ account menu ----------------------------- */
+#account-menu{position:fixed;top:74px;right:18px;z-index:40;width:236px;padding:7px;border-radius:16px;display:grid;gap:2px}
+.menu-item{display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border-radius:12px;border:1px solid transparent;
+  background:transparent;color:var(--text);font:inherit;font-size:.9rem;font-weight:600;cursor:pointer;text-align:left;
+  transition:background .2s var(--ease)}
+.menu-item:hover{background:var(--surface-strong)}
+.menu-item .i{font-size:17px;color:var(--muted)}
+.menu-sep{height:1px;background:var(--border);margin:5px 8px}
+
+/* -------------------------------- edit bar ------------------------------- */
+#editbar{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:45;display:flex;align-items:center;gap:14px;
+  padding:11px 14px;border-radius:18px}
+.editbar-label{display:flex;align-items:center;gap:9px;font-weight:680;font-size:.9rem}
+.editbar-label .i{font-size:17px;color:var(--primary)}
+.editbar-hint{color:var(--muted);font-size:.82rem}
+@media(max-width:740px){.editbar-hint{display:none}#editbar{left:14px;right:14px;transform:none;justify-content:space-between}}
+
+/* --------------------------------- buttons ------------------------------- */
+.btn{padding:10px 16px;border-radius:13px;border:1px solid var(--border);background:var(--surface-strong);color:var(--text);
+  font:inherit;font-size:.88rem;font-weight:650;cursor:pointer;transition:transform .25s var(--ease),filter .25s}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.55;cursor:default;transform:none}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 8px 20px rgba(10,132,255,.35)}
+.btn.ghost{background:transparent}
+.tinybtn{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--text);
+  border:1px solid var(--border-strong);background:var(--surface-strong);font-size:14px;transition:transform .25s var(--ease)}
+.tinybtn:hover{transform:scale(1.08)}
+.tinybtn.danger{color:#ff453a}
+
+/* ---------------------------------- toast -------------------------------- */
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:86px;z-index:70;padding:12px 18px;border-radius:14px;
+  font-size:.88rem;font-weight:600;max-width:min(540px,92vw)}
+#toast.toast-error{border-color:rgba(255,69,58,.45);color:#ff453a}
+
+/* ------------------------------ GeoRide tile ----------------------------- */
+/* Sized to match the height of the weather tiles, so the tile row keeps the
+   proportions of the original dashboard. */
+.georide .wtop h3{font-size:1.06rem;font-weight:650;margin-top:3px}
+.gr-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;position:relative;z-index:2}
+.gr-stat{min-width:0}
+.gr-stat .k{font-size:.6rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-stat .v{font-size:1.02rem;font-weight:750;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gr-stat .v small{font-size:.66rem;font-weight:600;color:var(--muted)}
+.gr-message{color:var(--muted);line-height:1.55;font-size:.92rem;margin-top:14px;position:relative;z-index:2}
+.gr-map{margin-top:14px;height:74px;border-radius:var(--rmd);overflow:hidden;border:1px solid var(--border);
+  background:var(--surface-soft);position:relative;z-index:2}
+.gr-map-canvas{width:100%;height:100%}
+.gr-map-empty{height:100%;display:grid;place-items:center;color:var(--muted);font-size:.78rem;padding:0 10px;text-align:center}
+.georide .insight-foot{margin-top:13px}
+.gr-pin{display:grid;place-items:center;color:#fff;background:var(--accent);border-radius:50%;font-size:15px;
+  box-shadow:0 6px 16px rgba(10,132,255,.55),inset 0 1px 0 rgba(255,255,255,.4)}
+.leaflet-container{background:var(--surface-soft);font:inherit}
+.leaflet-control-attribution{background:rgba(255,255,255,.6)!important;font-size:8px;padding:0 3px}
+[data-theme="dark"] .leaflet-control-attribution{background:rgba(0,0,0,.45)!important;color:var(--muted)}
+[data-theme="dark"] .leaflet-control-attribution a{color:var(--muted)}
+.map-dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.86) contrast(.92)}
+@media(max-width:1180px){.gr-map{height:150px}}
+
+/* -------------------------------- edit mode ------------------------------ */
+body.editing .app,body.editing .card{cursor:grab}
+body.editing .editable{position:relative;outline:1px dashed var(--border-strong);outline-offset:3px}
+body.editing .editable.dragging{opacity:.45}
+body.editing .editable.drop-target{outline:2px solid var(--primary);outline-offset:3px}
+.tile-edit{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:6}
+body:not(.editing) .tile-edit{display:none}
+.tile-grip{position:absolute;top:50%;right:-9px;transform:translateY(-50%);width:20px;height:44px;border-radius:9px;
+  display:grid;place-items:center;cursor:ew-resize;color:var(--muted);font-size:13px;z-index:6;
+  border:1px solid var(--border-strong);background:var(--surface-strong)}
+body:not(.editing) .tile-grip{display:none}
+.tile-add,.app-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;cursor:pointer;
+  color:var(--muted);font:inherit;font-weight:650;font-size:.86rem;border:1px dashed var(--border-strong);
+  background:transparent;border-radius:var(--rxl);min-height:120px;transition:color .25s,border-color .25s}
+.app-add{border-radius:var(--rlg)}
+.tile-add:hover,.app-add:hover{color:var(--primary);border-color:var(--primary)}
+
+/* --------------------------------- dialogs ------------------------------- */
+.dlg{display:grid;gap:14px}
+.fld{display:grid;gap:6px}
+.fld-l{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+.fld-h{font-size:.8rem;color:var(--muted);line-height:1.5}
+.inp{width:100%;border:1px solid var(--border);background:var(--surface-soft);color:var(--text);border-radius:13px;
+  padding:11px 14px;outline:none;font:inherit;font-size:.9rem;transition:border-color .25s}
+.inp:focus{border-color:var(--primary)}
+textarea.inp{resize:vertical;line-height:1.5}
+select.inp{appearance:none;cursor:pointer}
+.chk{display:flex;align-items:center;gap:10px;font-size:.9rem;font-weight:600;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--primary)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.sep{height:1px;background:var(--border);margin:4px 0}
+.status{font-size:.86rem;color:var(--muted);padding:10px 12px;border-radius:12px;background:var(--surface-soft);border:1px solid var(--border)}
+.dlg-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
+.tabs{display:flex;gap:7px;flex-wrap:wrap}
+.tab{padding:8px 13px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);
+  font:inherit;font-size:.84rem;font-weight:650;cursor:pointer}
+.tab.on{background:var(--primary-soft);color:var(--primary);border-color:transparent}
+.pane{display:grid;gap:14px}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.swatch{width:26px;height:26px;border-radius:9px;border:2px solid transparent;cursor:pointer}
+.swatch.on{border-color:var(--text);transform:scale(1.08)}
+.swatch-native{width:34px;height:26px;border:1px solid var(--border);border-radius:9px;background:transparent;padding:0;cursor:pointer}
+.iconpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:7px;max-height:190px;overflow:auto;
+  padding:9px;border:1px solid var(--border);border-radius:14px;background:var(--surface-soft);scrollbar-width:thin}
+.iconopt{aspect-ratio:1;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--muted);
+  display:grid;place-items:center;cursor:pointer;font-size:17px}
+.iconopt:hover{background:var(--surface-strong);color:var(--text)}
+.iconopt.on{background:var(--primary-soft);color:var(--primary);border-color:var(--primary)}
+.tile-choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px}
+.tile-choice{display:flex;flex-direction:column;align-items:flex-start;gap:9px;padding:15px;border-radius:var(--rmd);
+  border:1px solid var(--border);background:var(--surface-soft);color:var(--text);font:inherit;font-weight:650;
+  font-size:.88rem;cursor:pointer;text-align:left}
+.tile-choice:hover{border-color:var(--primary);color:var(--primary)}
+.sub-list{display:grid;gap:8px}
+.sub-row{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;border:1px solid var(--border);background:var(--surface-soft)}
+.sub-ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;color:#fff;font-size:15px;flex:none}
+.sub-tt{flex:1;font-size:.88rem;font-weight:620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.codes{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.codes code{padding:9px 11px;border-radius:11px;background:var(--surface-soft);border:1px solid var(--border);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86rem;letter-spacing:.04em;text-align:center}
+
+/* --------------------------------- auth ---------------------------------- */
+.auth-wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
+.auth-card{width:min(430px,100%);padding:30px;border-radius:var(--rxl);display:grid;gap:18px}
+.auth-head{display:flex;align-items:center;gap:13px}
+.auth-head h1{font-size:1.14rem;font-weight:700}
+.auth-head p{color:var(--muted);font-size:.86rem;margin-top:3px}
+.auth-err{padding:11px 13px;border-radius:12px;font-size:.86rem;font-weight:600;color:#ff453a;
+  background:rgba(255,69,58,.12);border:1px solid rgba(255,69,58,.35)}
+.auth-steps{display:grid;gap:16px}
+.qr{display:grid;place-items:center;padding:14px;border-radius:var(--rmd);background:#fff;border:1px solid var(--border)}
+.qr img{width:210px;height:210px;display:block}
+.secret{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;letter-spacing:.08em;word-break:break-all;
+  padding:10px 12px;border-radius:11px;background:var(--surface-soft);border:1px solid var(--border);text-align:center}
