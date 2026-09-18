@@ -4,6 +4,8 @@ A self-hosted dashboard for the services you use every day: a grid of shortcuts,
 weather tiles, and optional integrations — all editable from the page itself,
 behind a login with two-factor authentication.
 
+<img width="1906" height="881" alt="SCR-20260918-jhgn" src="https://github.com/user-attachments/assets/ee9a13ad-ab81-4f53-af45-5254443cf66b" />
+
 Glassboard keeps a strict line between **the software** (this repository) and
 **your data** (a directory you own). A fresh install starts empty, with a
 neutral example configuration, and your whole setup is one JSON file you can
