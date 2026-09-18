@@ -7,6 +7,7 @@ import { attachUser, needsSetup } from './auth.js';
 import { authRouter } from './routes/auth.js';
 import { configRouter } from './routes/config.js';
 import { integrationsRouter } from './routes/integrations.js';
+import { appearanceRouter } from './routes/appearance.js';
 import { getConfig } from './store.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -29,7 +30,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '16mb' }));
 
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -83,6 +84,7 @@ app.get(['/index.html'], (_req, res) => res.redirect('/'));
 app.use('/api/auth', authRouter);
 app.use('/api/config', configRouter);
 app.use('/api/integrations', integrationsRouter);
+app.use('/api/appearance', appearanceRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, setupRequired: needsSetup() }));
 

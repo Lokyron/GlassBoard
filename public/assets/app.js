@@ -23,6 +23,8 @@ const state = {
   places: {},      // tileId -> resolved city name
   coords: {},      // tileId -> { latitude, longitude }
   georide: null,
+  themePresets: {},
+  wallpaperVersion: '',
   map: null,
   marker: null,
   modalTile: null,
@@ -534,11 +536,16 @@ function renderGeorideTile(tile, summary) {
   if (!summary?.ok) {
     safe(el('name'), t('gr.title'));
     el('stats').innerHTML = `<p class="gr-message">${esc(summary?.configured === false ? t('gr.notConfigured') : summary?.error || t('gr.unavailable'))}</p>`;
+    // No empty map frame while the integration is not set up: the tile would
+    // stretch the whole row for nothing.
+    el('map').style.display = 'none';
     el('dot').style.background = '#ff9f0a';
     el('dot').style.boxShadow = '0 0 0 5px rgba(255,159,10,.16)';
-    safe(el('foot'), t('gr.unavailable'));
+    // Point at the fix rather than repeating the problem.
+    safe(el('foot'), summary?.configured === false ? `${t('set.title')} → ${t('set.georide')}` : t('gr.unavailable'));
     return;
   }
+  el('map').style.display = '';
 
   const stats = summary.stats;
   const hours = Math.floor(stats.durationMinutes / 60);
@@ -621,10 +628,40 @@ function updateTime() {
   if (bar) bar.style.width = `${percent}%`;
 }
 
+/* ------------------------------ appearance ------------------------------- */
+
+/** Apply a colour preset, the orbs and the wallpaper. Pass a draft to preview it. */
+function applyAppearance(appearance = state.config?.appearance, version = state.wallpaperVersion) {
+  const settings = appearance || {};
+  html.setAttribute('data-preset', settings.preset || 'default');
+  html.setAttribute('data-orbs', settings.orbs === false ? 'off' : 'on');
+
+  const wallpaper = settings.wallpaper || {};
+  if (wallpaper.enabled) {
+    html.setAttribute('data-wallpaper', 'on');
+    html.style.setProperty('--wall-image', `url("/api/appearance/wallpaper?v=${encodeURIComponent(version || '')}")`);
+    html.style.setProperty('--wall-dim', String(wallpaper.dim ?? 0.4));
+    html.style.setProperty('--wall-blur', `${wallpaper.blur ?? 0}px`);
+  } else {
+    html.removeAttribute('data-wallpaper');
+  }
+}
+
+/** The image is cached hard, so its timestamp is what busts that cache. */
+async function loadWallpaperVersion() {
+  try {
+    const info = await api('/api/appearance/wallpaper/info');
+    state.wallpaperVersion = info.wallpaper?.updatedAt || '';
+  } catch {
+    state.wallpaperVersion = '';
+  }
+}
+
 /* ------------------------------- rendering ------------------------------- */
 
 function renderChrome() {
   const config = state.config;
+  applyAppearance();
   setLocale(config.site.locale);
   applyTranslations();
   document.title = config.site.title;
@@ -756,6 +793,8 @@ async function boot() {
   state.config = payload.config;
   state.saved = clone(payload.config);
   state.tileTypes = payload.tileTypes;
+  state.themePresets = payload.themePresets || {};
+  if (payload.config.appearance?.wallpaper?.enabled) await loadWallpaperVersion();
 
   renderAll();
   refreshData();

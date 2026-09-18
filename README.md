@@ -35,6 +35,9 @@ reaches the browser, and no request goes out to a service you did not enable.
   tile explains what is missing, and the rest of the dashboard carries on.
 - **Backup and restore** — a single versioned JSON file, from the interface or
   from the command line, with automatic snapshots before every import.
+- **Themes and wallpapers** — six colour presets, light and dark, plus your own
+  background image with adjustable dimming and blur. Everything is a CSS
+  variable, so a seventh preset is a dozen lines.
 - **Seven interface languages** — English, French, Spanish, German, Italian,
   Portuguese and Dutch. The dashboard follows the language you pick in the
   settings; the sign-in screens follow the browser.
@@ -224,6 +227,26 @@ glassboard/
   the server, so an imported file cannot inject a `javascript:` link.
 - Losing `APP_SECRET` means losing the sessions and the stored credentials —
   the dashboard configuration itself stays readable.
+
+## Themes and wallpaper
+
+**Settings → Appearance** holds six presets — Glass blue (the default), Ember,
+Forest, Violet, Rose and Slate. Each one drives the accent colour, the glow, the
+animated background orbs and the backdrop, in both light and dark mode. Choices
+preview live on the real dashboard; nothing is written until you save.
+
+You can also upload your own background: PNG, JPEG, WebP or GIF, up to 4 MB.
+The image is stored in your data directory, served only to authenticated
+sessions, and identified by its magic bytes rather than by its declared type.
+Two sliders control how much the image is dimmed and blurred, so the glass
+surfaces stay readable over any photograph, and the orbs can be switched off.
+
+The wallpaper travels inside the configuration export, so restoring on a blank
+instance gives back the same dashboard, image included. An image larger than
+4 MB is left out and flagged in the file rather than silently dropped.
+
+A new preset is one block in `public/assets/themes.css` plus one entry in
+`THEME_PRESETS` (`server/config-schema.js`).
 
 ## Languages
 

@@ -1,0 +1,146 @@
+/* Colour presets and custom background.
+   Loaded after base.css, so these rules win ties and can restate the handful of
+   base rules that carry a hard-coded accent colour. The "default" preset
+   reproduces the original values exactly: selecting it changes nothing. */
+
+:root {
+  /* Accent glow, as raw channels so it can be used at several opacities. */
+  --glow: 10, 132, 255;
+  /* Background orbs. */
+  --orb-a: #0a84ff;
+  --orb-b: #64d2ff;
+  --orb-c: #7c5cff;
+  /* Backdrop: three radial washes over a linear base. */
+  --wall-1: #15326b; --wall-2: #0a3a56; --wall-3: #281a5c;
+  --wall-base-1: #06080e; --wall-base-2: #0b1120; --wall-base-3: #0c1426;
+}
+:root[data-theme="light"] {
+  --wall-1: #d7e6ff; --wall-2: #e2f4ff; --wall-3: #ede6ff;
+  --wall-base-1: #eef2fb; --wall-base-2: #e8eef8; --wall-base-3: #e3eaf6;
+}
+
+/* ------------------------------- presets -------------------------------- */
+
+:root[data-preset="ember"] {
+  --primary: #ff7a18; --primary-2: #f54e2e; --primary-3: #ffb648;
+  --primary-soft: rgba(255, 122, 24, 0.14);
+  --accent: linear-gradient(135deg, #ff7a18 0%, #f54e2e 55%, #ffb648 100%);
+  --glow: 255, 122, 24;
+  --orb-a: #ff7a18; --orb-b: #ffb648; --orb-c: #f54e2e;
+  --wall-1: #5c2408; --wall-2: #4a1a14; --wall-3: #3a2408;
+  --wall-base-1: #0e0805; --wall-base-2: #1a0f08; --wall-base-3: #16100a;
+}
+:root[data-preset="ember"][data-theme="light"] {
+  --wall-1: #ffe6d1; --wall-2: #ffd9c7; --wall-3: #fff0d6;
+  --wall-base-1: #fdf3ec; --wall-base-2: #faeade; --wall-base-3: #f7e6dc;
+}
+
+:root[data-preset="forest"] {
+  --primary: #15a06a; --primary-2: #0e7c86; --primary-3: #6fd39b;
+  --primary-soft: rgba(21, 160, 106, 0.14);
+  --accent: linear-gradient(135deg, #15a06a 0%, #0e7c86 55%, #6fd39b 100%);
+  --glow: 21, 160, 106;
+  --orb-a: #15a06a; --orb-b: #6fd39b; --orb-c: #0e7c86;
+  --wall-1: #0b3d2c; --wall-2: #0a3339; --wall-3: #123b1f;
+  --wall-base-1: #050a08; --wall-base-2: #0a1512; --wall-base-3: #0b1714;
+}
+:root[data-preset="forest"][data-theme="light"] {
+  --wall-1: #d5f2e3; --wall-2: #d3eef2; --wall-3: #e2f5d9;
+  --wall-base-1: #eef7f2; --wall-base-2: #e7f3ec; --wall-base-3: #e2f0e8;
+}
+
+:root[data-preset="violet"] {
+  --primary: #8b5cf6; --primary-2: #c026d3; --primary-3: #a78bfa;
+  --primary-soft: rgba(139, 92, 246, 0.16);
+  --accent: linear-gradient(135deg, #8b5cf6 0%, #c026d3 55%, #a78bfa 100%);
+  --glow: 139, 92, 246;
+  --orb-a: #8b5cf6; --orb-b: #c026d3; --orb-c: #6d28d9;
+  --wall-1: #3b1d6e; --wall-2: #4a1152; --wall-3: #241a5c;
+  --wall-base-1: #08060e; --wall-base-2: #120d1f; --wall-base-3: #140f26;
+}
+:root[data-preset="violet"][data-theme="light"] {
+  --wall-1: #e8ddff; --wall-2: #f7dbfb; --wall-3: #e0dcff;
+  --wall-base-1: #f3f0fb; --wall-base-2: #ece7f8; --wall-base-3: #e8e2f6;
+}
+
+:root[data-preset="rose"] {
+  --primary: #f43f5e; --primary-2: #c2185b; --primary-3: #fb7185;
+  --primary-soft: rgba(244, 63, 94, 0.14);
+  --accent: linear-gradient(135deg, #f43f5e 0%, #c2185b 55%, #fb7185 100%);
+  --glow: 244, 63, 94;
+  --orb-a: #f43f5e; --orb-b: #fb7185; --orb-c: #c2185b;
+  --wall-1: #5e1229; --wall-2: #4a0f33; --wall-3: #3a1430;
+  --wall-base-1: #0d0508; --wall-base-2: #190a11; --wall-base-3: #170b14;
+}
+:root[data-preset="rose"][data-theme="light"] {
+  --wall-1: #ffdde4; --wall-2: #ffd6ea; --wall-3: #ffe0ef;
+  --wall-base-1: #fdeff2; --wall-base-2: #fae7ec; --wall-base-3: #f7e2e8;
+}
+
+:root[data-preset="slate"] {
+  --primary: #64748b; --primary-2: #475569; --primary-3: #94a3b8;
+  --primary-soft: rgba(100, 116, 139, 0.16);
+  --accent: linear-gradient(135deg, #64748b 0%, #475569 55%, #94a3b8 100%);
+  --glow: 100, 116, 139;
+  --orb-a: #64748b; --orb-b: #94a3b8; --orb-c: #334155;
+  --wall-1: #1e2937; --wall-2: #1b2430; --wall-3: #232b38;
+  --wall-base-1: #070809; --wall-base-2: #0e1116; --wall-base-3: #11151b;
+}
+:root[data-preset="slate"][data-theme="light"] {
+  --wall-1: #dfe5ee; --wall-2: #e3e8f0; --wall-3: #e7eaf1;
+  --wall-base-1: #f1f3f7; --wall-base-2: #eaedf3; --wall-base-3: #e6e9f0;
+}
+
+/* --------------------- rules driven by the preset ----------------------- */
+/* These restate base rules whose accent colour was written literally. With the
+   default preset the computed values are identical to the original. */
+
+[data-theme="dark"] #wall,
+[data-theme="light"] #wall {
+  background:
+    radial-gradient(1200px 900px at 16% -8%, var(--wall-1) 0, transparent 55%),
+    radial-gradient(1000px 800px at 108% 10%, var(--wall-2) 0, transparent 52%),
+    radial-gradient(900px 900px at 50% 118%, var(--wall-3) 0, transparent 55%),
+    linear-gradient(160deg, var(--wall-base-1), var(--wall-base-2) 60%, var(--wall-base-3));
+}
+[data-theme="light"] #wall {
+  background:
+    radial-gradient(1100px 820px at 14% -10%, var(--wall-1) 0, transparent 55%),
+    radial-gradient(900px 700px at 110% 8%, var(--wall-2) 0, transparent 50%),
+    radial-gradient(900px 900px at 55% 118%, var(--wall-3) 0, transparent 55%),
+    linear-gradient(160deg, var(--wall-base-1), var(--wall-base-2) 60%, var(--wall-base-3));
+}
+
+.orb.a { background: var(--orb-a); }
+.orb.b { background: var(--orb-b); }
+.orb.c { background: var(--orb-c); }
+
+.tb-dot { box-shadow: 0 0 0 4px rgba(var(--glow), .15); }
+.brand { box-shadow: 0 10px 24px rgba(var(--glow), .45), inset 0 1px 0 rgba(255, 255, 255, .4); }
+.prog > div { box-shadow: 0 0 10px rgba(var(--glow), .5); }
+.day-btn.active { box-shadow: 0 8px 20px rgba(var(--glow), .4); }
+.box.alert { border-color: rgba(var(--glow), .4); }
+.btn.primary { box-shadow: 0 8px 20px rgba(var(--glow), .35); }
+.gr-pin { box-shadow: 0 6px 16px rgba(var(--glow), .55), inset 0 1px 0 rgba(255, 255, 255, .4); }
+
+/* ------------------------------ wallpaper ------------------------------- */
+/* The image replaces the generated backdrop. A dimming layer keeps the glass
+   surfaces and the text readable over an arbitrary photograph. */
+
+:root[data-wallpaper="on"] #wall {
+  background-image: var(--wall-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--wall-blur, 0px));
+}
+:root[data-wallpaper="on"] #wall::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--wall-dim, .4));
+}
+:root[data-theme="light"][data-wallpaper="on"] #wall::after {
+  background: rgba(255, 255, 255, var(--wall-dim, .4));
+}
+:root[data-orbs="off"] .orb { display: none; }

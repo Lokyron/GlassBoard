@@ -77,6 +77,19 @@ function iconPicker(value, onChange) {
   return wrap;
 }
 
+function slider(value, min, max, step, onChange) {
+  const output = el('span', { class: 'fld-h', text: String(value) });
+  const input = el('input', {
+    class: 'range', type: 'range', min: String(min), max: String(max), step: String(step), value: String(value),
+    oninput: (event) => {
+      const next = Number(event.target.value);
+      output.textContent = String(next);
+      onChange(next);
+    },
+  });
+  return el('div', { class: 'rangerow' }, [input, output]);
+}
+
 function dialogFooter(onSave, onCancel = closeDialog, saveLabel = t('dlg.save')) {
   return el('div', { class: 'dlg-foot' }, [
     el('button', { class: 'btn ghost', type: 'button', text: t('dlg.cancel'), onclick: onCancel }),
@@ -409,12 +422,16 @@ async function openSettings(section = 'general') {
 
   const sections = {
     general: () => generalPane(draft),
+    appearance: () => appearancePane(draft),
     weather: () => weatherPane(draft),
     georide: () => georidePane(draft),
     account: () => accountPane(),
     data: () => dataPane(),
   };
-  const labels = { general: t('set.general'), weather: t('set.weather'), georide: t('set.georide'), account: t('set.account'), data: t('set.data') };
+  const labels = {
+    general: t('set.general'), appearance: t('set.appearance'), weather: t('set.weather'),
+    georide: t('set.georide'), account: t('set.account'), data: t('set.data'),
+  };
 
   const show = (name) => {
     panes.innerHTML = '';
@@ -440,7 +457,7 @@ async function openSettings(section = 'general') {
     } catch (error) {
       toast(error.details?.length ? `${error.message}: ${error.details[0]}` : error.message, 'error');
     }
-  }));
+  }, () => { closeDialog(); applyAppearance(); }));
 
   openDialog({ title: t('set.title'), body });
   show(section);
@@ -466,6 +483,88 @@ function generalPane(draft) {
   pane.appendChild(field(t('set.searchAction'), textInput(draft.search.action, { oninput: (e) => { draft.search.action = e.target.value; } })));
   pane.appendChild(field(t('set.searchParam'), textInput(draft.search.param, { oninput: (e) => { draft.search.param = e.target.value; } })));
   pane.appendChild(checkbox(t('set.searchNewTab'), draft.search.newTab !== false, (value) => { draft.search.newTab = value; }));
+  return pane;
+}
+
+function appearancePane(draft) {
+  const appearance = draft.appearance;
+  const wallpaper = appearance.wallpaper;
+  const pane = el('div', { class: 'pane' });
+  // Everything on this pane previews live, so the choice can be judged on the
+  // real dashboard rather than on a swatch.
+  const preview = () => applyAppearance(appearance, state.wallpaperVersion);
+
+  const themes = el('div', { class: 'themes' });
+  const paint = () => themes.querySelectorAll('.theme').forEach((b) => b.classList.toggle('on', b.dataset.preset === appearance.preset));
+  Object.entries(state.themePresets).forEach(([key, meta]) => {
+    themes.appendChild(el('button', {
+      class: 'theme', type: 'button', 'data-preset': key,
+      html: `<span class="theme-dots">${meta.swatch.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span>${esc(meta.label)}</span>`,
+      onclick: () => { appearance.preset = key; paint(); preview(); },
+    }));
+  });
+  paint();
+  pane.appendChild(field(t('set.theme'), themes));
+  pane.appendChild(checkbox(t('set.orbs'), appearance.orbs !== false, (value) => { appearance.orbs = value; preview(); }));
+
+  pane.appendChild(el('div', { class: 'sep' }));
+  pane.appendChild(el('div', { class: 'fld-l', text: t('set.wallpaper') }));
+
+  const status = el('div', { class: 'status', text: t('set.wallpaperNone') });
+  const file = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', hidden: true });
+  const pick = el('button', { class: 'btn ghost', type: 'button', text: t('set.wallpaperUpload'), onclick: () => file.click() });
+  const drop = el('button', { class: 'btn ghost', type: 'button', text: t('set.wallpaperRemove'), onclick: async () => {
+    await api('/api/appearance/wallpaper', { method: 'DELETE' });
+    wallpaper.enabled = false;
+    state.wallpaperVersion = '';
+    status.textContent = t('set.wallpaperNone');
+    preview();
+  } });
+
+  file.addEventListener('change', async () => {
+    const chosen = file.files?.[0];
+    if (!chosen) return;
+    pick.disabled = true;
+    try {
+      // Raw bytes: no multipart parser to pull in for a single file.
+      const response = await fetch('/api/appearance/wallpaper', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': chosen.type || 'application/octet-stream' },
+        body: chosen,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      state.wallpaperVersion = payload.updatedAt || String(Date.now());
+      wallpaper.enabled = true;
+      enabled.querySelector('input').checked = true;
+      status.textContent = `${chosen.name} — ${Math.round(payload.bytes / 1024)} KB`;
+      preview();
+      toast(t('msg.wallpaperSaved'));
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      pick.disabled = false;
+      file.value = '';
+    }
+  });
+
+  const enabled = checkbox(t('set.wallpaperEnabled'), wallpaper.enabled, (value) => { wallpaper.enabled = value; preview(); });
+  pane.appendChild(status);
+  pane.appendChild(el('div', { class: 'row' }, [pick, drop, file]));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.wallpaperHint') }));
+  pane.appendChild(enabled);
+  pane.appendChild(field(t('set.wallpaperDim'), slider(wallpaper.dim ?? 0.4, 0, 0.9, 0.05, (value) => { wallpaper.dim = value; preview(); })));
+  pane.appendChild(field(t('set.wallpaperBlur'), slider(wallpaper.blur ?? 0, 0, 24, 1, (value) => { wallpaper.blur = value; preview(); })));
+
+  api('/api/appearance/wallpaper/info')
+    .then((info) => {
+      if (!info.wallpaper) return;
+      state.wallpaperVersion = info.wallpaper.updatedAt || '';
+      status.textContent = `${info.wallpaper.mime} — ${Math.round(info.wallpaper.bytes / 1024)} KB`;
+    })
+    .catch(() => {});
+
   return pane;
 }
 

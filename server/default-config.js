@@ -21,6 +21,11 @@ export function defaultConfig() {
       placeholder: '',
       newTab: true,
     },
+    appearance: {
+      preset: 'default',
+      orbs: true,
+      wallpaper: { enabled: false, dim: 0.4, blur: 0 },
+    },
     tiles: [
       { id: 'tile-weather-local', type: 'weather-local', span: 1.1, settings: { label: '' } },
       {

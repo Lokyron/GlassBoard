@@ -3,13 +3,13 @@ import express from 'express';
 import { requireAuth, instanceId } from '../auth.js';
 import { getConfig, saveConfig, listRevisions, buildExport, importExport, writeBackup } from '../store.js';
 import { db } from '../db.js';
-import { TILE_TYPES } from '../config-schema.js';
+import { TILE_TYPES, THEME_PRESETS } from '../config-schema.js';
 
 export const configRouter = express.Router();
 configRouter.use(requireAuth);
 
 configRouter.get('/', (_req, res) => {
-  res.json({ config: getConfig(), tileTypes: TILE_TYPES });
+  res.json({ config: getConfig(), tileTypes: TILE_TYPES, themePresets: THEME_PRESETS });
 });
 
 configRouter.put('/', (req, res) => {

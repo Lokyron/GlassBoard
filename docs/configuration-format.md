@@ -63,6 +63,11 @@ An import only restores secrets when it is explicitly asked to.
     "placeholder": "Quick search…",
     "newTab": true
   },
+  "appearance": {
+    "preset": "default",
+    "orbs": true,
+    "wallpaper": { "enabled": false, "dim": 0.4, "blur": 0 }
+  },
   "tiles": [
     { "id": "tile-local", "type": "weather-local", "span": 1.1, "settings": { "label": "" } }
   ],
@@ -92,6 +97,25 @@ An import only restores secrets when it is explicitly asked to.
   }
 }
 ```
+
+### Appearance
+
+`preset` is one of `default`, `ember`, `forest`, `violet`, `rose`, `slate`. An
+unknown value is refused rather than silently reset, so a typo in a hand-edited
+file is reported. `orbs` toggles the animated background shapes. Under
+`wallpaper`, `dim` is between `0` and `0.9` and `blur` between `0` and `24`
+pixels; both only apply when `enabled` is true and an image has been uploaded.
+
+The image itself is not part of the configuration document — it lives as a file
+in the data directory. Exports carry it separately, in the `wallpaper` field of
+the envelope:
+
+```json
+{ "wallpaper": { "mime": "image/jpeg", "updatedAt": "…", "data": "<base64>" } }
+```
+
+An image above 4 MB is omitted, and the envelope says so through
+`wallpaperOmitted`.
 
 ### Tiles
 

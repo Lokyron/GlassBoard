@@ -12,6 +12,16 @@ export const TILE_TYPES = {
   note: { label: 'Note', integration: null, singleton: false },
 };
 
+/** Colour presets. The ids match the [data-preset] rules in public/assets/themes.css. */
+export const THEME_PRESETS = {
+  default: { label: 'Glass blue', swatch: ['#0a84ff', '#5e5ce6', '#64d2ff'] },
+  ember: { label: 'Ember', swatch: ['#ff7a18', '#f54e2e', '#ffb648'] },
+  forest: { label: 'Forest', swatch: ['#15a06a', '#0e7c86', '#6fd39b'] },
+  violet: { label: 'Violet', swatch: ['#8b5cf6', '#c026d3', '#a78bfa'] },
+  rose: { label: 'Rose', swatch: ['#f43f5e', '#c2185b', '#fb7185'] },
+  slate: { label: 'Slate', swatch: ['#64748b', '#475569', '#94a3b8'] },
+};
+
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const ID = /^[a-zA-Z0-9_-]{1,64}$/;
 
@@ -171,6 +181,15 @@ export function validateConfig(input) {
       placeholder: v.str(search.placeholder, 'search.placeholder', { max: 60, fallback: 'Quick search…' }),
       newTab: v.bool(search.newTab, true),
     },
+    appearance: {
+      preset: THEME_PRESETS[input.appearance?.preset] ? input.appearance.preset : 'default',
+      orbs: v.bool(input.appearance?.orbs, true),
+      wallpaper: {
+        enabled: v.bool(input.appearance?.wallpaper?.enabled, false),
+        dim: v.num(input.appearance?.wallpaper?.dim, 'appearance.wallpaper.dim', { min: 0, max: 0.9, fallback: 0.4 }),
+        blur: v.num(input.appearance?.wallpaper?.blur, 'appearance.wallpaper.blur', { min: 0, max: 24, fallback: 0 }),
+      },
+    },
     tiles: [],
     links: [],
     integrations: {
@@ -196,6 +215,10 @@ export function validateConfig(input) {
       },
     },
   };
+
+  if (input.appearance?.preset && !THEME_PRESETS[input.appearance.preset]) {
+    v.fail('appearance.preset', `unknown theme "${input.appearance.preset}"`);
+  }
 
   if (!Array.isArray(input.tiles)) {
     v.fail('tiles', 'must be an array');
