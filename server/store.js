@@ -22,10 +22,15 @@ export function getConfig() {
     return seeded;
   }
   try {
-    return JSON.parse(row.json);
-  } catch {
+    // A document saved by an older version lacks the fields added since, so it
+    // goes through the validator on the way out: callers always receive a
+    // complete document, and the gaps are filled with the current defaults.
+    const { ok, errors, value } = validateConfig(migrateConfig(JSON.parse(row.json)));
+    if (!ok) console.warn(`[glassboard] stored configuration needed fixing up: ${errors.join('; ')}`);
+    return value;
+  } catch (error) {
     // A corrupted revision must not take the whole dashboard down.
-    console.error('[glassboard] latest configuration revision is unreadable, falling back to defaults');
+    console.error(`[glassboard] latest configuration revision is unreadable (${error.message}), falling back to defaults`);
     return defaultConfig();
   }
 }
