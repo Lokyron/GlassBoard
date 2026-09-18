@@ -1,0 +1,14 @@
+{
+  "name": "Glassboard",
+  "short_name": "Dashboard",
+  "description": "Self-hosted service dashboard",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07080c",
+  "theme_color": "#07080c",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

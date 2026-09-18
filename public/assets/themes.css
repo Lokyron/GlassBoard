@@ -144,3 +144,20 @@
   background: rgba(255, 255, 255, var(--wall-dim, .4));
 }
 :root[data-orbs="off"] .orb { display: none; }
+
+/* --------------------------- theme cross-fade ---------------------------- */
+/* Changing a preset swaps gradients, which no CSS transition can interpolate.
+   A view transition snapshots the old rendering and dissolves it into the new
+   one instead — a single fade for the whole page, backdrop included. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: .65s;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation-duration: .01ms; }
+  .orb { animation: none !important; }
+  .rise { animation: none !important; }
+  * { scroll-behavior: auto !important; }
+}

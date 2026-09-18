@@ -18,7 +18,8 @@ const LOCALE_NAMES = {
 
 const I18N = {
   en: {
-    'menu.edit': 'Edit dashboard', 'menu.settings': 'Settings', 'menu.export': 'Export configuration',
+    'menu.edit': 'Edit dashboard', 'menu.settings': 'Settings',
+    'menu.shuffle': 'Shuffle theme', 'msg.themeChanged': 'Theme changed to {name}.', 'menu.export': 'Export configuration',
     'menu.import': 'Import configuration', 'menu.logout': 'Sign out',
     'edit.mode': 'Edit mode', 'edit.save': 'Save', 'edit.cancel': 'Cancel',
     'edit.hint': 'Drag to reorder, use the grip to resize.',
@@ -29,6 +30,7 @@ const I18N = {
     'side.search': 'Search', 'search.placeholder': 'Quick search…', 'side.realtime': 'Real time', 'side.time': 'Time',
     'side.year': 'Year progress', 'side.day': 'Day',
     'nav.overview': 'Overview', 'nav.apps': 'Applications', 'nav.localWeather': 'Local weather',
+    'dock.overview': 'Home', 'dock.apps': 'Apps', 'dock.weather': 'Weather', 'dock.account': 'Account',
     'greeting.morning': 'Good morning', 'greeting.evening': 'Good evening',
     'tile.localPosition': 'Local position', 'tile.searching': 'Locating…',
     'tile.followedCity': 'Followed city', 'tile.wind': 'Wind', 'tile.rain': 'Rain',
@@ -105,7 +107,8 @@ const I18N = {
   },
 
   fr: {
-    'menu.edit': 'Éditer le dashboard', 'menu.settings': 'Paramètres', 'menu.export': 'Exporter la configuration',
+    'menu.edit': 'Éditer le dashboard', 'menu.settings': 'Paramètres',
+    'menu.shuffle': 'Thème aléatoire', 'msg.themeChanged': 'Thème passé sur {name}.', 'menu.export': 'Exporter la configuration',
     'menu.import': 'Importer une configuration', 'menu.logout': 'Se déconnecter',
     'edit.mode': 'Mode édition', 'edit.save': 'Enregistrer', 'edit.cancel': 'Annuler',
     'edit.hint': 'Glisse pour réorganiser, utilise la poignée pour redimensionner.',
@@ -116,6 +119,7 @@ const I18N = {
     'side.search': 'Recherche', 'search.placeholder': 'Recherche rapide…', 'side.realtime': 'Temps réel', 'side.time': 'Heure',
     'side.year': 'Progression annuelle', 'side.day': 'Jour',
     'nav.overview': 'Vue générale', 'nav.apps': 'Applications', 'nav.localWeather': 'Météo locale',
+    'dock.overview': 'Accueil', 'dock.apps': 'Apps', 'dock.weather': 'Météo', 'dock.account': 'Compte',
     'greeting.morning': 'Bonjour', 'greeting.evening': 'Bonsoir',
     'tile.localPosition': 'Position locale', 'tile.searching': 'Recherche…',
     'tile.followedCity': 'Ville suivie', 'tile.wind': 'Vent', 'tile.rain': 'Pluie',
@@ -192,7 +196,8 @@ const I18N = {
   },
 
   es: {
-    'menu.edit': 'Editar el panel', 'menu.settings': 'Ajustes', 'menu.export': 'Exportar la configuración',
+    'menu.edit': 'Editar el panel', 'menu.settings': 'Ajustes',
+    'menu.shuffle': 'Tema aleatorio', 'msg.themeChanged': 'Tema cambiado a {name}.', 'menu.export': 'Exportar la configuración',
     'menu.import': 'Importar una configuración', 'menu.logout': 'Cerrar sesión',
     'edit.mode': 'Modo edición', 'edit.save': 'Guardar', 'edit.cancel': 'Cancelar',
     'edit.hint': 'Arrastra para reordenar, usa el tirador para redimensionar.',
@@ -203,6 +208,7 @@ const I18N = {
     'side.search': 'Búsqueda', 'search.placeholder': 'Búsqueda rápida…', 'side.realtime': 'Tiempo real', 'side.time': 'Hora',
     'side.year': 'Progreso del año', 'side.day': 'Día',
     'nav.overview': 'Vista general', 'nav.apps': 'Aplicaciones', 'nav.localWeather': 'Tiempo local',
+    'dock.overview': 'Inicio', 'dock.apps': 'Apps', 'dock.weather': 'Tiempo', 'dock.account': 'Cuenta',
     'greeting.morning': 'Buenos días', 'greeting.evening': 'Buenas noches',
     'tile.localPosition': 'Posición local', 'tile.searching': 'Localizando…',
     'tile.followedCity': 'Ciudad seguida', 'tile.wind': 'Viento', 'tile.rain': 'Lluvia',
@@ -279,7 +285,8 @@ const I18N = {
   },
 
   de: {
-    'menu.edit': 'Dashboard bearbeiten', 'menu.settings': 'Einstellungen', 'menu.export': 'Konfiguration exportieren',
+    'menu.edit': 'Dashboard bearbeiten', 'menu.settings': 'Einstellungen',
+    'menu.shuffle': 'Zufälliges Design', 'msg.themeChanged': 'Design auf {name} gewechselt.', 'menu.export': 'Konfiguration exportieren',
     'menu.import': 'Konfiguration importieren', 'menu.logout': 'Abmelden',
     'edit.mode': 'Bearbeitungsmodus', 'edit.save': 'Speichern', 'edit.cancel': 'Abbrechen',
     'edit.hint': 'Zum Umsortieren ziehen, zum Ändern der Größe den Griff verwenden.',
@@ -290,6 +297,7 @@ const I18N = {
     'side.search': 'Suche', 'search.placeholder': 'Schnellsuche…', 'side.realtime': 'Echtzeit', 'side.time': 'Uhrzeit',
     'side.year': 'Jahresfortschritt', 'side.day': 'Tag',
     'nav.overview': 'Übersicht', 'nav.apps': 'Anwendungen', 'nav.localWeather': 'Wetter vor Ort',
+    'dock.overview': 'Start', 'dock.apps': 'Apps', 'dock.weather': 'Wetter', 'dock.account': 'Konto',
     'greeting.morning': 'Guten Morgen', 'greeting.evening': 'Guten Abend',
     'tile.localPosition': 'Aktueller Standort', 'tile.searching': 'Standort wird ermittelt…',
     'tile.followedCity': 'Beobachtete Stadt', 'tile.wind': 'Wind', 'tile.rain': 'Regen',
@@ -366,7 +374,8 @@ const I18N = {
   },
 
   it: {
-    'menu.edit': 'Modifica la dashboard', 'menu.settings': 'Impostazioni', 'menu.export': 'Esporta la configurazione',
+    'menu.edit': 'Modifica la dashboard', 'menu.settings': 'Impostazioni',
+    'menu.shuffle': 'Tema casuale', 'msg.themeChanged': 'Tema cambiato in {name}.', 'menu.export': 'Esporta la configurazione',
     'menu.import': 'Importa una configurazione', 'menu.logout': 'Esci',
     'edit.mode': 'Modalità modifica', 'edit.save': 'Salva', 'edit.cancel': 'Annulla',
     'edit.hint': 'Trascina per riordinare, usa la maniglia per ridimensionare.',
@@ -377,6 +386,7 @@ const I18N = {
     'side.search': 'Ricerca', 'search.placeholder': 'Ricerca rapida…', 'side.realtime': 'Tempo reale', 'side.time': 'Ora',
     'side.year': 'Avanzamento dell’anno', 'side.day': 'Giorno',
     'nav.overview': 'Panoramica', 'nav.apps': 'Applicazioni', 'nav.localWeather': 'Meteo locale',
+    'dock.overview': 'Home', 'dock.apps': 'App', 'dock.weather': 'Meteo', 'dock.account': 'Account',
     'greeting.morning': 'Buongiorno', 'greeting.evening': 'Buonasera',
     'tile.localPosition': 'Posizione locale', 'tile.searching': 'Localizzazione…',
     'tile.followedCity': 'Città seguita', 'tile.wind': 'Vento', 'tile.rain': 'Pioggia',
@@ -453,7 +463,8 @@ const I18N = {
   },
 
   pt: {
-    'menu.edit': 'Editar o painel', 'menu.settings': 'Definições', 'menu.export': 'Exportar a configuração',
+    'menu.edit': 'Editar o painel', 'menu.settings': 'Definições',
+    'menu.shuffle': 'Tema aleatório', 'msg.themeChanged': 'Tema alterado para {name}.', 'menu.export': 'Exportar a configuração',
     'menu.import': 'Importar uma configuração', 'menu.logout': 'Terminar sessão',
     'edit.mode': 'Modo de edição', 'edit.save': 'Guardar', 'edit.cancel': 'Cancelar',
     'edit.hint': 'Arrasta para reordenar, usa a pega para redimensionar.',
@@ -464,6 +475,7 @@ const I18N = {
     'side.search': 'Pesquisa', 'search.placeholder': 'Pesquisa rápida…', 'side.realtime': 'Tempo real', 'side.time': 'Hora',
     'side.year': 'Progresso do ano', 'side.day': 'Dia',
     'nav.overview': 'Vista geral', 'nav.apps': 'Aplicações', 'nav.localWeather': 'Meteorologia local',
+    'dock.overview': 'Início', 'dock.apps': 'Apps', 'dock.weather': 'Tempo', 'dock.account': 'Conta',
     'greeting.morning': 'Bom dia', 'greeting.evening': 'Boa noite',
     'tile.localPosition': 'Posição local', 'tile.searching': 'A localizar…',
     'tile.followedCity': 'Cidade seguida', 'tile.wind': 'Vento', 'tile.rain': 'Chuva',
@@ -540,7 +552,8 @@ const I18N = {
   },
 
   nl: {
-    'menu.edit': 'Dashboard bewerken', 'menu.settings': 'Instellingen', 'menu.export': 'Configuratie exporteren',
+    'menu.edit': 'Dashboard bewerken', 'menu.settings': 'Instellingen',
+    'menu.shuffle': 'Willekeurig thema', 'msg.themeChanged': 'Thema gewijzigd naar {name}.', 'menu.export': 'Configuratie exporteren',
     'menu.import': 'Configuratie importeren', 'menu.logout': 'Afmelden',
     'edit.mode': 'Bewerkmodus', 'edit.save': 'Opslaan', 'edit.cancel': 'Annuleren',
     'edit.hint': 'Sleep om te herschikken, gebruik de greep om te vergroten of verkleinen.',
@@ -551,6 +564,7 @@ const I18N = {
     'side.search': 'Zoeken', 'search.placeholder': 'Snel zoeken…', 'side.realtime': 'Realtime', 'side.time': 'Tijd',
     'side.year': 'Voortgang van het jaar', 'side.day': 'Dag',
     'nav.overview': 'Overzicht', 'nav.apps': 'Toepassingen', 'nav.localWeather': 'Weer ter plaatse',
+    'dock.overview': 'Start', 'dock.apps': 'Apps', 'dock.weather': 'Weer', 'dock.account': 'Account',
     'greeting.morning': 'Goedemorgen', 'greeting.evening': 'Goedenavond',
     'tile.localPosition': 'Huidige locatie', 'tile.searching': 'Locatie bepalen…',
     'tile.followedCity': 'Gevolgde stad', 'tile.wind': 'Wind', 'tile.rain': 'Regen',

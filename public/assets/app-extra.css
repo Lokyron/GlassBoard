@@ -29,6 +29,7 @@
 .btn:disabled{opacity:.55;cursor:default;transform:none}
 .btn.primary{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 8px 20px rgba(10,132,255,.35)}
 .btn.ghost{background:transparent}
+.btn .i{font-size:16px;vertical-align:-.16em;margin-right:7px}
 .tinybtn{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--text);
   border:1px solid var(--border-strong);background:var(--surface-strong);font-size:14px;transition:transform .25s var(--ease)}
 .tinybtn:hover{transform:scale(1.08)}
@@ -49,7 +50,7 @@
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gr-stat .v{font-size:1.02rem;font-weight:750;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .gr-stat .v small{font-size:.66rem;font-weight:600;color:var(--muted)}
-.gr-message{color:var(--muted);line-height:1.55;font-size:.92rem;margin-top:14px;position:relative;z-index:2}
+.gr-message{grid-column:1/-1;color:var(--muted);line-height:1.55;font-size:.92rem;margin-top:14px;position:relative;z-index:2}
 .gr-map{margin-top:14px;height:74px;border-radius:var(--rmd);overflow:hidden;border:1px solid var(--border);
   background:var(--surface-soft);position:relative;z-index:2}
 .gr-map-canvas{width:100%;height:100%}
@@ -94,7 +95,7 @@ select.inp{appearance:none;cursor:pointer}
 .chk{display:flex;align-items:center;gap:10px;font-size:.9rem;font-weight:600;cursor:pointer}
 .chk input{width:18px;height:18px;accent-color:var(--primary)}
 .row{display:flex;gap:10px;flex-wrap:wrap}
-.sep{height:1px;background:var(--border);margin:4px 0}
+.divider{height:1px;background:var(--border);margin:4px 0}
 .status{font-size:.86rem;color:var(--muted);padding:10px 12px;border-radius:12px;background:var(--surface-soft);border:1px solid var(--border)}
 .dlg-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
 .tabs{display:flex;gap:7px;flex-wrap:wrap}

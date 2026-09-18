@@ -493,6 +493,7 @@ function appearancePane(draft) {
   // Everything on this pane previews live, so the choice can be judged on the
   // real dashboard rather than on a swatch.
   const preview = () => applyAppearance(appearance, state.wallpaperVersion);
+  const previewFaded = () => withTransition(preview);
 
   const themes = el('div', { class: 'themes' });
   const paint = () => themes.querySelectorAll('.theme').forEach((b) => b.classList.toggle('on', b.dataset.preset === appearance.preset));
@@ -500,14 +501,25 @@ function appearancePane(draft) {
     themes.appendChild(el('button', {
       class: 'theme', type: 'button', 'data-preset': key,
       html: `<span class="theme-dots">${meta.swatch.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span>${esc(meta.label)}</span>`,
-      onclick: () => { appearance.preset = key; paint(); preview(); },
+      onclick: () => { appearance.preset = key; paint(); previewFaded(); },
     }));
   });
   paint();
   pane.appendChild(field(t('set.theme'), themes));
+  pane.appendChild(el('button', {
+    class: 'btn ghost', type: 'button',
+    html: `${svg('shuffle')}<span>${esc(t('menu.shuffle'))}</span>`,
+    onclick: () => {
+      const options = Object.keys(state.themePresets).filter((key) => key !== appearance.preset);
+      if (options.length === 0) return;
+      appearance.preset = options[Math.floor(Math.random() * options.length)];
+      paint();
+      previewFaded();
+    },
+  }));
   pane.appendChild(checkbox(t('set.orbs'), appearance.orbs !== false, (value) => { appearance.orbs = value; preview(); }));
 
-  pane.appendChild(el('div', { class: 'sep' }));
+  pane.appendChild(el('div', { class: 'divider' }));
   pane.appendChild(el('div', { class: 'fld-l', text: t('set.wallpaper') }));
 
   const status = el('div', { class: 'status', text: t('set.wallpaperNone') });
@@ -671,7 +683,7 @@ function accountPane() {
 
   const codesBox = el('div', { class: 'codes', hidden: true });
   const regenPassword = textInput('', { type: 'password', placeholder: t('set.currentPassword') });
-  pane.appendChild(el('div', { class: 'sep' }));
+  pane.appendChild(el('div', { class: 'divider' }));
   pane.appendChild(el('div', { class: 'fld-l', text: t('set.recoveryCodes') }));
   pane.appendChild(regenPassword);
   pane.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('set.regenerate'), onclick: async () => {
@@ -700,7 +712,7 @@ function dataPane() {
     if (confirm(t('set.exportSecretsWarn'))) downloadExport(true);
   } }));
   pane.appendChild(el('p', { class: 'fld-h', text: t('set.exportSecretsWarn') }));
-  pane.appendChild(el('div', { class: 'sep' }));
+  pane.appendChild(el('div', { class: 'divider' }));
   pane.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('set.import'), onclick: openImportDialog }));
   pane.appendChild(el('p', { class: 'fld-h', text: t('set.importWarn') }));
   return pane;

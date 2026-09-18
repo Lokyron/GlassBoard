@@ -36,8 +36,13 @@ reaches the browser, and no request goes out to a service you did not enable.
 - **Backup and restore** — a single versioned JSON file, from the interface or
   from the command line, with automatic snapshots before every import.
 - **Themes and wallpapers** — six colour presets, light and dark, plus your own
-  background image with adjustable dimming and blur. Everything is a CSS
-  variable, so a seventh preset is a dozen lines.
+  background image with adjustable dimming and blur. Shuffle picks one at
+  random and cross-fades the whole page into it. Everything is a CSS variable,
+  so a seventh preset is a dozen lines.
+- **Built for a phone too** — a thumb-reachable bottom dock, bottom sheets
+  instead of centred modals, three columns of shortcuts on a 375 px screen, and
+  full support for notches, Dynamic Islands and home indicators. Add it to your
+  home screen and it runs as a standalone app.
 - **Seven interface languages** — English, French, Spanish, German, Italian,
   Portuguese and Dutch. The dashboard follows the language you pick in the
   settings; the sign-in screens follow the browser.
@@ -228,6 +233,18 @@ glassboard/
 - Losing `APP_SECRET` means losing the sessions and the stored credentials —
   the dashboard configuration itself stays readable.
 
+## Housekeeping
+
+An hourly job keeps the footprint flat without any attention: it drops expired
+cache rows and caps the table, deletes expired sessions and sign-in challenges,
+trims the map tile cache back under 128 MB by dropping the least recently used,
+folds SQLite's write-ahead log back into the database and refreshes its
+statistics.
+
+In the browser, the clock and the polling stop while the tab is hidden and pick
+up again when it comes back — a dashboard left open on a phone all day should
+not cost battery.
+
 ## Themes and wallpaper
 
 **Settings → Appearance** holds six presets — Glass blue (the default), Ember,
@@ -247,6 +264,26 @@ instance gives back the same dashboard, image included. An image larger than
 
 A new preset is one block in `public/assets/themes.css` plus one entry in
 `THEME_PRESETS` (`server/config-schema.js`).
+
+## On a phone
+
+Below 820 px the layout changes rather than shrinks:
+
+- navigation moves to a **bottom dock**, where a thumb reaches it;
+- modals become **bottom sheets** with a grab handle;
+- the sidebar folds into a header, a full-width search box and two compact cards;
+- shortcuts drop to three columns with larger touch targets, and hover effects
+  are disabled so no card stays stuck highlighted after a tap;
+- `viewport-fit=cover` plus `env(safe-area-inset-*)` keep the bars clear of a
+  notch, a Dynamic Island, a home indicator and curved screen edges;
+- the status bar takes the colour of the current theme.
+
+A web manifest ships with the app, so **Add to Home Screen** gives a standalone
+window with no browser chrome, on both Android and iOS.
+
+Backdrop blur is the expensive part of this design on a phone GPU, so it is
+lightened on small screens, one of the background orbs is dropped, and the
+parallax runs only on a device with a real pointer.
 
 ## Languages
 

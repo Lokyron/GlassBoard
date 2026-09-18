@@ -78,45 +78,77 @@ function setTheme(dark) {
   if (icon) icon.innerHTML = PH[dark ? 'moon' : 'sun'] || '';
   try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch { /* private mode */ }
   if (state.map) refreshMapTheme();
+  syncStatusBarColour();
+}
+
+/** Paint the phone status bar and the PWA chrome with the current backdrop. */
+function syncStatusBarColour() {
+  const meta = id('meta-theme-color');
+  if (!meta) return;
+  // Sampled from the backdrop so the status bar blends into the page.
+  const base = getComputedStyle(html).getPropertyValue('--wall-base-1').trim();
+  if (base) meta.setAttribute('content', base);
 }
 function toggleTheme() { setTheme(html.getAttribute('data-theme') !== 'dark'); }
 
 /* ------------------------------- navigation ------------------------------ */
 
-function goTo(anchor, pill) {
+function goTo(anchor, trigger) {
   const target = id(anchor);
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  document.querySelectorAll('.pill').forEach((p) => p.classList.remove('active'));
-  if (pill) pill.classList.add('active');
+  document.querySelectorAll('.pill, .dock-item').forEach((p) => p.classList.remove('active'));
+  if (trigger) trigger.classList.add('active');
 }
 
-function renderNav() {
-  const nav = id('nav');
+/** The navigation entries, shared by the sidebar and the phone dock. */
+function navEntries() {
   const entries = [
-    { icon: 'sparkle', label: t('nav.overview'), action: () => 'overview' },
-    { icon: 'folder', label: t('nav.apps'), action: () => 'apps-section' },
+    { icon: 'sparkle', label: t('nav.overview'), short: t('dock.overview'), run: (button) => goTo('overview', button) },
+    { icon: 'folder', label: t('nav.apps'), short: t('dock.apps'), run: (button) => goTo('apps-section', button) },
   ];
-  nav.innerHTML = '';
-  entries.forEach((entry, index) => {
-    const button = document.createElement('button');
-    button.className = `pill${index === 0 ? ' active' : ''}`;
-    button.innerHTML = `${svg(entry.icon)}${esc(entry.label)}`;
-    button.addEventListener('click', () => goTo(entry.action(), button));
-    nav.appendChild(button);
-  });
   // One entry per weather tile, exactly like the original page.
   state.config.tiles
     .filter((tile) => tile.type === 'weather-local' || tile.type === 'weather-secondary')
     .forEach((tile) => {
-      const button = document.createElement('button');
-      button.className = 'pill';
-      const label = tile.type === 'weather-local'
-        ? t('nav.localWeather')
-        : (tile.settings.name || t('tile.followedCity'));
-      button.innerHTML = `${svg(tile.type === 'weather-local' ? 'navigation-arrow' : 'buildings')}${esc(label)}`;
-      button.addEventListener('click', () => openWeatherModal(tile.id));
-      nav.appendChild(button);
+      const label = tile.type === 'weather-local' ? t('nav.localWeather') : tile.settings.name || t('tile.followedCity');
+      entries.push({
+        icon: tile.type === 'weather-local' ? 'navigation-arrow' : 'buildings',
+        label,
+        short: tile.type === 'weather-local' ? t('dock.weather') : label,
+        run: () => openWeatherModal(tile.id),
+      });
     });
+  return entries;
+}
+
+function renderNav() {
+  const entries = navEntries();
+  const nav = id('nav');
+  const dock = id('dock');
+  nav.innerHTML = '';
+  dock.innerHTML = '';
+
+  entries.forEach((entry, index) => {
+    const pill = document.createElement('button');
+    pill.className = `pill${index === 0 ? ' active' : ''}`;
+    pill.innerHTML = `${svg(entry.icon)}${esc(entry.label)}`;
+    pill.addEventListener('click', () => entry.run(pill));
+    nav.appendChild(pill);
+
+    const item = document.createElement('button');
+    item.className = `dock-item${index === 0 ? ' active' : ''}`;
+    item.innerHTML = `${svg(entry.icon)}<span>${esc(entry.short || entry.label)}</span>`;
+    item.addEventListener('click', () => entry.run(item));
+    dock.appendChild(item);
+  });
+
+  // The account menu belongs within thumb reach on a phone.
+  const account = document.createElement('button');
+  account.className = 'dock-item';
+  account.setAttribute('aria-label', t('set.account'));
+  account.innerHTML = `${svg('user-circle')}<span>${esc(t('dock.account'))}</span>`;
+  account.addEventListener('click', (event) => { event.stopPropagation(); toggleAccountMenu(); });
+  dock.appendChild(account);
 }
 
 /* ------------------------------- shortcuts ------------------------------- */
@@ -224,8 +256,7 @@ function renderTiles() {
     });
   });
 
-  state.map = null;
-  state.marker = null;
+  destroyMap();
   if (state.editing) decorateTilesForEditing();
 }
 
@@ -505,10 +536,20 @@ function refreshMapTheme() {
   if (container) container.classList.toggle('map-dark', html.getAttribute('data-theme') === 'dark');
 }
 
+/** Leaflet keeps global listeners alive, so a discarded map has to be told. */
+function destroyMap() {
+  if (state.map) {
+    try { state.map.remove(); } catch { /* already detached */ }
+  }
+  state.map = null;
+  state.marker = null;
+}
+
 function renderGeorideMap(tile, position) {
   const article = tileElement(tile.id);
   const holder = article?.querySelector('[data-role="map"]');
   if (!holder || !position) return;
+  destroyMap();
   holder.innerHTML = '';
   const mapElement = document.createElement('div');
   mapElement.className = 'gr-map-canvas';
@@ -534,7 +575,7 @@ function renderGeorideTile(tile, summary) {
   const el = (role) => article.querySelector(`[data-role="${role}"]`);
 
   if (!summary?.ok) {
-    safe(el('name'), t('gr.title'));
+    safe(el('name'), state.config.integrations.georide?.trackerName || '');
     el('stats').innerHTML = `<p class="gr-message">${esc(summary?.configured === false ? t('gr.notConfigured') : summary?.error || t('gr.unavailable'))}</p>`;
     // No empty map frame while the integration is not set up: the tile would
     // stretch the whole row for nothing.
@@ -647,6 +688,48 @@ function applyAppearance(appearance = state.config?.appearance, version = state.
   }
 }
 
+/**
+ * Change the colour preset with a cross-fade of the whole page.
+ * The View Transitions API snapshots the old rendering and fades it into the
+ * new one, which no CSS transition can do for gradients. Where it is missing,
+ * the change simply applies at once.
+ */
+function setPreset(preset) {
+  // The state changes now, synchronously: a view transition defers its
+  // callback, and anything saving right after would send the previous value.
+  state.config.appearance.preset = preset;
+  withTransition(() => {
+    applyAppearance();
+    syncStatusBarColour();
+  });
+}
+
+/** Run a repaint inside a cross-fade where the browser supports one. */
+function withTransition(repaint) {
+  if (typeof document.startViewTransition === 'function' && !prefersReducedMotion()) {
+    document.startViewTransition(repaint);
+  } else {
+    repaint();
+  }
+}
+
+/** Pick a preset at random, never the one already showing. */
+async function shuffleTheme() {
+  const available = Object.keys(state.themePresets).filter((key) => key !== state.config.appearance?.preset);
+  if (available.length === 0) return;
+  const preset = available[Math.floor(Math.random() * available.length)];
+  setPreset(preset);
+  toast(t('msg.themeChanged', { name: state.themePresets[preset]?.label || preset }));
+  try {
+    const payload = await api('/api/config', { method: 'PUT', body: { config: state.config, note: 'theme shuffled' } });
+    state.saved = clone(payload.config);
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** The image is cached hard, so its timestamp is what busts that cache. */
 async function loadWallpaperVersion() {
   try {
@@ -691,6 +774,7 @@ function renderAll() {
 }
 
 function refreshData() {
+  lastRefresh = Date.now();
   loadWeather();
   loadGeoride();
 }
@@ -750,6 +834,7 @@ async function boot() {
     toggleAccountMenu(false);
     if (action === 'logout') doLogout();
     if (action === 'edit') setEditing(true);
+    if (action === 'shuffle') shuffleTheme();
     if (action === 'settings') openSettings();
     if (action === 'export') openExportDialog();
     if (action === 'import') openImportDialog();
@@ -768,11 +853,9 @@ async function boot() {
     toggleAccountMenu(false);
   });
 
-  addEventListener('mousemove', (event) => {
-    const x = (innerWidth - event.pageX * 2) / 110;
-    const y = (innerHeight - event.pageY * 2) / 110;
-    id('wall').style.transform = `translate(${x}px,${y}px) scale(1.08)`;
-  });
+  installParallax();
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   let resizeTimer;
   addEventListener('resize', () => {
@@ -798,8 +881,66 @@ async function boot() {
 
   renderAll();
   refreshData();
-  setInterval(updateTime, 1000);
-  setInterval(refreshData, Math.max(5, state.config.integrations.weather.refreshMinutes) * 60000);
+  startTimers();
+}
+
+/* --------------------------------- timers -------------------------------- */
+/* Nothing ticks while the tab is hidden: on a phone that is battery, and on a
+   dashboard left open all day it is a poll every few minutes for nobody. */
+
+let clockTimer = null;
+let dataTimer = null;
+let lastRefresh = 0;
+
+function startTimers() {
+  stopTimers();
+  clockTimer = setInterval(updateTime, 1000);
+  const minutes = Math.max(5, state.config?.integrations?.weather?.refreshMinutes ?? 30);
+  dataTimer = setInterval(refreshData, minutes * 60000);
+}
+
+function stopTimers() {
+  clearInterval(clockTimer);
+  clearInterval(dataTimer);
+  clockTimer = null;
+  dataTimer = null;
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    stopTimers();
+    return;
+  }
+  updateTime();
+  // Coming back after a minute is worth a refresh; flicking between tabs is not.
+  if (Date.now() - lastRefresh > 60000) refreshData();
+  startTimers();
+}
+
+/**
+ * Background parallax, on a pointer that can actually hover and at one update
+ * per frame. Touch screens and reduced-motion users get a still backdrop.
+ */
+function installParallax() {
+  if (!matchMedia('(hover: hover) and (pointer: fine)').matches || prefersReducedMotion()) return;
+  const wall = id('wall');
+  let queued = false;
+  let x = 0;
+  let y = 0;
+  addEventListener(
+    'mousemove',
+    (event) => {
+      x = (innerWidth - event.pageX * 2) / 110;
+      y = (innerHeight - event.pageY * 2) / 110;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        wall.style.transform = `translate(${x}px,${y}px) scale(1.08)`;
+      });
+    },
+    { passive: true }
+  );
 }
 
 boot().catch((error) => {

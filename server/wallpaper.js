@@ -39,6 +39,8 @@ export function wallpaperInfo() {
   };
 }
 
+export const wallpaperFile = () => FILE;
+
 export function readWallpaper() {
   return hasWallpaper() ? fs.readFileSync(FILE) : null;
 }

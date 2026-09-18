@@ -13,6 +13,8 @@ export const db = new DatabaseSync(DB_FILE);
 db.exec(`
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
+-- Keep the write-ahead log from growing without bound on a small container.
+PRAGMA journal_size_limit = 8388608;
 
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,

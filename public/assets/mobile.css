@@ -1,0 +1,203 @@
+/* Phone layout.
+   Loaded last, so it can override the inline grid template the renderer writes
+   on the tile row. The desktop layout above 820px is untouched. */
+
+/* The dock only exists on small screens. */
+#dock { display: none; }
+
+@media (max-width: 820px) {
+  :root {
+    /* Notch, Dynamic Island, home indicator and curved edges. */
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+    --dock-h: 66px;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+  }
+  button, a, input, select { touch-action: manipulation; }
+
+  /* Heavy backdrop filters are the main cost of this design on a phone GPU. */
+  .glass { -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%); }
+  .orb { filter: blur(56px); }
+  .orb.c { display: none; }
+
+  /* -------------------------------- top bar ------------------------------ */
+  .topbar {
+    top: calc(var(--safe-t) + 8px);
+    left: calc(var(--safe-l) + 10px);
+    right: calc(var(--safe-r) + 10px);
+    height: 48px;
+    padding: 0 8px 0 13px;
+    border-radius: 15px;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+  .tb-c { display: none; }
+  .tb-l { font-size: .86rem; gap: 9px; min-width: 0; }
+  .tb-l > span:not(.tb-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tb-clock { font-size: .92rem; }
+  .iconbtn { width: 40px; height: 40px; }
+  /* The account menu lives in the dock, where a thumb can reach it. */
+  #account-toggle { display: none; }
+
+  /* -------------------------------- layout ------------------------------- */
+  .shell {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin: calc(var(--safe-t) + 64px) auto calc(var(--safe-b) + var(--dock-h) + 16px);
+    padding: 0 calc(var(--safe-r) + 12px) 0 calc(var(--safe-l) + 12px);
+  }
+  .stack { gap: 14px; }
+
+  .sidebar {
+    position: relative;
+    top: 0;
+    padding: 14px;
+    border-radius: var(--rlg);
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .side-head, #search-card { grid-column: 1 / -1; }
+  .side-head { gap: 11px; }
+  .brand { width: 44px; height: 44px; border-radius: 14px; font-size: 21px; }
+  .side-head h1 { font-size: .98rem; }
+  .side-head p { font-size: .78rem; }
+  /* Navigation moved to the dock. */
+  .nav { display: none; }
+  .wcard-s { padding: 13px; border-radius: 17px; }
+  .year-big { font-size: 1.55rem; }
+
+  /* --------------------------------- tiles ------------------------------- */
+  /* The renderer writes the column template inline, hence !important. */
+  .wgrid { grid-template-columns: 1fr !important; gap: 14px; }
+  .card { padding: 16px 18px; border-radius: var(--rlg); }
+  /* Tighter tiles put the shortcuts within one scroll instead of two. */
+  .temp { font-size: 3rem; }
+  .wtop h3 { font-size: 1rem; }
+  .wmain { margin-top: 12px; }
+  .spark { height: 54px; margin-top: 10px; }
+  .gr-stats { grid-template-columns: repeat(4, 1fr); }
+  .gr-map { height: 170px; }
+
+  /* ------------------------------- shortcuts ----------------------------- */
+  .apps { padding: 16px; border-radius: var(--rlg); }
+  .apps-head { margin-bottom: 14px; }
+  .apps-head h3 { font-size: 1rem; }
+  .links { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 9px; }
+  .app { min-height: 102px; padding: 12px; border-radius: 18px; }
+  .appic { width: 40px; height: 40px; border-radius: 12px; font-size: 20px; }
+  .app-tt { font-size: .82rem; }
+  /* "Direct access" on every card is noise at this size; folder counts are not. */
+  .app:not([data-folder]) .app-sub { display: none; }
+  .app .caret { top: 10px; right: 10px; }
+
+  /* --------------------------------- dock -------------------------------- */
+  #dock {
+    display: flex;
+    position: fixed;
+    z-index: 40;
+    left: calc(var(--safe-l) + 10px);
+    right: calc(var(--safe-r) + 10px);
+    bottom: calc(var(--safe-b) + 10px);
+    padding: 6px;
+    border-radius: 21px;
+    gap: 3px;
+  }
+  .dock-item {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    place-items: center;
+    gap: 3px;
+    padding: 7px 3px;
+    border: 1px solid transparent;
+    border-radius: 15px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: .6rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color .25s, background .25s, transform .18s var(--ease);
+  }
+  .dock-item .i { font-size: 19px; }
+  .dock-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dock-item.active { color: var(--primary); background: var(--primary-soft); }
+  .dock-item:active { transform: scale(.93); }
+
+  /* ------------------------- menus, sheets, editing ---------------------- */
+  #account-menu {
+    top: auto;
+    bottom: calc(var(--safe-b) + var(--dock-h) + 14px);
+    left: calc(var(--safe-l) + 10px);
+    right: calc(var(--safe-r) + 10px);
+    width: auto;
+    border-radius: 20px;
+  }
+  .menu-item { padding: 13px 14px; font-size: .92rem; }
+
+  /* Modals become bottom sheets: reachable, and they keep their place. */
+  .modal { align-items: flex-end; padding: 0; }
+  .sheet {
+    width: 100% !important;
+    max-height: 88vh;
+    border-radius: var(--rxl) var(--rxl) 0 0;
+    padding-bottom: var(--safe-b);
+    animation: sheetUp .38s var(--ease) both;
+  }
+  @keyframes sheetUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .m-head, .m-body { padding: 18px 16px; }
+  /* A grab handle says "sheet": tap outside or press Escape to dismiss. */
+  .m-head { padding-top: 24px; }
+  .m-head::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border-strong);
+  }
+  .m-head { flex-wrap: wrap; gap: 12px; }
+  .m-head h3 { font-size: 1.2rem; }
+  .cbox { height: 130px; }
+
+  #editbar {
+    left: calc(var(--safe-l) + 10px);
+    right: calc(var(--safe-r) + 10px);
+    bottom: calc(var(--safe-b) + var(--dock-h) + 14px);
+    transform: none;
+    justify-content: space-between;
+    padding: 10px 12px;
+  }
+  .editbar-hint { display: none; }
+  /* Columns collapse to one, so the resize grip has nothing to resize. */
+  .tile-grip { display: none; }
+  .tinybtn { width: 34px; height: 34px; }
+  .iconpick { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); max-height: 40vh; }
+  .themes { grid-template-columns: 1fr 1fr; }
+  .tile-choices { grid-template-columns: 1fr 1fr; }
+  .inp { font-size: 16px; } /* iOS zooms into anything smaller */
+}
+
+/* A short landscape screen has no room for labels under the icons. */
+@media (max-width: 820px) and (max-height: 460px) {
+  :root { --dock-h: 48px; }
+  .dock-item span { display: none; }
+  .dock-item { padding: 9px 3px; }
+}
+
+/* Hover effects are meaningless on touch and leave cards stuck in a hover state. */
+@media (hover: none) {
+  .app:hover, .wx:hover, .day-btn:hover, .iconbtn:hover, .btn:hover, .tinybtn:hover { transform: none; }
+  .app:hover .appic { transform: none; }
+  .app:hover .sheen { opacity: 0; }
+  .app:active { transform: scale(.97); }
+}

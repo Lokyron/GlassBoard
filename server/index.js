@@ -9,6 +9,7 @@ import { configRouter } from './routes/config.js';
 import { integrationsRouter } from './routes/integrations.js';
 import { appearanceRouter } from './routes/appearance.js';
 import { getConfig } from './store.js';
+import { scheduleMaintenance } from './maintenance.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const app = express();
@@ -111,6 +112,7 @@ app.use((error, _req, res, _next) => {
 
 // Seed the default configuration on a fresh instance before accepting traffic.
 getConfig();
+scheduleMaintenance();
 
 app.listen(PORT, HOST, () => {
   console.log(`[glassboard] listening on http://${HOST}:${PORT}`);

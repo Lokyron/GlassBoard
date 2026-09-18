@@ -1,19 +1,21 @@
 // Background image upload, download and removal.
 import express from 'express';
 import { requireAuth } from '../auth.js';
-import { saveWallpaper, readWallpaper, deleteWallpaper, wallpaperInfo, MAX_BYTES } from '../wallpaper.js';
+import fs from 'node:fs';
+import { saveWallpaper, wallpaperFile, deleteWallpaper, wallpaperInfo, MAX_BYTES } from '../wallpaper.js';
 
 export const appearanceRouter = express.Router();
 appearanceRouter.use(requireAuth);
 
 appearanceRouter.get('/wallpaper', (_req, res) => {
   const info = wallpaperInfo();
-  const image = readWallpaper();
-  if (!info || !image) return res.status(404).json({ error: 'No wallpaper set.' });
+  if (!info) return res.status(404).json({ error: 'No wallpaper set.' });
   res.setHeader('Content-Type', info.mime);
+  res.setHeader('Content-Length', String(info.bytes));
   // The client asks with ?v=<updatedAt>, so the answer can be cached hard.
   res.setHeader('Cache-Control', 'private, max-age=604800');
-  res.send(image);
+  // Streamed rather than buffered: the image is never held in memory whole.
+  fs.createReadStream(wallpaperFile()).on('error', () => res.status(500).end()).pipe(res);
 });
 
 appearanceRouter.get('/wallpaper/info', (_req, res) => {
