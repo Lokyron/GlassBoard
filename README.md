@@ -4,7 +4,9 @@ A self-hosted dashboard for the services you use every day: a grid of shortcuts,
 weather tiles and optional integrations, all editable from the page itself,
 behind a login with two-factor authentication.
 
-<img width="1906" height="881" alt="SCR-20260918-jhgn" src="https://github.com/user-attachments/assets/ee9a13ad-ab81-4f53-af45-5254443cf66b" />
+![The Glassboard dashboard in dark mode](docs/images/dashboard-dark.png)
+
+<sub>Screenshots come from a real instance, with the names and places blurred out.</sub>
 
 Glassboard keeps a strict line between **the software** (this repository) and
 **your data** (a directory you own). A fresh install starts empty, with a
@@ -107,6 +109,12 @@ The account menu in the top bar switches between read and edit mode.
 
 Nothing is written to the server until you press **Save**.
 
+Everything that is not a tile lives in **Settings**, reachable from the same
+menu: the dashboard name, the language, the clocks, the search engine, the
+integrations, the appearance, the account and the backups.
+
+![The settings dialog](docs/images/settings.png)
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -131,6 +139,11 @@ geolocation (with a configurable fallback position) and one for a fixed city.
 City names are resolved through OpenStreetMap Nominatim, server-side and
 cached, so your visitors' IP addresses never reach it. Disable the whole
 integration in **Settings → Weather** and both tiles disappear cleanly.
+
+Clicking a weather tile opens the detailed forecast: seven days, with
+temperature, rain and wind over the hours of the day you pick.
+
+![The detailed forecast](docs/images/forecast.png)
 
 ### GeoRide, motorcycle tracker
 
@@ -266,6 +279,8 @@ instance gives back the same dashboard, image included. An image larger than
 
 A new preset is one block in `public/assets/themes.css` plus one entry in
 `THEME_PRESETS` (`server/config-schema.js`).
+
+![The same dashboard in light mode](docs/images/dashboard-light.png)
 
 ## On a phone
 
