@@ -20,6 +20,7 @@
 .editbar-label{display:flex;align-items:center;gap:9px;font-weight:680;font-size:.9rem}
 .editbar-label .i{font-size:17px;color:var(--primary)}
 .editbar-hint{color:var(--muted);font-size:.82rem}
+.editbar-touch{display:none}
 @media(max-width:740px){.editbar-hint{display:none}#editbar{left:14px;right:14px;transform:none;justify-content:space-between}}
 
 /* --------------------------------- buttons ------------------------------- */
@@ -68,8 +69,17 @@
 /* -------------------------------- edit mode ------------------------------ */
 body.editing .app,body.editing .card{cursor:grab}
 body.editing .editable{position:relative;outline:1px dashed var(--border-strong);outline-offset:3px}
-body.editing .editable.dragging{opacity:.45}
-body.editing .editable.drop-target{outline:2px solid var(--primary);outline-offset:3px}
+/* Arranging: the card lifts into a ghost that follows the pointer, its slot stays faintly visible. */
+body.editing .editable{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body.editing .links .editable,body.editing .wgrid .editable{cursor:grab}
+body.editing .editable.pressing{transform:scale(.95);transition:transform .3s var(--ease)}
+body.editing .editable.drag-source{opacity:.18;outline-style:dashed}
+.drag-ghost{position:fixed!important;left:0;top:0;margin:0;z-index:1000;pointer-events:none;transition:none!important;
+  box-shadow:0 26px 60px rgba(0,0,0,.34);will-change:transform}
+.drag-ghost .tile-edit,.drag-ghost .tile-grip{display:none}
+body.arranging,body.arranging *{cursor:grabbing!important}
+body.arranging .app:hover,body.arranging .wx:hover{transform:none}
+.sheet.drop-away{opacity:.45;transition:opacity .2s}
 body.editing .editable.drop-into{outline:2px solid var(--primary);outline-offset:3px;transform:scale(1.06);
   box-shadow:0 0 0 7px color-mix(in srgb,var(--primary) 22%,transparent);transition:transform .16s ease,box-shadow .16s ease}
 .tile-edit{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:6}

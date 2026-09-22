@@ -134,6 +134,13 @@ Pas de tests, linter ni CI configurés.
 - **`document.startViewTransition`** : le callback est différé ; modifier l'état *avant* l'appel (piège déjà rencontré).
 - **Fenêtre de dialogue unique** (`#dialog-modal`) : un éditeur imbriqué (un lien dans un dossier) doit
   rouvrir l'éditeur parent sur le même brouillon, jamais le fermer, sinon le brouillon est perdu.
+- **Glisser-déposer « écran d'accueil »** (`makeArrangeable` dans `edit.js`, événements pointeur) :
+  les grilles gardent leur élément d'un rendu à l'autre, donc les écouteurs sont posés **une seule fois**
+  et relisent les options du dernier rendu (sinon ils s'empilent et un geste est traité plusieurs fois).
+  La validation d'un dépôt ne doit pas attendre la fin d'une animation (elles se figent dans un onglet
+  masqué) ; les transitions CSS de survol ne doivent pas être prises pour des cartes en mouvement.
+- **Vue téléphone** : `.sidebar` et `.stack` passent en `display: contents` pour réordonner la page ;
+  un élément sans boîte ne peut pas servir de cible à `scrollIntoView` (voir `goTo`).
 - **Pas de tests automatisés** : prioriser le validateur de configuration (`config-schema.js`) et le flux d'authentification.
 - `express.json({ limit: '16mb' })` global : large (motivé par l'import avec fond d'écran en base64) ;
   le restreindre aux routes d'import si possible.

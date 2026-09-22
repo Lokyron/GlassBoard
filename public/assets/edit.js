@@ -133,61 +133,260 @@ function cancelEditing() {
   toast(t('edit.discarded'));
 }
 
-/* ------------------------- drag & drop reordering ------------------------ */
+/* ----------------------- home-screen style arranging ---------------------- */
+
+const LONG_PRESS_MS = 300;
+const DRAG_THRESHOLD = 6;
+const SLIDE = { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' };
+
+/** Put `list` in the order given as a list of former indexes. */
+const reorder = (list, order) => order.map((index) => list[index]);
 
 /**
- * Wire a container so its [data-index] children can be reordered by dragging.
- * With `canNest`/`onNest`, dropping on the middle of an accepting child puts the
- * dragged item inside it instead; its edges still reorder.
+ * Rearrange the [data-index] children of a grid the way a phone home screen
+ * does: the card lifts, follows the pointer, and the other cards slide out of
+ * its way while it moves. A mouse drags at once; a finger holds still for a
+ * moment first, so that a swipe keeps scrolling the page.
+ *
+ * - onReorder(order): released on the grid, `order` lists the former indexes.
+ * - canNest(from, to) / onNest(from, to): dropped on the middle of an accepting
+ *   card (a folder), the card goes inside it. Its edges still reorder.
+ * - bounds() / onDropOutside(from): released outside that rectangle.
+ *
+ * A grid keeps its element across re-renders, so the listeners are bound once
+ * and read the options of the latest render.
  */
-function makeSortable(container, selector, onReorder, { canNest, onNest } = {}) {
-  let dragIndex = null;
-  const nests = (node, event) => {
-    if (!canNest || dragIndex === null || !canNest(dragIndex, Number(node.dataset.index))) return false;
-    const box = node.getBoundingClientRect();
-    const x = (event.clientX - box.left) / box.width;
-    const y = (event.clientY - box.top) / box.height;
-    return x > 0.2 && x < 0.8 && y > 0.15 && y < 0.85;
-  };
-  const clearMarks = (node) => node.classList.remove('drop-target', 'drop-into');
-  container.querySelectorAll(selector).forEach((node) => {
-    node.setAttribute('draggable', 'true');
-    node.addEventListener('dragstart', (event) => {
-      dragIndex = Number(node.dataset.index);
-      node.classList.add('dragging');
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', String(dragIndex));
-    });
-    node.addEventListener('dragend', () => {
-      node.classList.remove('dragging');
-      dragIndex = null;
-      container.querySelectorAll('.drop-target, .drop-into').forEach(clearMarks);
-    });
-    node.addEventListener('dragover', (event) => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      const into = nests(node, event);
-      node.classList.toggle('drop-into', into);
-      node.classList.toggle('drop-target', !into);
-    });
-    node.addEventListener('dragleave', (event) => {
-      if (!node.contains(event.relatedTarget)) clearMarks(node);
-    });
-    node.addEventListener('drop', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const into = nests(node, event);
-      const from = dragIndex ?? Number(event.dataTransfer.getData('text/plain'));
-      const to = Number(node.dataset.index);
-      clearMarks(node);
-      if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
-      if (into) onNest(from, to);
-      else onReorder(from, to);
-    });
-  });
+function makeArrangeable(container, selector, options) {
+  container.querySelectorAll(selector).forEach((node) => node.setAttribute('draggable', 'false'));
+  const bound = Boolean(container.arrangeOptions);
+  container.arrangeOptions = options;
+  if (!bound) bindArranging(container, selector);
 }
 
-const moveItem = (list, from, to) => { list.splice(to, 0, list.splice(from, 1)[0]); };
+function bindArranging(container, selector) {
+  let press = null;
+  let drag = null;
+
+  const opts = () => container.arrangeOptions;
+  const cards = () => [...container.querySelectorAll(selector)];
+  const isCard = (node) => node && node.matches(selector) && node.parentElement === container;
+
+  container.addEventListener('dragstart', (event) => { if (document.body.classList.contains('editing')) event.preventDefault(); });
+  // Android opens a context menu on a long press, iOS a link preview.
+  container.addEventListener('contextmenu', (event) => {
+    if (document.body.classList.contains('editing') && event.target.closest(selector)) event.preventDefault();
+  });
+
+  container.addEventListener('pointerdown', (event) => {
+    if (!document.body.classList.contains('editing')) return;
+    if (drag || press || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (event.target.closest('.tile-edit, .tinybtn, .tile-grip, input, select, textarea')) return;
+    const node = event.target.closest(selector);
+    if (!isCard(node)) return;
+    press = { node, pointer: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType !== 'mouse' };
+    if (press.touch) {
+      node.classList.add('pressing');
+      press.timer = setTimeout(() => lift(), LONG_PRESS_MS);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  });
+
+  function forgetPress() {
+    if (!press) return;
+    clearTimeout(press.timer);
+    press.node.classList.remove('pressing');
+    press = null;
+  }
+
+  function unlisten() {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onCancel);
+  }
+
+  function onMove(event) {
+    if (press && event.pointerId === press.pointer) {
+      const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y) > DRAG_THRESHOLD;
+      if (!moved) return;
+      if (press.touch) { forgetPress(); unlisten(); return; } // a swipe: let the page scroll
+      press.x = event.clientX;
+      press.y = event.clientY;
+      lift();
+    }
+    if (drag && event.pointerId === drag.pointer) follow(event.clientX, event.clientY);
+  }
+
+  function onUp(event) {
+    if (press && event.pointerId === press.pointer) { forgetPress(); unlisten(); return; }
+    if (drag && event.pointerId === drag.pointer) land(false);
+  }
+
+  function onCancel(event) {
+    if (press && event.pointerId === press.pointer) { forgetPress(); unlisten(); return; }
+    if (drag && event.pointerId === drag.pointer) land(true);
+  }
+
+  function lift() {
+    const { node, x, y, pointer } = press;
+    forgetPress();
+    const box = node.getBoundingClientRect();
+    const ghost = node.cloneNode(true);
+    ghost.classList.add('drag-ghost');
+    ghost.classList.remove('pressing', 'rise');
+    ghost.removeAttribute('id');
+    Object.assign(ghost.style, { width: `${box.width}px`, height: `${box.height}px` });
+    document.body.appendChild(ghost);
+    node.classList.add('drag-source');
+    document.body.classList.add('arranging');
+    drag = { node, ghost, pointer, from: Number(node.dataset.index), offX: x - box.left, offY: y - box.top, x, y, into: null, outside: false };
+    place(x, y);
+    navigator.vibrate?.(8);
+    drag.frame = requestAnimationFrame(autoScroll);
+  }
+
+  function place(x, y) {
+    drag.ghost.style.transform = `translate3d(${x - drag.offX}px, ${y - drag.offY}px, 0) scale(1.06)`;
+  }
+
+  function follow(x, y) {
+    drag.x = x;
+    drag.y = y;
+    place(x, y);
+
+    const { bounds, canNest } = opts();
+    if (bounds) {
+      const box = bounds();
+      drag.outside = x < box.left || x > box.right || y < box.top || y > box.bottom;
+      container.closest('.sheet')?.classList.toggle('drop-away', drag.outside);
+      if (drag.outside) { markInto(null); return; }
+    }
+
+    const under = document.elementFromPoint(x, y)?.closest(selector);
+    if (!isCard(under) || under === drag.node) { if (under !== drag.into) markInto(null); return; }
+    // A card still sliding would bounce back under the pointer: wait for it to
+    // settle. Timed by the clock, since animations stall in a background tab.
+    if (performance.now() < (under.slidingUntil || 0)) return;
+
+    const to = Number(under.dataset.index);
+    if (canNest?.(drag.from, to) && inMiddle(under, x, y)) { markInto(under); return; }
+    markInto(null);
+
+    const list = [...container.children];
+    const after = list.indexOf(drag.node) < list.indexOf(under);
+    slide(() => under[after ? 'after' : 'before'](drag.node));
+  }
+
+  function markInto(node) {
+    if (drag.into === node) return;
+    drag.into?.classList.remove('drop-into');
+    drag.into = node;
+    node?.classList.add('drop-into');
+  }
+
+  /** Move DOM nodes, then animate every card from where it was to where it is. */
+  function slide(mutate) {
+    const others = [...container.children].filter((node) => node !== drag.node);
+    const before = new Map(others.map((node) => [node, node.getBoundingClientRect()]));
+    mutate();
+    others.forEach((node) => {
+      const from = before.get(node);
+      const to = node.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (!dx && !dy) return;
+      node.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], SLIDE);
+      node.slidingUntil = performance.now() + SLIDE.duration;
+    });
+  }
+
+  function autoScroll() {
+    if (!drag) return;
+    const scroller = scrollParent(container);
+    const view = scroller === document.scrollingElement
+      ? { top: 0, bottom: innerHeight }
+      : scroller.getBoundingClientRect();
+    // Bars fixed at the bottom of a phone screen hide the last cards.
+    const bar = id('editbar');
+    const bottom = bar && !bar.hidden && scroller === document.scrollingElement ? Math.min(view.bottom, bar.getBoundingClientRect().top) : view.bottom;
+    const edge = 72;
+    let speed = 0;
+    if (drag.y < view.top + edge) speed = -Math.min(1, (view.top + edge - drag.y) / edge);
+    else if (drag.y > bottom - edge) speed = Math.min(1, (drag.y - (bottom - edge)) / edge);
+    if (speed) {
+      scroller.scrollBy(0, speed * 16);
+      follow(drag.x, drag.y);
+    }
+    drag.frame = requestAnimationFrame(autoScroll);
+  }
+
+  function land(cancelled) {
+    unlisten();
+    cancelAnimationFrame(drag.frame);
+    const { node, ghost, into, outside, from } = drag;
+    container.closest('.sheet')?.classList.remove('drop-away');
+    document.body.classList.remove('arranging');
+
+    const { onReorder, onNest, onDropOutside } = opts();
+    let commit;
+    if (!cancelled && into) commit = () => onNest(from, Number(into.dataset.index));
+    else if (!cancelled && outside && onDropOutside) commit = () => onDropOutside(from);
+    else {
+      // A cancelled drag still re-renders, which puts the cards back in place.
+      const order = cancelled ? cards().map((_, i) => i) : cards().map((card) => Number(card.dataset.index));
+      commit = () => onReorder(order);
+    }
+
+    const target = (into || node).getBoundingClientRect();
+    const shrink = into ? 0.35 : 1;
+    const landing = ghost.animate([
+      { transform: ghost.style.transform, opacity: 1 },
+      { transform: `translate3d(${target.left + (target.width * (1 - shrink)) / 2}px, ${target.top + (target.height * (1 - shrink)) / 2}px, 0) scale(${shrink})`, opacity: into || outside ? 0 : 1 },
+    ], { duration: 200, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'forwards' });
+    drag = null;
+    suppressClick();
+    // The change must not depend on the animation: it never ends in a hidden tab.
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      ghost.remove();
+      node.classList.remove('drag-source');
+      into?.classList.remove('drop-into');
+      commit();
+    };
+    landing.onfinish = settle;
+    setTimeout(settle, 260);
+  }
+}
+
+/** The click that ends a drag must not open the card it was released on. */
+function suppressClick() {
+  const swallow = (event) => { event.preventDefault(); event.stopPropagation(); };
+  window.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 350);
+}
+
+function inMiddle(node, x, y) {
+  const box = node.getBoundingClientRect();
+  const rx = (x - box.left) / box.width;
+  const ry = (y - box.top) / box.height;
+  return rx > 0.22 && rx < 0.78 && ry > 0.18 && ry < 0.82;
+}
+
+function scrollParent(node) {
+  for (let el = node.parentElement; el && el !== document.body; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight) return el;
+  }
+  return document.scrollingElement;
+}
+
+// While a card is lifted, a finger moving must drag it, not scroll the page.
+document.addEventListener('touchmove', (event) => {
+  if (document.body.classList.contains('arranging')) event.preventDefault();
+}, { passive: false });
 
 /* --------------------------- tiles in edit mode -------------------------- */
 
@@ -212,10 +411,12 @@ function decorateTilesForEditing() {
   grid.appendChild(add);
   grid.style.gridTemplateColumns = `${state.config.tiles.map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
 
-  makeSortable(grid, '.editable', (from, to) => {
-    moveItem(state.config.tiles, from, to);
-    renderTiles();
-    refreshData();
+  makeArrangeable(grid, '.editable', {
+    onReorder: (order) => {
+      state.config.tiles = reorder(state.config.tiles, order);
+      renderTiles();
+      refreshData();
+    },
   });
 }
 
@@ -324,10 +525,11 @@ function decorateLinksForEditing() {
   grid.appendChild(el('button', { class: 'app app-add', html: `${svg('plus', 'font-size:22px')}<span>${esc(t('edit.addLink'))}</span>`, onclick: () => addLink(false) }));
   grid.appendChild(el('button', { class: 'app app-add', html: `${svg('folder', 'font-size:22px')}<span>${esc(t('edit.addFolder'))}</span>`, onclick: () => addLink(true) }));
 
-  makeSortable(grid, '.editable', (from, to) => {
-    moveItem(state.config.links, from, to);
-    renderLinks();
-  }, {
+  makeArrangeable(grid, '.editable', {
+    onReorder: (order) => {
+      state.config.links = reorder(state.config.links, order);
+      renderLinks();
+    },
     // Folders hold shortcuts only: a folder is never nested in another one.
     canNest: (from, to) => !state.config.links[from]?.items && Boolean(state.config.links[to]?.items),
     onNest: (from, to) => {
@@ -474,10 +676,21 @@ function decorateFolderForEditing(folderIndex) {
     renderLinks();
     openLinkDialog(items.length - 1, folderIndex, { isNew: true });
   } }));
-  makeSortable(grid, '.editable', (from, to) => {
-    moveItem(state.config.links[folderIndex].items, from, to);
-    openFolder(folderIndex);
-    renderLinks();
+  const folder = state.config.links[folderIndex];
+  makeArrangeable(grid, '.editable', {
+    onReorder: (order) => {
+      folder.items = reorder(folder.items, order);
+      openFolder(folderIndex);
+      renderLinks();
+    },
+    // Released outside the folder, a link goes back to the main grid.
+    bounds: () => grid.closest('.sheet').getBoundingClientRect(),
+    onDropOutside: (from) => {
+      const [link] = folder.items.splice(from, 1);
+      placeLink(link, '');
+      renderLinks();
+      closeFolder();
+    },
   });
 }
 

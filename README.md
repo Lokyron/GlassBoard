@@ -44,9 +44,9 @@ reaches the browser, and no request goes out to a service you did not enable.
   random and cross-fades the whole page into it. Everything is a CSS variable,
   so a seventh preset is a dozen lines.
 - **Built for a phone too**: a thumb-reachable bottom dock, bottom sheets
-  instead of centred modals, three columns of shortcuts on a 375 px screen, and
-  full support for notches, Dynamic Islands and home indicators. Add it to your
-  home screen and it runs as a standalone app.
+  instead of centred modals, a four-column grid of shortcuts like a home
+  screen, and full support for notches, Dynamic Islands and home indicators.
+  Add it to your home screen and it runs as a standalone app.
 - **Seven interface languages**: English, French, Spanish, German, Italian,
   Portuguese and Dutch. The dashboard follows the language you pick in the
   settings, the sign-in screens follow the browser.
@@ -100,7 +100,7 @@ The account menu in the top bar switches between read and edit mode.
 
 | In edit mode | How |
 |---|---|
-| Reorder a tile or a shortcut | drag it onto another one |
+| Move a tile, a shortcut or a folder | drag it where you want it; the others slide out of the way |
 | Resize a tile | drag the grip on its right edge |
 | Change a shortcut | the pencil button on the card |
 | Create a folder | **Add a folder**, then add links inside it |
@@ -110,10 +110,15 @@ The account menu in the top bar switches between read and edit mode.
 | Add or configure a tile | **Add a tile**, or the gear on an existing one |
 | Keep or drop the changes | **Save** / **Cancel** in the bottom bar |
 
-Dropping a shortcut on the edge of a folder reorders it, as with any other card.
-Folders only hold shortcuts, so a folder dropped on another one just moves
-next to it. Drag and drop needs a mouse; on a phone, the **Location** field does
-the same job.
+Rearranging works like a phone home screen: the card lifts, follows the pointer,
+and the others make room for it as it goes. With a mouse, just drag. With a
+finger, hold the card for a moment, then drag; a quick swipe still scrolls the
+page. Near the top or the bottom of the screen, the page scrolls along.
+
+Dropping a shortcut on the middle of a folder files it there; its edges only
+reorder. Folders only hold shortcuts, so a folder dropped on another one just
+moves next to it. Inside an open folder, links rearrange the same way, and a
+link released outside the folder goes back to the main grid.
 
 Nothing is written to the server until you press **Save**.
 
@@ -294,11 +299,17 @@ A new preset is one block in `public/assets/themes.css` plus one entry in
 
 Below 820 px the layout changes rather than shrinks:
 
-- navigation moves to a **bottom dock**, where a thumb reaches it;
-- modals become **bottom sheets** with a grab handle;
-- the sidebar folds into a header, a full-width search box and two compact cards;
-- shortcuts drop to three columns with larger touch targets, and hover effects
-  are disabled so no card stays stuck highlighted after a tap;
+- the page is reordered for a thumb: greeting and search, the tiles, the
+  shortcuts, and the clock and year cards last;
+- navigation moves to a **bottom dock**, where a thumb reaches it; while
+  editing, the **Save** / **Cancel** bar takes its place;
+- weather tiles pair up side by side, other tiles keep the full width;
+- shortcuts become a four-column home screen grid (three below 360 px), with
+  one-line labels, and hover effects are disabled so no card stays stuck
+  highlighted after a tap;
+- modals become **bottom sheets** with a grab handle, their **Save** button
+  stays pinned at the bottom, the settings tabs scroll sideways and the seven
+  forecast days fit on one line;
 - `viewport-fit=cover` plus `env(safe-area-inset-*)` keep the bars clear of a
   notch, a Dynamic Island, a home indicator and curved screen edges;
 - the status bar takes the colour of the current theme.

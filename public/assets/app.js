@@ -95,7 +95,9 @@ function toggleTheme() { setTheme(html.getAttribute('data-theme') !== 'dark'); }
 
 function goTo(anchor, trigger) {
   const target = id(anchor);
-  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // On a phone the overview wrapper has no box of its own: go to the top instead.
+  if (target?.getClientRects().length) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  else window.scrollTo({ top: 0, behavior: 'smooth' });
   document.querySelectorAll('.pill, .dock-item').forEach((p) => p.classList.remove('active'));
   if (trigger) trigger.classList.add('active');
 }
@@ -470,7 +472,7 @@ function renderDays() {
     const button = document.createElement('button');
     button.className = `day-btn${index === state.selectedDay ? ' active' : ''}`;
     const dayName = day === today
-      ? t('wx.today').slice(0, 4)
+      ? t('wx.todayShort')
       : date.toLocaleDateString(state.config.site.locale, { weekday: 'short' });
     button.innerHTML = `<span class="dn">${esc(dayName)}</span><span class="dd">${date.getDate()}</span>`;
     button.addEventListener('click', () => { state.selectedDay = index; renderDays(); updateWeatherModal(); });
