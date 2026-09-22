@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Dashboard" />
-<link rel="apple-touch-icon" href="/favicon.svg" />
-<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
 <title>Dashboard</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/assets/vendor/leaflet.css" />
@@ -33,6 +33,7 @@
   <button class="menu-item" data-action="edit" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="pencil-simple"></svg><span data-t="menu.edit">Edit dashboard</span></button>
   <button class="menu-item" data-action="shuffle" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="shuffle"></svg><span data-t="menu.shuffle">Shuffle theme</span></button>
   <button class="menu-item" data-action="settings" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="gear-six"></svg><span data-t="menu.settings">Settings</span></button>
+  <button class="menu-item" data-action="install" role="menuitem" hidden><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="download-simple"></svg><span data-t="menu.install">Install the app</span></button>
   <button class="menu-item" data-action="export" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="download-simple"></svg><span data-t="menu.export">Export configuration</span></button>
   <button class="menu-item" data-action="import" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="upload-simple"></svg><span data-t="menu.import">Import configuration</span></button>
   <div class="menu-sep"></div>
@@ -118,6 +119,7 @@
 <script src="/assets/icons-extra.js"></script>
 <script src="/assets/vendor/leaflet.js"></script>
 <script src="/assets/i18n.js"></script>
+<script src="/assets/pwa.js"></script>
 <script src="/assets/app.js"></script>
 <script src="/assets/edit.js"></script>
 </body>

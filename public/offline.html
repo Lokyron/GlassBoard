@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#07080c" />
+<title>Glassboard</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/assets/base.css" />
+<link rel="stylesheet" href="/assets/app-extra.css" />
+<link rel="stylesheet" href="/assets/themes.css" />
+</head>
+<body>
+<div id="wall"></div><div class="orb a"></div><div class="orb b"></div>
+<main class="auth-wrap">
+  <section class="auth-card glass rise offline-card">
+    <img src="/icons/icon-192.png" alt="" width="64" height="64" class="offline-icon" />
+    <h1 data-t="off.title">You're offline</h1>
+    <p class="muted" data-t="off.body">The dashboard can't reach its server right now. It will come back by itself as soon as the connection does.</p>
+    <button class="btn primary" id="retry" type="button" data-t="off.retry">Retry</button>
+  </section>
+</main>
+<script src="/assets/i18n.js"></script>
+<script src="/assets/offline.js"></script>
+</body>
+</html>

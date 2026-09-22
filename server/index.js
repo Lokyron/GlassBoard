@@ -91,6 +91,13 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, setupRequired: needsS
 
 /* -------------------------------- statics -------------------------------- */
 
+// The service worker and the manifest must never be served stale from a cache,
+// or an installed app would hold on to an old version.
+app.get(['/sw.js', '/manifest.webmanifest'], (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  next();
+});
+
 app.use(
   express.static(PUBLIC_DIR, {
     index: false,

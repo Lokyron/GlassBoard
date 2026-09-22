@@ -779,6 +779,28 @@ function refreshData() {
   loadGeoride();
 }
 
+/* ------------------------------- install app ------------------------------ */
+
+/** The menu offers installing only where the browser can, and not from inside the app. */
+function syncInstallItem() {
+  id('account-menu').querySelector('[data-action="install"]').hidden = !pwa.available;
+}
+
+async function installApp() {
+  if (pwa.prompt) {
+    const prompt = pwa.prompt;
+    pwa.prompt = null; // a prompt can be shown only once
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    syncInstallItem();
+    if (outcome === 'accepted') toast(t('pwa.installed'));
+    return;
+  }
+  if (pwa.ios) {
+    openDialog({ title: t('menu.install'), body: el('div', { class: 'dlg' }, [el('p', { class: 'fld-h', text: t('pwa.ios') })]) });
+  }
+}
+
 /* --------------------------------- dialogs -------------------------------- */
 
 function openDialog({ title, subtitle = '', body }) {
@@ -837,6 +859,7 @@ async function boot() {
     if (action === 'shuffle') shuffleTheme();
     if (action === 'settings') openSettings();
     if (action === 'export') openExportDialog();
+    if (action === 'install') installApp();
     if (action === 'import') openImportDialog();
   });
 
@@ -854,6 +877,8 @@ async function boot() {
   });
 
   installParallax();
+  pwa.onChange = syncInstallItem;
+  syncInstallItem();
 
   document.addEventListener('visibilitychange', onVisibilityChange);
 

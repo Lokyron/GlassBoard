@@ -139,6 +139,10 @@ Pas de tests, linter ni CI configurés.
   et relisent les options du dernier rendu (sinon ils s'empilent et un geste est traité plusieurs fois).
   La validation d'un dépôt ne doit pas attendre la fin d'une animation (elles se figent dans un onglet
   masqué) ; les transitions CSS de survol ne doivent pas être prises pour des cartes en mouvement.
+- **PWA** : `public/sw.js` (réseau d'abord, jamais de cache pour `/api/` ni pour les pages, page
+  `offline.html` en secours), `public/manifest.webmanifest`, icônes dans `public/icons/` (SVG sources,
+  PNG rendus avec Chrome headless). Installation impossible sans HTTPS (hors `localhost`). Changer le
+  contenu mis en cache ⇒ incrémenter `CACHE` dans `sw.js`.
 - **Vue téléphone** : `.sidebar` et `.stack` passent en `display: contents` pour réordonner la page ;
   un élément sans boîte ne peut pas servir de cible à `scrollIntoView` (voir `goTo`).
 - **Pas de tests automatisés** : prioriser le validateur de configuration (`config-schema.js`) et le flux d'authentification.

@@ -50,6 +50,8 @@ reaches the browser, and no request goes out to a service you did not enable.
 - **Seven interface languages**: English, French, Spanish, German, Italian,
   Portuguese and Dutch. The dashboard follows the language you pick in the
   settings, the sign-in screens follow the browser.
+- **Installable**: a Progressive Web App, with its own window and icon on a
+  phone or a computer.
 - **Light footprint**: no front-end framework, no build step, no CDN. Two
   vendored libraries, four runtime dependencies, one SQLite file.
 
@@ -314,8 +316,30 @@ Below 820 px the layout changes rather than shrinks:
   notch, a Dynamic Island, a home indicator and curved screen edges;
 - the status bar takes the colour of the current theme.
 
-A web manifest ships with the app, so **Add to Home Screen** gives a standalone
-window with no browser chrome, on both Android and iOS.
+## Installing it as an app
+
+Glassboard is a Progressive Web App: it installs from the browser and then runs
+in its own window, with its own icon, like a native app.
+
+- **Chrome, Edge, Android**: use the install icon in the address bar or the
+  browser menu, or **Install the app** in Glassboard's account menu.
+- **iPhone and iPad**: **Install the app** in the account menu shows the steps:
+  Share menu, then **Add to Home Screen**.
+- **Safari on a Mac**: **File → Add to Dock**.
+
+The menu entry only appears where the browser can install, and disappears once
+you are inside the installed app.
+
+Installing needs **HTTPS**, like every browser feature of this kind. Over plain
+`http://` on a LAN address the dashboard works as usual but cannot be
+installed; `localhost` is the only exception. The manifest is requested with
+credentials, so installing also works behind a proxy that asks for a login
+(basic auth, Authelia, Authentik).
+
+A service worker makes the app installable and shows a small offline page when
+the server cannot be reached; the page comes back by itself when the connection
+does. It never stores your data: API responses and pages are not cached, only
+the files the offline page needs.
 
 Backdrop blur is the expensive part of this design on a phone GPU, so it is
 lightened on small screens, one of the background orbs is dropped, and the
