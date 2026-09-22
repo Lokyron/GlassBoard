@@ -173,10 +173,8 @@ function renderLinks() {
     })
     .join('');
   grid.querySelectorAll('[data-folder]').forEach((el) => {
-    el.addEventListener('click', () => {
-      if (state.editing) return;
-      openFolder(Number(el.dataset.link));
-    });
+    // In edit mode too: that is where its links are added and rearranged.
+    el.addEventListener('click', () => openFolder(Number(el.dataset.link)));
   });
   if (state.editing) decorateLinksForEditing();
 }

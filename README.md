@@ -104,8 +104,16 @@ The account menu in the top bar switches between read and edit mode.
 | Resize a tile | drag the grip on its right edge |
 | Change a shortcut | the pencil button on the card |
 | Create a folder | **Add a folder**, then add links inside it |
+| Open a folder to edit its links | click it |
+| Put a shortcut in a folder | drop it on the middle of the folder, or pick the folder in its **Location** field |
+| Take a link out of a folder | set its **Location** back to **Main grid** |
 | Add or configure a tile | **Add a tile**, or the gear on an existing one |
 | Keep or drop the changes | **Save** / **Cancel** in the bottom bar |
+
+Dropping a shortcut on the edge of a folder reorders it, as with any other card.
+Folders only hold shortcuts, so a folder dropped on another one just moves
+next to it. Drag and drop needs a mouse; on a phone, the **Location** field does
+the same job.
 
 Nothing is written to the server until you press **Save**.
 

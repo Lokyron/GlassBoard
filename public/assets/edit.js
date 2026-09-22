@@ -135,9 +135,21 @@ function cancelEditing() {
 
 /* ------------------------- drag & drop reordering ------------------------ */
 
-/** Wire a container so its [data-index] children can be reordered by dragging. */
-function makeSortable(container, selector, onReorder) {
+/**
+ * Wire a container so its [data-index] children can be reordered by dragging.
+ * With `canNest`/`onNest`, dropping on the middle of an accepting child puts the
+ * dragged item inside it instead; its edges still reorder.
+ */
+function makeSortable(container, selector, onReorder, { canNest, onNest } = {}) {
   let dragIndex = null;
+  const nests = (node, event) => {
+    if (!canNest || dragIndex === null || !canNest(dragIndex, Number(node.dataset.index))) return false;
+    const box = node.getBoundingClientRect();
+    const x = (event.clientX - box.left) / box.width;
+    const y = (event.clientY - box.top) / box.height;
+    return x > 0.2 && x < 0.8 && y > 0.15 && y < 0.85;
+  };
+  const clearMarks = (node) => node.classList.remove('drop-target', 'drop-into');
   container.querySelectorAll(selector).forEach((node) => {
     node.setAttribute('draggable', 'true');
     node.addEventListener('dragstart', (event) => {
@@ -148,21 +160,29 @@ function makeSortable(container, selector, onReorder) {
     });
     node.addEventListener('dragend', () => {
       node.classList.remove('dragging');
-      container.querySelectorAll('.drop-target').forEach((n) => n.classList.remove('drop-target'));
+      dragIndex = null;
+      container.querySelectorAll('.drop-target, .drop-into').forEach(clearMarks);
     });
     node.addEventListener('dragover', (event) => {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
-      node.classList.add('drop-target');
+      const into = nests(node, event);
+      node.classList.toggle('drop-into', into);
+      node.classList.toggle('drop-target', !into);
     });
-    node.addEventListener('dragleave', () => node.classList.remove('drop-target'));
+    node.addEventListener('dragleave', (event) => {
+      if (!node.contains(event.relatedTarget)) clearMarks(node);
+    });
     node.addEventListener('drop', (event) => {
       event.preventDefault();
       event.stopPropagation();
+      const into = nests(node, event);
       const from = dragIndex ?? Number(event.dataTransfer.getData('text/plain'));
       const to = Number(node.dataset.index);
-      node.classList.remove('drop-target');
-      if (Number.isInteger(from) && Number.isInteger(to) && from !== to) onReorder(from, to);
+      clearMarks(node);
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
+      if (into) onNest(from, to);
+      else onReorder(from, to);
     });
   });
 }
@@ -299,9 +319,6 @@ function decorateLinksForEditing() {
       el('button', { class: 'tinybtn', title: t('edit.settings'), html: svg('pencil-simple'), onclick: (e) => { e.stopPropagation(); openLinkDialog(index); } }),
       el('button', { class: 'tinybtn danger', title: t('edit.remove'), html: svg('trash'), onclick: (e) => { e.stopPropagation(); removeLink(index); } }),
     ]));
-    if (state.config.links[index].items) {
-      node.addEventListener('dblclick', () => openFolder(index));
-    }
   });
 
   grid.appendChild(el('button', { class: 'app app-add', html: `${svg('plus', 'font-size:22px')}<span>${esc(t('edit.addLink'))}</span>`, onclick: () => addLink(false) }));
@@ -310,6 +327,15 @@ function decorateLinksForEditing() {
   makeSortable(grid, '.editable', (from, to) => {
     moveItem(state.config.links, from, to);
     renderLinks();
+  }, {
+    // Folders hold shortcuts only: a folder is never nested in another one.
+    canNest: (from, to) => !state.config.links[from]?.items && Boolean(state.config.links[to]?.items),
+    onNest: (from, to) => {
+      const folder = state.config.links[to];
+      const [link] = state.config.links.splice(from, 1);
+      placeLink(link, folder.id);
+      renderLinks();
+    },
   });
 }
 
@@ -319,8 +345,19 @@ function addLink(isFolder) {
     : { id: uid('lnk'), title: 'Shortcut', url: 'https://example.org/', color: '#0a84ff', icon: 'link' };
   state.config.links.push(link);
   renderLinks();
-  openLinkDialog(state.config.links.length - 1);
+  openLinkDialog(state.config.links.length - 1, null, { isNew: true });
 }
+
+/** Put a shortcut in a folder, or back on the main grid when `folderId` is empty. */
+function placeLink(link, folderId) {
+  const folder = folderId ? state.config.links.find((entry) => entry.id === folderId && entry.items) : null;
+  if (folder) folder.items.push({ ...link, id: uid('sub') });
+  else state.config.links.push({ ...link, id: uid('lnk') });
+  toast(t('edit.movedTo', { name: link.title, folder: folder ? folder.title : t('dlg.mainGrid') }));
+}
+
+/** The shortcut list a link lives in: the main grid, or one folder's items. */
+const linkList = (folderIndex) => (folderIndex === null ? state.config.links : state.config.links[folderIndex].items);
 
 function removeLink(index) {
   if (!confirm(t('edit.confirmRemove', { name: state.config.links[index].title }))) return;
@@ -328,14 +365,29 @@ function removeLink(index) {
   renderLinks();
 }
 
-function openLinkDialog(index, folderIndex = null) {
-  const source = folderIndex === null ? state.config.links[index] : state.config.links[folderIndex].items[index];
-  const draft = clone(source);
+function openLinkDialog(index, folderIndex = null, { draft: kept = null, isNew = false, destination: keptDestination } = {}) {
+  const draft = kept ?? clone(linkList(folderIndex)[index]);
   const isFolder = Boolean(draft.items);
+  const currentFolderId = folderIndex === null ? '' : state.config.links[folderIndex].id;
+  let destination = keptDestination ?? currentFolderId;
+  // A nested editor takes over the single dialog; it reopens this one on the
+  // same draft when it closes, so nothing typed here is lost.
+  const reopen = () => openLinkDialog(index, folderIndex, { draft, isNew, destination });
+
+  const folders = state.config.links.filter((entry) => entry.items);
+  const locationPicker = () => {
+    const select = el('select', { class: 'inp', onchange: (e) => { destination = e.target.value; } }, [
+      el('option', { value: '', text: t('dlg.mainGrid') }),
+      ...folders.map((folder) => el('option', { value: folder.id, text: folder.title })),
+    ]);
+    select.value = destination;
+    return select;
+  };
 
   const body = el('div', { class: 'dlg' }, [
     field(t('dlg.title'), textInput(draft.title, { oninput: (e) => { draft.title = e.target.value; } })),
     isFolder ? null : field(t('dlg.url'), textInput(draft.url, { oninput: (e) => { draft.url = e.target.value; }, placeholder: 'https://' })),
+    isFolder || folders.length === 0 ? null : field(t('dlg.location'), locationPicker()),
     field(t('dlg.colour'), colourPicker(draft.color, (colour) => { draft.color = colour; })),
     field(t('dlg.icon'), iconPicker(draft.icon, (icon) => { draft.icon = icon; })),
   ]);
@@ -348,31 +400,44 @@ function openLinkDialog(index, folderIndex = null) {
         list.appendChild(el('div', { class: 'sub-row' }, [
           el('span', { class: 'sub-ic', style: `background:${item.color}`, html: svg(item.icon) }),
           el('span', { class: 'sub-tt', text: item.title }),
-          el('button', { class: 'tinybtn', type: 'button', html: svg('pencil-simple'), onclick: () => openSubItemDialog(draft, i, renderSubList) }),
+          el('button', { class: 'tinybtn', type: 'button', html: svg('pencil-simple'), onclick: () => openSubItemDialog(draft, i, reopen) }),
           el('button', { class: 'tinybtn danger', type: 'button', html: svg('trash'), onclick: () => { draft.items.splice(i, 1); renderSubList(); } }),
         ]));
       });
       list.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('edit.addItem'), onclick: () => {
         draft.items.push({ id: uid('sub'), title: 'Link', url: 'https://example.org/', color: draft.color, icon: 'link' });
-        openSubItemDialog(draft, draft.items.length - 1, renderSubList);
+        openSubItemDialog(draft, draft.items.length - 1, reopen, { isNew: true });
       } }));
     };
     renderSubList();
     body.appendChild(field(t('apps.links', { n: draft.items.length }), list));
   }
 
-  body.appendChild(dialogFooter(() => {
-    if (folderIndex === null) state.config.links[index] = draft;
-    else state.config.links[folderIndex].items[index] = draft;
+  const done = () => {
     closeDialog();
     renderLinks();
     if (folderIndex !== null) openFolder(folderIndex);
-  }));
+  };
+  const save = () => {
+    if (destination === currentFolderId) {
+      linkList(folderIndex)[index] = draft;
+    } else {
+      linkList(folderIndex).splice(index, 1);
+      placeLink(draft, destination);
+    }
+    done();
+  };
+  // Cancelling a link that was just added takes its placeholder away again.
+  const cancel = () => {
+    if (isNew) linkList(folderIndex).splice(index, 1);
+    done();
+  };
+  body.appendChild(dialogFooter(save, cancel));
   openDialog({ title: draft.title, subtitle: isFolder ? t('edit.addFolder') : t('edit.addLink'), body });
 }
 
 /** Nested editor for one link inside a folder, without leaving the folder dialog. */
-function openSubItemDialog(folderDraft, itemIndex, onDone) {
+function openSubItemDialog(folderDraft, itemIndex, onDone, { isNew = false } = {}) {
   const item = clone(folderDraft.items[itemIndex]);
   const body = el('div', { class: 'dlg' }, [
     field(t('dlg.title'), textInput(item.title, { oninput: (e) => { item.title = e.target.value; } })),
@@ -382,7 +447,9 @@ function openSubItemDialog(folderDraft, itemIndex, onDone) {
   ]);
   body.appendChild(dialogFooter(() => {
     folderDraft.items[itemIndex] = item;
-    closeDialog();
+    onDone();
+  }, () => {
+    if (isNew) folderDraft.items.splice(itemIndex, 1);
     onDone();
   }));
   openDialog({ title: item.title, body });
@@ -401,9 +468,11 @@ function decorateFolderForEditing(folderIndex) {
     ]));
   });
   grid.appendChild(el('button', { class: 'app app-add', html: `${svg('plus', 'font-size:22px')}<span>${esc(t('edit.addItem'))}</span>`, onclick: () => {
-    state.config.links[folderIndex].items.push({ id: uid('sub'), title: 'Link', url: 'https://example.org/', color: state.config.links[folderIndex].color, icon: 'link' });
+    const items = state.config.links[folderIndex].items;
+    items.push({ id: uid('sub'), title: 'Link', url: 'https://example.org/', color: state.config.links[folderIndex].color, icon: 'link' });
     openFolder(folderIndex);
     renderLinks();
+    openLinkDialog(items.length - 1, folderIndex, { isNew: true });
   } }));
   makeSortable(grid, '.editable', (from, to) => {
     moveItem(state.config.links[folderIndex].items, from, to);

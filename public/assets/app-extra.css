@@ -70,6 +70,8 @@ body.editing .app,body.editing .card{cursor:grab}
 body.editing .editable{position:relative;outline:1px dashed var(--border-strong);outline-offset:3px}
 body.editing .editable.dragging{opacity:.45}
 body.editing .editable.drop-target{outline:2px solid var(--primary);outline-offset:3px}
+body.editing .editable.drop-into{outline:2px solid var(--primary);outline-offset:3px;transform:scale(1.06);
+  box-shadow:0 0 0 7px color-mix(in srgb,var(--primary) 22%,transparent);transition:transform .16s ease,box-shadow .16s ease}
 .tile-edit{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:6}
 body:not(.editing) .tile-edit{display:none}
 .tile-grip{position:absolute;top:50%;right:-9px;transform:translateY(-50%);width:20px;height:44px;border-radius:9px;
