@@ -1,0 +1,16 @@
+# Runs the updater once, as root. Started by glassboard-update.path, never by
+# the application itself.
+[Unit]
+Description=Update Glassboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/glassboard-update
+Environment=APP_DIR=/opt/glassboard
+Environment=DATA_DIR=/var/lib/glassboard
+Environment=SERVICE=glassboard
+Environment=APP_USER=glassboard
+Environment=UPDATE_REPO=Lokyron/GlassBoard
+Environment=UPDATE_BRANCH=main

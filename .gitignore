@@ -27,3 +27,6 @@ npm-debug.log*
 # Editors
 .vscode/
 .idea/
+
+# Written by the updater, describes the installed version
+VERSION

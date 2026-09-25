@@ -174,6 +174,18 @@ git pull && npm ci --omit=dev && systemctl restart glassboard
 An installed app picks the new version up on its own: the service worker and the
 manifest are always served fresh.
 
+### From inside Glassboard
+
+Glassboard can also update itself, from **Settings → About**: it shows the
+installed version, what the repository has, and an **Update now** button, with a
+dot next to the account button when a newer version is waiting.
+
+The application never writes its own code. Pressing the button drops a request
+file in the data directory; a systemd path unit runs the updater as root, which
+downloads the new version, installs it, restarts the service, and rolls back if
+it fails to start. Setting it up takes three commands, in
+[deploy/README.md](deploy/README.md).
+
 ## Using Glassboard
 
 ### Editing the dashboard
@@ -426,6 +438,10 @@ from a `.env` file next to the server. See [.env.example](.env.example).
 | `LOGIN_MAX_ATTEMPTS` | `5` | Failed logins before a lockout. |
 | `LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration. |
 | `OSM_CONTACT` | none | Optional contact address sent to OpenStreetMap services, as their usage policy asks. |
+| `UPDATE_ENABLED` | `0` | `1` turns on the **Update now** button. Needs the updater from [deploy/](deploy/README.md). |
+| `UPDATE_REPO` | `Lokyron/GlassBoard` | The GitHub repository updates come from. |
+| `UPDATE_BRANCH` | `main` | The branch that is tracked. |
+| `UPDATE_CHECK_HOURS` | `24` | How often the instance asks GitHub whether a newer version exists. |
 
 ## Security
 
@@ -452,6 +468,7 @@ glassboard/
 ├── server/            HTTP server, storage, auth, integrations
 ├── public/            the dashboard itself (HTML/CSS/JS, no build)
 ├── scripts/           export and import CLI
+├── deploy/            updater script and systemd units
 ├── docs/              format documentation
 └── $DATA_DIR/         YOUR data, never in git
     ├── glassboard.db  configuration, account, encrypted credentials

@@ -694,6 +694,115 @@ function decorateFolderForEditing(folderIndex) {
   });
 }
 
+/* ------------------------------ about & update --------------------------- */
+
+const shortCommit = (sha) => (sha ? sha.slice(0, 7) : null);
+
+/** Version, what GitHub has, and the button that asks for an update. */
+function aboutPane() {
+  const pane = el('div', { class: 'pane' });
+  const body = el('div', { class: 'dlg' });
+  pane.appendChild(body);
+  const draw = (payload) => {
+    body.innerHTML = '';
+    const installed = payload?.installed ?? {};
+    const latest = payload?.latest ?? null;
+    const behind = Boolean(latest?.commit && installed.commit && latest.commit !== installed.commit);
+    const unknown = !installed.commit;
+
+    const line = (label, value, hint) => {
+      const rows = [el('div', { class: 'fld-l', text: label }), el('div', { class: 'about-v', text: value })];
+      if (hint) rows.push(el('p', { class: 'fld-h', text: hint }));
+      return el('div', { class: 'about-row' }, rows);
+    };
+
+    body.appendChild(line(
+      t('upd.installed'),
+      installed.commit ? `${installed.version ?? ''} · ${shortCommit(installed.commit)}`.trim() : (installed.version ?? t('upd.unknown')),
+      installed.installedAt ? new Date(installed.installedAt).toLocaleString(state.config.site.locale) : undefined
+    ));
+    body.appendChild(line(
+      t('upd.latest'),
+      latest ? `${shortCommit(latest.commit)}` : (payload?.error || t('upd.unknown')),
+      latest?.message
+    ));
+
+    const state_ = payload?.status?.state;
+    if (state_ === 'running') {
+      body.appendChild(el('p', { class: 'fld-h', text: `${t('upd.running')} ${payload.status.step ?? ''}` }));
+    } else if (state_ === 'failed') {
+      body.appendChild(el('p', { class: 'fld-h danger-text', text: t('upd.failed', { message: payload.status.message || '' }) }));
+    } else if (!unknown && !behind && latest) {
+      body.appendChild(el('p', { class: 'fld-h', text: t('upd.upToDate') }));
+    }
+
+    if (!payload?.enabled) {
+      body.appendChild(el('p', { class: 'fld-h', text: t('upd.disabled') }));
+      return;
+    }
+    const button = el('button', {
+      class: `btn ${behind ? 'primary' : 'ghost'}`,
+      type: 'button',
+      text: state_ === 'running' ? t('upd.updating') : t('upd.update'),
+      disabled: state_ === 'running',
+      onclick: () => {
+        if (!confirm(t('upd.confirm'))) return;
+        startUpdate(draw);
+      },
+    });
+    body.appendChild(button);
+    body.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('upd.check'), onclick: () => loadAbout(draw, true) }));
+  };
+
+  loadAbout(draw, false);
+  return pane;
+}
+
+async function loadAbout(draw, force) {
+  try {
+    draw(await api(`/api/update${force ? '?check=1' : ''}`));
+  } catch (error) {
+    draw({ enabled: false, error: error.message, installed: {}, status: { state: 'idle' } });
+  }
+}
+
+/**
+ * Ask for the update, then follow it. The server goes away when it restarts, so
+ * a failing request is expected: keep polling until it answers again.
+ */
+async function startUpdate(draw) {
+  try {
+    await api('/api/update/start', { method: 'POST' });
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
+  toast(t('upd.running'));
+  const deadline = Date.now() + 5 * 60_000;
+  const poll = async () => {
+    if (Date.now() > deadline) return;
+    let payload = null;
+    try {
+      payload = await api('/api/update');
+    } catch {
+      setTimeout(poll, 2500); // the service is restarting
+      return;
+    }
+    draw(payload);
+    if (payload.status?.state === 'running') {
+      setTimeout(poll, 2000);
+      return;
+    }
+    if (payload.status?.state === 'done') {
+      toast(t('upd.done'));
+      setTimeout(() => window.location.reload(), 1500);
+    } else if (payload.status?.state === 'failed') {
+      toast(t('upd.failed', { message: payload.status.message || '' }), 'error');
+    }
+  };
+  setTimeout(poll, 2000);
+}
+
 /* -------------------------------- settings ------------------------------- */
 
 async function openSettings(section = 'general') {
@@ -709,10 +818,12 @@ async function openSettings(section = 'general') {
     georide: () => georidePane(draft),
     account: () => accountPane(),
     data: () => dataPane(),
+    about: () => aboutPane(),
   };
   const labels = {
     general: t('set.general'), appearance: t('set.appearance'), weather: t('set.weather'),
     georide: t('set.georide'), account: t('set.account'), data: t('set.data'),
+    about: t('set.about'),
   };
 
   const show = (name) => {

@@ -7,6 +7,11 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Settings → About**, with the installed version, the version the repository
+  has, and an **Update now** button. The application only writes a request
+  file; a systemd unit runs the updater as root, which installs the new version,
+  restarts the service and rolls back if it does not start. Off by default; see
+  `deploy/`.
 - The GeoRide tile opens a detail view: the rides of the period on an
   interactive map, each with its own track, a list to pick one from, and
   figures that follow the selection. Periods of 24 hours, 7 days and 30 days.

@@ -45,6 +45,13 @@ export const LOGIN_MAX_ATTEMPTS = num(process.env.LOGIN_MAX_ATTEMPTS, 5);
 export const LOGIN_LOCKOUT_MINUTES = num(process.env.LOGIN_LOCKOUT_MINUTES, 15);
 export const OSM_CONTACT = process.env.OSM_CONTACT || '';
 
+// In-app updates. Off unless the host wired the updater (see deploy/): the app
+// only ever writes a request file, it never touches its own code.
+export const UPDATE_ENABLED = process.env.UPDATE_ENABLED === '1' || process.env.UPDATE_ENABLED === 'true';
+export const UPDATE_REPO = process.env.UPDATE_REPO || 'Lokyron/GlassBoard';
+export const UPDATE_BRANCH = process.env.UPDATE_BRANCH || 'main';
+export const UPDATE_CHECK_HOURS = num(process.env.UPDATE_CHECK_HOURS, 24);
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // APP_SECRET is mandatory in production: it protects sessions and the stored

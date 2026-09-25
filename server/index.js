@@ -7,6 +7,7 @@ import { attachUser, needsSetup } from './auth.js';
 import { authRouter } from './routes/auth.js';
 import { configRouter } from './routes/config.js';
 import { integrationsRouter } from './routes/integrations.js';
+import { updateRouter } from './routes/update.js';
 import { appearanceRouter } from './routes/appearance.js';
 import { getConfig } from './store.js';
 import { scheduleMaintenance } from './maintenance.js';
@@ -86,6 +87,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/config', configRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/appearance', appearanceRouter);
+app.use('/api/update', updateRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, setupRequired: needsSetup() }));
 

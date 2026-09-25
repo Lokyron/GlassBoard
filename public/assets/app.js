@@ -962,6 +962,22 @@ function refreshData() {
   loadGeoride();
 }
 
+/* --------------------------------- updates -------------------------------- */
+
+/** A quiet daily check: a dot on the account button when a version is waiting. */
+async function checkForUpdateBadge() {
+  try {
+    const payload = await api('/api/update');
+    const behind = Boolean(payload.latest?.commit && payload.installed?.commit && payload.latest.commit !== payload.installed.commit);
+    id('account-toggle').classList.toggle('has-badge', behind);
+    document.querySelector('#dock [aria-label]')?.classList.remove('has-badge');
+    document.querySelectorAll('#dock .dock-item').forEach((item) => {
+      if (item.getAttribute('aria-label') === t('set.account')) item.classList.toggle('has-badge', behind);
+    });
+    id('account-menu').querySelector('[data-action="settings"]')?.classList.toggle('has-badge', behind);
+  } catch { /* an instance without the update route: nothing to show */ }
+}
+
 /* ------------------------------- install app ------------------------------ */
 
 /** The menu offers installing only where the browser can, and not from inside the app. */
@@ -1066,6 +1082,7 @@ async function boot() {
   installParallax();
   pwa.onChange = syncInstallItem;
   syncInstallItem();
+  checkForUpdateBadge();
 
   document.addEventListener('visibilitychange', onVisibilityChange);
 

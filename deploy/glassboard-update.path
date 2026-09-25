@@ -1,0 +1,11 @@
+# Watches for the request file the application writes when you press the
+# update button, and starts the updater.
+[Unit]
+Description=Watch for a Glassboard update request
+
+[Path]
+PathExists=/var/lib/glassboard/update.request
+Unit=glassboard-update.service
+
+[Install]
+WantedBy=paths.target
