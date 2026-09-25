@@ -585,6 +585,8 @@ function renderGeorideTile(tile, summary) {
   if (!article) return;
   const el = (role) => article.querySelector(`[data-role="${role}"]`);
 
+  article.classList.toggle('gr-clickable', Boolean(summary?.ok));
+
   if (!summary?.ok) {
     safe(el('name'), state.config.integrations.georide?.trackerName || '');
     el('stats').innerHTML = `<p class="gr-message">${esc(summary?.configured === false ? t('gr.notConfigured') : summary?.error || t('gr.unavailable'))}</p>`;

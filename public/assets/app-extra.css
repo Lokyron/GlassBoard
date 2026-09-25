@@ -166,6 +166,10 @@ select.inp{appearance:none;cursor:pointer}
 .secret{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;letter-spacing:.08em;word-break:break-all;
   padding:10px 12px;border-radius:11px;background:var(--surface-soft);border:1px solid var(--border);text-align:center}
 
+/* Like a weather tile, it opens a detail view: say so with the cursor. */
+body:not(.editing) .georide.gr-clickable{cursor:pointer}
+body:not(.editing) .georide.gr-clickable .gr-map{cursor:auto}
+
 /* GeoRide detail view: the trips of the period and their tracks. */
 .gr-split{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:16px}
 .gr-side{display:grid;gap:12px;min-width:0;align-content:start}
