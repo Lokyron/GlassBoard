@@ -1,6 +1,6 @@
 {
   "name": "glassboard",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "Self-hosted, live-editable service dashboard with native TOTP authentication and pluggable integrations.",
   "keywords": [
     "dashboard",
