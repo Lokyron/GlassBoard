@@ -125,7 +125,7 @@ Pas de tests, linter ni CI configurés.
 | `GET /api/health` | Santé + indicateur `setupRequired` |
 | `/api/auth` | `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
-| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status|trackers|summary`, `POST /georide/login|logout`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status|trackers|summary|trips`, `POST /georide/login|logout`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
 
 - **Ports** : 3000 (natif), 8080 → 3000 (Docker).

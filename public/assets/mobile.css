@@ -201,6 +201,14 @@
   .m-head { flex-wrap: wrap; gap: 12px; }
   .m-head h3 { font-size: 1.2rem; }
   .cbox { height: 130px; }
+  /* GeoRide detail view: the map first, then the list of trips. */
+  .gr-split { grid-template-columns: 1fr; gap: 12px; }
+  .gr-track { order: -1; min-height: 240px; }
+  .gr-track-canvas { min-height: 240px; }
+  .gr-trips { max-height: 34vh; }
+  #gr-period { gap: 6px; }
+  #gr-period .day-btn { min-width: 0; padding: 7px 11px; }
+  #gr-period .dn { white-space: nowrap; font-size: .62rem; }
   /* The seven days fit on one line instead of scrolling out of sight. */
   #modal-day-selector { width: 100%; gap: 5px; }
   .day-btn { flex: 1 1 0; min-width: 0; padding: 8px 0; border-radius: 13px; }

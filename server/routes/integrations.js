@@ -78,6 +78,14 @@ integrationsRouter.get('/georide/summary', async (_req, res) => {
   res.json(await georide.getSummary(settings));
 });
 
+integrationsRouter.get('/georide/trips', async (req, res) => {
+  const settings = getConfig().integrations.georide;
+  if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The GeoRide integration is disabled.' });
+  const days = Number.parseInt(req.query.days, 10);
+  const periodDays = Number.isFinite(days) && days >= 1 && days <= 31 ? days : settings.periodDays;
+  res.json(await georide.getTrips({ ...settings, periodDays }));
+});
+
 /* ------------------------------- map tiles ------------------------------- */
 
 integrationsRouter.get('/map/tile/:z/:x/:y.png', async (req, res) => {

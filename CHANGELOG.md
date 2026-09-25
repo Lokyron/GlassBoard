@@ -3,6 +3,14 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Added
+
+- The GeoRide tile opens a detail view: the rides of the period on an
+  interactive map, each with its own track, a list to pick one from, and
+  figures that follow the selection. Periods of 24 hours, 7 days and 30 days.
+
 ## 1.0.0 — 2026-09-25
 
 First public release.

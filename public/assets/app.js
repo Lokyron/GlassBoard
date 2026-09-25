@@ -23,6 +23,10 @@ const state = {
   places: {},      // tileId -> resolved city name
   coords: {},      // tileId -> { latitude, longitude }
   georide: null,
+  trips: null,          // the detail view's payload
+  tripPeriod: null,     // days shown in the detail view
+  selectedTrip: 'all',
+  tripMap: null,
   themePresets: {},
   wallpaperVersion: '',
   map: null,
@@ -253,6 +257,13 @@ function renderTiles() {
     article.addEventListener('click', () => {
       if (state.editing) return;
       openWeatherModal(article.dataset.tile);
+    });
+  });
+
+  grid.querySelectorAll('[data-type="georide"]').forEach((article) => {
+    article.addEventListener('click', (event) => {
+      if (state.editing || event.target.closest('.gr-map')) return; // the small map pans on its own
+      openGeorideModal();
     });
   });
 
@@ -531,8 +542,7 @@ function openWeatherModal(tileId) {
 
 const MAP_TILE_URL = '/api/integrations/map/tile/{z}/{x}/{y}.png';
 
-function refreshMapTheme() {
-  const container = state.map?.getContainer();
+function refreshMapTheme(container = state.map?.getContainer()) {
   if (container) container.classList.toggle('map-dark', html.getAttribute('data-theme') === 'dark');
 }
 
@@ -614,6 +624,179 @@ function renderGeorideTile(tile, summary) {
   } else {
     el('map').innerHTML = `<div class="gr-map-empty">${esc(t('gr.noPosition'))}</div>`;
   }
+}
+
+/* ---------------------- GeoRide detail view (trips) ---------------------- */
+
+const TRIP_PERIODS = [1, 7, 30];
+
+function destroyTripMap() {
+  if (state.tripMap) {
+    try { state.tripMap.remove(); } catch { /* already detached */ }
+  }
+  state.tripMap = null;
+  // Leaflet detaches its listeners; the container is ours to drop.
+  const holder = id('gr-track');
+  if (holder) holder.innerHTML = '';
+}
+
+function closeGeorideModal() {
+  id('georide-modal').classList.remove('open');
+  destroyTripMap();
+}
+
+async function openGeorideModal() {
+  if (!state.georide?.ok) return;
+  safe(id('gr-modal-title'), state.config.integrations.georide.trackerName || state.georide.tracker.name);
+  state.tripPeriod = state.tripPeriod ?? state.config.integrations.georide.periodDays ?? 7;
+  state.selectedTrip = 'all';
+  id('georide-modal').classList.add('open');
+  renderTripPeriods();
+  await loadTrips();
+}
+
+function renderTripPeriods() {
+  const holder = id('gr-period');
+  holder.innerHTML = '';
+  TRIP_PERIODS.forEach((days) => {
+    const button = document.createElement('button');
+    button.className = `day-btn${days === state.tripPeriod ? ' active' : ''}`;
+    button.innerHTML = `<span class="dn">${esc(t(`gr.p${days}`))}</span>`;
+    button.addEventListener('click', () => {
+      if (days === state.tripPeriod) return;
+      state.tripPeriod = days;
+      state.selectedTrip = 'all';
+      renderTripPeriods();
+      loadTrips();
+    });
+    holder.appendChild(button);
+  });
+}
+
+async function loadTrips() {
+  id('gr-trip-list').innerHTML = `<p class="gr-empty">${esc(t('gr.loading'))}</p>`;
+  try {
+    state.trips = await api(`/api/integrations/georide/trips?days=${state.tripPeriod}`);
+  } catch (error) {
+    state.trips = { ok: false, error: error.message };
+  }
+  renderTrips();
+}
+
+/** Distance and duration, written the way the tile writes them. */
+function tripFigures(trip) {
+  const hours = Math.floor(trip.durationMinutes / 60);
+  const minutes = trip.durationMinutes % 60;
+  return {
+    distance: `${trip.distanceKm} km`,
+    duration: hours > 0 ? `${hours} h ${String(minutes).padStart(2, '0')}` : `${minutes} min`,
+  };
+}
+
+function renderTrips() {
+  const list = id('gr-trip-list');
+  const totals = id('gr-totals');
+  const payload = state.trips;
+
+  if (!payload?.ok) {
+    totals.innerHTML = '';
+    list.innerHTML = `<p class="gr-empty">${esc(payload?.error || t('gr.unavailable'))}</p>`;
+    destroyTripMap();
+    return;
+  }
+
+  // The figures follow the selection: the whole period, or the chosen ride.
+  const trip = typeof state.selectedTrip === 'number' ? payload.trips[state.selectedTrip] : null;
+  const shownStats = trip
+    ? { distanceKm: trip.distanceKm, durationMinutes: trip.durationMinutes, topSpeedKmh: trip.topSpeedKmh }
+    : payload.totals;
+  const hours = Math.floor(shownStats.durationMinutes / 60);
+  const minutes = shownStats.durationMinutes % 60;
+  totals.innerHTML = [
+    [t('gr.distance'), `${shownStats.distanceKm} <small>km</small>`],
+    [t('gr.time'), hours > 0 ? `${hours} <small>h</small> ${String(minutes).padStart(2, '0')}` : `${minutes} <small>min</small>`],
+    trip
+      ? [t('gr.average'), `${trip.averageSpeedKmh} <small>km/h</small>`]
+      : [t('gr.trips'), String(payload.totals.tripCount)],
+    [t('gr.topSpeed'), `${shownStats.topSpeedKmh} <small>km/h</small>`],
+  ]
+    .map(([label, value]) => `<div class="box"><div class="k">${esc(label)}</div><div class="v">${value}</div></div>`)
+    .join('');
+
+  if (payload.trips.length === 0) {
+    list.innerHTML = `<p class="gr-empty">${esc(t('gr.noTrips'))}</p>`;
+    destroyTripMap();
+    return;
+  }
+
+  const rows = [
+    `<button class="gr-trip${state.selectedTrip === 'all' ? ' active' : ''}" data-trip="all">
+       <span class="gr-trip-when">${esc(t('gr.allTrips'))}</span>
+       <span class="gr-trip-where">${esc(t('gr.tripsOver', { n: payload.trips.length, days: payload.periodDays }))}</span>
+     </button>`,
+  ];
+  payload.trips.forEach((trip, index) => {
+    const figures = tripFigures(trip);
+    const when = trip.startTime
+      ? new Date(trip.startTime).toLocaleString(state.config.site.locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : '—';
+    rows.push(`<button class="gr-trip${state.selectedTrip === index ? ' active' : ''}" data-trip="${index}">
+        <span class="gr-trip-when">${esc(when)}</span>
+        <span class="gr-trip-where">${esc(trip.start.address || '—')} → ${esc(trip.end.address || '—')}</span>
+        <span class="gr-trip-figures">${esc(figures.distance)} · ${esc(figures.duration)} · ${trip.topSpeedKmh} km/h</span>
+      </button>`);
+  });
+  list.innerHTML = rows.join('');
+  list.querySelectorAll('[data-trip]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.selectedTrip = button.dataset.trip === 'all' ? 'all' : Number(button.dataset.trip);
+      renderTrips();
+    });
+  });
+
+  drawTracks();
+}
+
+/** Draw the selected ride, or every ride of the period, and frame it. */
+function drawTracks() {
+  const payload = state.trips;
+  const holder = id('gr-track');
+  if (!payload?.ok) return;
+
+  destroyTripMap();
+  holder.innerHTML = '';
+  const canvas = document.createElement('div');
+  canvas.className = 'gr-track-canvas';
+  holder.appendChild(canvas);
+
+  const map = L.map(canvas, { zoomControl: true, scrollWheelZoom: true, attributionControl: true });
+  L.tileLayer(MAP_TILE_URL, { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  state.tripMap = map;
+
+  const accent = getComputedStyle(html).getPropertyValue('--primary').trim() || '#0a84ff';
+  const shown = state.selectedTrip === 'all' ? payload.trips : [payload.trips[state.selectedTrip]];
+  const bounds = [];
+
+  payload.trips.forEach((trip, index) => {
+    if (trip.track.length < 2) return;
+    const selected = shown.includes(trip);
+    L.polyline(trip.track, {
+      color: accent,
+      weight: selected ? 4 : 2,
+      opacity: selected ? 0.95 : 0.25,
+    }).addTo(map);
+    if (selected) bounds.push(...trip.track);
+    if (selected && state.selectedTrip === index) {
+      const pin = (name) => L.divIcon({ className: 'gr-pin', html: svg(name), iconSize: [26, 26], iconAnchor: [13, 13] });
+      L.marker(trip.track[0], { icon: pin('navigation-arrow') }).addTo(map);
+      L.marker(trip.track[trip.track.length - 1], { icon: pin('map-pin') }).addTo(map);
+    }
+  });
+
+  if (bounds.length) map.fitBounds(bounds, { padding: [26, 26] });
+  else map.setView([46.6, 2.5], 5); // nothing to show: France, wide
+  refreshMapTheme(canvas);
+  setTimeout(() => map.invalidateSize(), 80);
 }
 
 async function loadGeoride() {
@@ -868,11 +1051,15 @@ async function boot() {
   id('weather-modal').addEventListener('click', (event) => {
     if (event.target === id('weather-modal')) id('weather-modal').classList.remove('open');
   });
+  id('georide-modal').addEventListener('click', (event) => {
+    if (event.target === id('georide-modal')) closeGeorideModal();
+  });
   id('dialog-close').addEventListener('click', closeDialog);
   id('dialog-modal').addEventListener('click', (event) => { if (event.target === id('dialog-modal')) closeDialog(); });
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     document.querySelectorAll('.modal.open').forEach((modal) => modal.classList.remove('open'));
+    destroyTripMap();
     toggleAccountMenu(false);
   });
 

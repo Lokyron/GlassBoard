@@ -57,8 +57,10 @@ reaches the browser, and no request goes out to a service you did not enable.
   session cookies and a temporary lockout after repeated failures. Only the
   login page is public.
 - **Optional integrations**: weather (Open-Meteo) and GeoRide motorcycle
-  tracking. A disabled or unconfigured integration never breaks the page. The
-  tile explains what is missing, and the rest of the dashboard carries on.
+  tracking. Both tiles open a detail view: seven days of forecast, or the rides
+  of the period on an interactive map. A disabled or unconfigured integration
+  never breaks the page. The tile explains what is missing, and the rest of the
+  dashboard carries on.
 - **Backup and restore**: a single versioned JSON file, from the interface or
   from the command line, with automatic snapshots before every import.
 - **Themes and wallpapers**: six colour presets, light and dark, plus your own
@@ -315,10 +317,33 @@ renewed automatically before it expires. The tile shows the distance, riding
 time, number of trips and top speed over the period you choose, plus the
 current position on a map.
 
+Clicking the tile opens the rides of the period on an interactive map, with
+every track drawn. Click one in the list and it comes forward, the others fade
+out, the map frames it and marks where it started and ended; the four figures
+then describe that ride rather than the whole period. The period itself
+switches between 24 hours, 7 days and 30 days. Click outside the panel, or
+press Escape, to close it.
+
+![The GeoRide trips of the period](docs/images/georide-trips.jpg)
+
+![One ride, with its start and its end](docs/images/georide-trip.jpg)
+
+<sub>Fabricated rides: the screenshots come from a demo instance, not a real
+account.</sub>
+
 Endpoints used, from the official documentation at <https://api.georide.fr>:
 `POST /user/login`, `GET /user/new-token`, `GET /user/trackers`,
 `GET /tracker/:id/trips`, `GET /tracker/:id/trips/positions`. Speeds are
 returned in knots and converted to km/h, distances are in metres.
+
+Two details about the tracks, because the API decides them for us. The
+positions endpoint returns the whole period in one list and never says which
+trip a point belongs to, so each ride takes the points that fall inside its own
+start and end times. And the trips endpoint carries an average speed but no
+maximum, so the top speed of a ride is computed from those same points. A long
+ride holds thousands of them; each track is thinned down to 400 points on the
+server, keeping both ends, which leaves the shape of the ride intact and the
+map quick to draw.
 
 Map tiles come from OpenStreetMap through the server, and are cached on disk.
 If you expect real traffic, point the proxy at your own tile server. See

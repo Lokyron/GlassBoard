@@ -17,6 +17,10 @@ const KNOTS_TO_KMH = 1.852;
 const TOKEN_LIFETIME_DAYS = 30;
 const REFRESH_AFTER_DAYS = 20; // renew well before the 30-day expiry
 
+// A long ride holds thousands of points; that many is invisible on a map and
+// slow to draw, so each track is thinned down before it leaves the server.
+const MAX_TRACK_POINTS = 400;
+
 const SECRET_EMAIL = 'georide.email';
 const SECRET_PASSWORD = 'georide.password';
 const SECRET_TOKEN = 'georide.token';
@@ -152,6 +156,28 @@ async function authed(path) {
 
 /* -------------------------------- queries -------------------------------- */
 
+/** The tracker asked for, or the first one on the account. */
+async function pickTracker(trackerId) {
+  const payload = await authed('/user/trackers');
+  const trackers = Array.isArray(payload) ? payload : payload?.trackers ?? [];
+  if (trackers.length === 0) throw new Error('No tracker is attached to this GeoRide account.');
+  return (trackerId && trackers.find((t) => Number(t.trackerId) === Number(trackerId))) || trackers[0];
+}
+
+const rangeQuery = (from, to) =>
+  `from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
+
+const asList = (payload, key) => (Array.isArray(payload) ? payload : payload?.[key] ?? []);
+
+/** Keep the ends and spread the rest evenly: the shape of the ride survives. */
+function thin(points, max) {
+  if (points.length <= max) return points;
+  const step = (points.length - 1) / (max - 1);
+  const kept = [];
+  for (let i = 0; i < max; i += 1) kept.push(points[Math.round(i * step)]);
+  return kept;
+}
+
 export async function listTrackers() {
   const data = await authed('/user/trackers');
   const trackers = Array.isArray(data) ? data : data?.trackers ?? [];
@@ -184,6 +210,100 @@ function summariseTrips(trips, periodStart) {
 }
 
 /**
+ * The trips of the period, each with its own track, for the detail view.
+ *
+ * The positions endpoint returns the whole period in one list and says nothing
+ * about which trip a point belongs to, so each trip takes the points that fall
+ * inside its own start/end window. The same points give the top speed of a trip,
+ * which the trips endpoint does not carry.
+ */
+export async function getTrips({ trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
+  if (!isConfigured()) {
+    return { ok: false, configured: false, error: 'GeoRide is not configured yet.' };
+  }
+  const key = `georide:trips:${trackerId ?? 'auto'}:${periodDays}`;
+  const cached = cacheGet(key);
+  if (cached) return { ...cached, cached: true };
+
+  try {
+    const tracker = await pickTracker(trackerId);
+    const to = new Date();
+    const from = new Date(to.getTime() - periodDays * 86_400_000);
+    const range = rangeQuery(from, to);
+
+    const [tripsPayload, positionsPayload] = await Promise.all([
+      authed(`/tracker/${tracker.trackerId}/trips?${range}`),
+      authed(`/tracker/${tracker.trackerId}/trips/positions?${range}`),
+    ]);
+
+    const positions = asList(positionsPayload, 'positions')
+      .map((p) => ({
+        at: new Date(p.fixtime).getTime(),
+        latitude: Number(p.latitude),
+        longitude: Number(p.longitude),
+        speed: Number(p.speed) || 0,
+      }))
+      .filter((p) => Number.isFinite(p.at) && Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+      .sort((a, b) => a.at - b.at);
+
+    const trips = asList(tripsPayload, 'trips')
+      .map((trip) => {
+        const startedAt = new Date(trip.startTime).getTime();
+        const endedAt = new Date(trip.endTime).getTime();
+        const own = Number.isFinite(startedAt) && Number.isFinite(endedAt)
+          ? positions.filter((p) => p.at >= startedAt && p.at <= endedAt)
+          : [];
+        const topKnots = own.reduce((max, p) => Math.max(max, p.speed), 0);
+        return {
+          id: trip.id ?? null,
+          startTime: trip.startTime ?? null,
+          endTime: trip.endTime ?? null,
+          distanceKm: Math.round(((Number(trip.distance) || 0) / 1000) * 10) / 10,
+          durationMinutes: Math.round((Number(trip.duration) || 0) / 60_000),
+          averageSpeedKmh: Math.round(knotsToKmh(trip.averageSpeed)),
+          topSpeedKmh: Math.round(knotsToKmh(topKnots)),
+          start: {
+            latitude: Number(trip.startLat),
+            longitude: Number(trip.startLon),
+            address: trip.niceStartAddress || trip.startAddress || '',
+          },
+          end: {
+            latitude: Number(trip.endLat),
+            longitude: Number(trip.endLon),
+            address: trip.niceEndAddress || trip.endAddress || '',
+          },
+          track: thin(own, MAX_TRACK_POINTS).map((p) => [p.latitude, p.longitude]),
+        };
+      })
+      .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+    const payload = {
+      ok: true,
+      configured: true,
+      tracker: { id: tracker.trackerId, name: tracker.trackerName || 'Tracker' },
+      periodDays,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      totals: {
+        tripCount: trips.length,
+        distanceKm: Math.round(trips.reduce((sum, trip) => sum + trip.distanceKm, 0) * 10) / 10,
+        durationMinutes: trips.reduce((sum, trip) => sum + trip.durationMinutes, 0),
+        topSpeedKmh: trips.reduce((max, trip) => Math.max(max, trip.topSpeedKmh), 0),
+      },
+      trips,
+      fetchedAt: new Date().toISOString(),
+    };
+
+    cacheSet(key, payload, Math.max(60, refreshMinutes * 60));
+    return payload;
+  } catch (error) {
+    const stale = cacheGetStale(key);
+    if (stale) return { ...stale.value, cached: true, stale: true, error: error.message };
+    return { ok: false, configured: true, error: error.message, code: error.code ?? null };
+  }
+}
+
+/**
  * Everything the GeoRide tile needs, in one cached payload.
  * Returns `{ ok: false, error }` rather than throwing, so a failing API degrades
  * the tile instead of breaking the dashboard.
@@ -197,16 +317,10 @@ export async function getSummary({ trackerId = null, periodDays = 7, refreshMinu
   if (cached) return { ...cached, cached: true };
 
   try {
-    const trackersPayload = await authed('/user/trackers');
-    const trackers = Array.isArray(trackersPayload) ? trackersPayload : trackersPayload?.trackers ?? [];
-    if (trackers.length === 0) throw new Error('No tracker is attached to this GeoRide account.');
-
-    const tracker =
-      (trackerId && trackers.find((t) => Number(t.trackerId) === Number(trackerId))) || trackers[0];
-
+    const tracker = await pickTracker(trackerId);
     const to = new Date();
     const from = new Date(to.getTime() - periodDays * 86_400_000);
-    const range = `from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
+    const range = rangeQuery(from, to);
 
     const trips = await authed(`/tracker/${tracker.trackerId}/trips?${range}`);
     const stats = summariseTrips(trips, from.toISOString());
@@ -216,9 +330,7 @@ export async function getSummary({ trackerId = null, periodDays = 7, refreshMinu
     let topSpeedKmh = stats.bestAverageSpeedKmh;
     try {
       const positionsPayload = await authed(`/tracker/${tracker.trackerId}/trips/positions?${range}`);
-      const positions = Array.isArray(positionsPayload)
-        ? positionsPayload
-        : positionsPayload?.positions ?? [];
+      const positions = asList(positionsPayload, 'positions');
       const maxKnots = positions.reduce((max, p) => Math.max(max, Number(p.speed) || 0), 0);
       if (maxKnots > 0) topSpeedKmh = Math.round(knotsToKmh(maxKnots));
     } catch {

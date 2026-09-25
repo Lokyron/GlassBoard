@@ -165,3 +165,20 @@ select.inp{appearance:none;cursor:pointer}
 .qr img{width:210px;height:210px;display:block}
 .secret{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;letter-spacing:.08em;word-break:break-all;
   padding:10px 12px;border-radius:11px;background:var(--surface-soft);border:1px solid var(--border);text-align:center}
+
+/* GeoRide detail view: the trips of the period and their tracks. */
+.gr-split{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:16px}
+.gr-side{display:grid;gap:12px;min-width:0;align-content:start}
+.gr-totals{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gr-totals .box{padding:12px 14px}
+.gr-trips{display:grid;gap:8px;max-height:44vh;overflow:auto;padding-right:4px;scrollbar-width:thin}
+.gr-trip{display:grid;gap:3px;text-align:left;padding:11px 13px;border-radius:14px;border:1px solid var(--border);
+  background:var(--surface);color:inherit;cursor:pointer;font:inherit;transition:border-color .2s,background .2s}
+.gr-trip:hover{border-color:var(--primary)}
+.gr-trip.active{border-color:var(--primary);background:var(--primary-soft)}
+.gr-trip-when{font-weight:680;font-size:.9rem}
+.gr-trip-where,.gr-trip-figures{color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-trip-figures{font-variant-numeric:tabular-nums}
+.gr-track{border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden;background:var(--surface-soft);min-height:430px}
+.gr-track-canvas{width:100%;height:100%;min-height:430px}
+.gr-empty{color:var(--muted);font-size:.9rem;padding:14px 2px}
