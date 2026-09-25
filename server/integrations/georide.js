@@ -18,8 +18,14 @@ const TOKEN_LIFETIME_DAYS = 30;
 const REFRESH_AFTER_DAYS = 20; // renew well before the 30-day expiry
 
 // A long ride holds thousands of points; that many is invisible on a map and
-// slow to draw, so each track is thinned down before it leaves the server.
+// slow to draw, so each track is thinned down before it leaves the server. A
+// whole month of riding is fetched in one go, hence the budget for the payload
+// as a whole: past it, every track is thinned further, in proportion.
 const MAX_TRACK_POINTS = 400;
+const MAX_PAYLOAD_POINTS = 12_000;
+const MIN_TRACK_POINTS = 60;
+// Five decimals is about a metre: plenty for a map, and a third of the bytes.
+const round5 = (value) => Math.round(value * 1e5) / 1e5;
 
 const SECRET_EMAIL = 'georide.email';
 const SECRET_PASSWORD = 'georide.password';
@@ -272,10 +278,19 @@ export async function getTrips({ trackerId = null, periodDays = 7, refreshMinute
             longitude: Number(trip.endLon),
             address: trip.niceEndAddress || trip.endAddress || '',
           },
-          track: thin(own, MAX_TRACK_POINTS).map((p) => [p.latitude, p.longitude]),
+          track: thin(own, MAX_TRACK_POINTS).map((p) => [round5(p.latitude), round5(p.longitude)]),
         };
       })
       .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+    // Keep the whole answer within the budget, without flattening short rides.
+    const totalPoints = trips.reduce((sum, trip) => sum + trip.track.length, 0);
+    if (totalPoints > MAX_PAYLOAD_POINTS) {
+      const ratio = MAX_PAYLOAD_POINTS / totalPoints;
+      trips.forEach((trip) => {
+        trip.track = thin(trip.track, Math.max(MIN_TRACK_POINTS, Math.round(trip.track.length * ratio)));
+      });
+    }
 
     const payload = {
       ok: true,

@@ -23,7 +23,8 @@ const state = {
   places: {},      // tileId -> resolved city name
   coords: {},      // tileId -> { latitude, longitude }
   georide: null,
-  trips: null,          // the detail view's payload
+  trips: null,          // the detail view's payload: the last 30 days, fetched once
+  tripLayers: null,     // trip key -> its polyline, kept across selections
   tripPeriod: null,     // days shown in the detail view
   selectedTrip: 'all',
   tripMap: null,
@@ -629,12 +630,20 @@ function renderGeorideTile(tile, summary) {
 /* ---------------------- GeoRide detail view (trips) ---------------------- */
 
 const TRIP_PERIODS = [1, 7, 30];
+// The whole month is fetched once and the shorter periods are slices of it, so
+// switching period or trip never waits on the network.
+const TRIP_WINDOW_DAYS = 30;
+
+const tripKey = (trip) => `${trip.id ?? ''}|${trip.startTime}`;
 
 function destroyTripMap() {
   if (state.tripMap) {
     try { state.tripMap.remove(); } catch { /* already detached */ }
   }
   state.tripMap = null;
+  state.tripLayers = null;
+  state.tripGroup = null;
+  state.tripMarkers = null;
   // Leaflet detaches its listeners; the container is ours to drop.
   const holder = id('gr-track');
   if (holder) holder.innerHTML = '';
@@ -652,7 +661,8 @@ async function openGeorideModal() {
   state.selectedTrip = 'all';
   id('georide-modal').classList.add('open');
   renderTripPeriods();
-  await loadTrips();
+  if (state.trips) renderTrips();   // prefetched while the dashboard loaded
+  else await loadTrips();
 }
 
 function renderTripPeriods() {
@@ -667,21 +677,36 @@ function renderTripPeriods() {
       state.tripPeriod = days;
       state.selectedTrip = 'all';
       renderTripPeriods();
-      loadTrips();
+      renderTrips();               // already downloaded: no round trip
     });
     holder.appendChild(button);
   });
 }
 
-async function loadTrips() {
-  id('gr-trip-list').innerHTML = `<p class="gr-empty">${esc(t('gr.loading'))}</p>`;
+/** Fetch the month once. Called in the background as the dashboard settles. */
+async function loadTrips({ quiet = false } = {}) {
+  if (!quiet) id('gr-trip-list').innerHTML = `<p class="gr-empty">${esc(t('gr.loading'))}</p>`;
   try {
-    state.trips = await api(`/api/integrations/georide/trips?days=${state.tripPeriod}`);
+    state.trips = await api(`/api/integrations/georide/trips?days=${TRIP_WINDOW_DAYS}`);
   } catch (error) {
     state.trips = { ok: false, error: error.message };
   }
-  renderTrips();
+  if (id('georide-modal').classList.contains('open')) renderTrips();
 }
+
+/** The trips of the selected period, taken from the month already in hand. */
+function visibleTrips() {
+  if (!state.trips?.ok) return [];
+  const since = Date.now() - state.tripPeriod * 86_400_000;
+  return state.trips.trips.filter((trip) => new Date(trip.startTime).getTime() >= since);
+}
+
+const periodTotals = (trips) => ({
+  tripCount: trips.length,
+  distanceKm: Math.round(trips.reduce((sum, trip) => sum + trip.distanceKm, 0) * 10) / 10,
+  durationMinutes: trips.reduce((sum, trip) => sum + trip.durationMinutes, 0),
+  topSpeedKmh: trips.reduce((max, trip) => Math.max(max, trip.topSpeedKmh), 0),
+});
 
 /** Distance and duration, written the way the tile writes them. */
 function tripFigures(trip) {
@@ -693,37 +718,38 @@ function tripFigures(trip) {
   };
 }
 
+/** The four figures: the whole period, or the ride being looked at. */
+function renderTripTotals(trips) {
+  const trip = typeof state.selectedTrip === 'number' ? trips[state.selectedTrip] : null;
+  const shown = trip
+    ? { distanceKm: trip.distanceKm, durationMinutes: trip.durationMinutes, topSpeedKmh: trip.topSpeedKmh }
+    : periodTotals(trips);
+  const hours = Math.floor(shown.durationMinutes / 60);
+  const minutes = shown.durationMinutes % 60;
+  id('gr-totals').innerHTML = [
+    [t('gr.distance'), `${shown.distanceKm} <small>km</small>`],
+    [t('gr.time'), hours > 0 ? `${hours} <small>h</small> ${String(minutes).padStart(2, '0')}` : `${minutes} <small>min</small>`],
+    trip ? [t('gr.average'), `${trip.averageSpeedKmh} <small>km/h</small>`] : [t('gr.trips'), String(trips.length)],
+    [t('gr.topSpeed'), `${shown.topSpeedKmh} <small>km/h</small>`],
+  ]
+    .map(([label, value]) => `<div class="box"><div class="k">${esc(label)}</div><div class="v">${value}</div></div>`)
+    .join('');
+}
+
+/** Full redraw: the period changed, or the data just arrived. */
 function renderTrips() {
   const list = id('gr-trip-list');
-  const totals = id('gr-totals');
-  const payload = state.trips;
-
-  if (!payload?.ok) {
-    totals.innerHTML = '';
-    list.innerHTML = `<p class="gr-empty">${esc(payload?.error || t('gr.unavailable'))}</p>`;
+  if (!state.trips?.ok) {
+    id('gr-totals').innerHTML = '';
+    list.innerHTML = `<p class="gr-empty">${esc(state.trips?.error || t('gr.unavailable'))}</p>`;
     destroyTripMap();
     return;
   }
 
-  // The figures follow the selection: the whole period, or the chosen ride.
-  const trip = typeof state.selectedTrip === 'number' ? payload.trips[state.selectedTrip] : null;
-  const shownStats = trip
-    ? { distanceKm: trip.distanceKm, durationMinutes: trip.durationMinutes, topSpeedKmh: trip.topSpeedKmh }
-    : payload.totals;
-  const hours = Math.floor(shownStats.durationMinutes / 60);
-  const minutes = shownStats.durationMinutes % 60;
-  totals.innerHTML = [
-    [t('gr.distance'), `${shownStats.distanceKm} <small>km</small>`],
-    [t('gr.time'), hours > 0 ? `${hours} <small>h</small> ${String(minutes).padStart(2, '0')}` : `${minutes} <small>min</small>`],
-    trip
-      ? [t('gr.average'), `${trip.averageSpeedKmh} <small>km/h</small>`]
-      : [t('gr.trips'), String(payload.totals.tripCount)],
-    [t('gr.topSpeed'), `${shownStats.topSpeedKmh} <small>km/h</small>`],
-  ]
-    .map(([label, value]) => `<div class="box"><div class="k">${esc(label)}</div><div class="v">${value}</div></div>`)
-    .join('');
+  const trips = visibleTrips();
+  renderTripTotals(trips);
 
-  if (payload.trips.length === 0) {
+  if (trips.length === 0) {
     list.innerHTML = `<p class="gr-empty">${esc(t('gr.noTrips'))}</p>`;
     destroyTripMap();
     return;
@@ -732,10 +758,10 @@ function renderTrips() {
   const rows = [
     `<button class="gr-trip${state.selectedTrip === 'all' ? ' active' : ''}" data-trip="all">
        <span class="gr-trip-when">${esc(t('gr.allTrips'))}</span>
-       <span class="gr-trip-where">${esc(t('gr.tripsOver', { n: payload.trips.length, days: payload.periodDays }))}</span>
+       <span class="gr-trip-where">${esc(t('gr.tripsOver', { n: trips.length, days: state.tripPeriod }))}</span>
      </button>`,
   ];
-  payload.trips.forEach((trip, index) => {
+  trips.forEach((trip, index) => {
     const figures = tripFigures(trip);
     const when = trip.startTime
       ? new Date(trip.startTime).toLocaleString(state.config.site.locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -748,55 +774,85 @@ function renderTrips() {
   });
   list.innerHTML = rows.join('');
   list.querySelectorAll('[data-trip]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.selectedTrip = button.dataset.trip === 'all' ? 'all' : Number(button.dataset.trip);
-      renderTrips();
-    });
+    button.addEventListener('click', () => selectTrip(button.dataset.trip === 'all' ? 'all' : Number(button.dataset.trip)));
   });
 
-  drawTracks();
+  syncTracks(trips);
+  styleTracks(trips);
 }
 
-/** Draw the selected ride, or every ride of the period, and frame it. */
-function drawTracks() {
-  const payload = state.trips;
-  const holder = id('gr-track');
-  if (!payload?.ok) return;
+/** Picking another ride only restyles what is already on the map. */
+function selectTrip(selection) {
+  if (state.selectedTrip === selection) return;
+  state.selectedTrip = selection;
+  const trips = visibleTrips();
+  id('gr-trip-list').querySelectorAll('[data-trip]').forEach((button) => {
+    const value = button.dataset.trip === 'all' ? 'all' : Number(button.dataset.trip);
+    button.classList.toggle('active', value === selection);
+  });
+  renderTripTotals(trips);
+  styleTracks(trips);
+}
 
-  destroyTripMap();
+function ensureTripMap() {
+  if (state.tripMap) return state.tripMap;
+  const holder = id('gr-track');
   holder.innerHTML = '';
   const canvas = document.createElement('div');
   canvas.className = 'gr-track-canvas';
   holder.appendChild(canvas);
 
-  const map = L.map(canvas, { zoomControl: true, scrollWheelZoom: true, attributionControl: true });
+  const map = L.map(canvas, { zoomControl: true, scrollWheelZoom: true, attributionControl: true }).setView([46.6, 2.5], 5);
   L.tileLayer(MAP_TILE_URL, { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   state.tripMap = map;
-
-  const accent = getComputedStyle(html).getPropertyValue('--primary').trim() || '#0a84ff';
-  const shown = state.selectedTrip === 'all' ? payload.trips : [payload.trips[state.selectedTrip]];
-  const bounds = [];
-
-  payload.trips.forEach((trip, index) => {
-    if (trip.track.length < 2) return;
-    const selected = shown.includes(trip);
-    L.polyline(trip.track, {
-      color: accent,
-      weight: selected ? 4 : 2,
-      opacity: selected ? 0.95 : 0.25,
-    }).addTo(map);
-    if (selected) bounds.push(...trip.track);
-    if (selected && state.selectedTrip === index) {
-      const pin = (name) => L.divIcon({ className: 'gr-pin', html: svg(name), iconSize: [26, 26], iconAnchor: [13, 13] });
-      L.marker(trip.track[0], { icon: pin('navigation-arrow') }).addTo(map);
-      L.marker(trip.track[trip.track.length - 1], { icon: pin('map-pin') }).addTo(map);
-    }
-  });
-
-  if (bounds.length) map.fitBounds(bounds, { padding: [26, 26] });
-  else map.setView([46.6, 2.5], 5); // nothing to show: France, wide
+  state.tripLayers = new Map();
+  state.tripGroup = L.layerGroup().addTo(map);
+  state.tripMarkers = L.layerGroup().addTo(map);
   refreshMapTheme(canvas);
   setTimeout(() => map.invalidateSize(), 80);
+  return map;
+}
+
+/** Each track is drawn once and kept; only the ones that left the period go. */
+function syncTracks(trips) {
+  ensureTripMap();
+  const accent = getComputedStyle(html).getPropertyValue('--primary').trim() || '#0a84ff';
+  const wanted = new Set(trips.map(tripKey));
+  for (const [key, layer] of state.tripLayers) {
+    if (!wanted.has(key)) {
+      state.tripGroup.removeLayer(layer);
+      state.tripLayers.delete(key);
+    }
+  }
+  trips.forEach((trip) => {
+    const key = tripKey(trip);
+    if (trip.track.length < 2 || state.tripLayers.has(key)) return;
+    const line = L.polyline(trip.track, { color: accent, weight: 3, opacity: 0.9, smoothFactor: 1.6 });
+    state.tripGroup.addLayer(line);
+    state.tripLayers.set(key, line);
+  });
+}
+
+function styleTracks(trips) {
+  if (!state.tripMap) return;
+  const selected = typeof state.selectedTrip === 'number' ? trips[state.selectedTrip] : null;
+  trips.forEach((trip) => {
+    const line = state.tripLayers.get(tripKey(trip));
+    if (!line) return;
+    const lit = !selected || trip === selected;
+    line.setStyle({ weight: lit ? 4 : 2, opacity: lit ? 0.95 : 0.22 });
+    if (lit && selected) line.bringToFront();
+  });
+
+  state.tripMarkers.clearLayers();
+  if (selected && selected.track.length >= 2) {
+    const pin = (name) => L.divIcon({ className: 'gr-pin', html: svg(name), iconSize: [26, 26], iconAnchor: [13, 13] });
+    L.marker(selected.track[0], { icon: pin('navigation-arrow') }).addTo(state.tripMarkers);
+    L.marker(selected.track[selected.track.length - 1], { icon: pin('map-pin') }).addTo(state.tripMarkers);
+  }
+
+  const frame = selected ? selected.track : trips.flatMap((trip) => trip.track);
+  if (frame.length) state.tripMap.flyToBounds(frame, { padding: [26, 26], duration: 0.45 });
 }
 
 async function loadGeoride() {
@@ -806,6 +862,12 @@ async function loadGeoride() {
     const summary = await api('/api/integrations/georide/summary');
     state.georide = summary;
     renderGeorideTile(tile, summary);
+    // Pull the month in the background so the detail view opens on ready data.
+    if (summary.ok && !state.trips) {
+      const prefetch = () => loadTrips({ quiet: true });
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(prefetch, { timeout: 4000 });
+      else setTimeout(prefetch, 1200);
+    }
   } catch (error) {
     renderGeorideTile(tile, { ok: false, error: error.message });
   }

@@ -1,5 +1,6 @@
 // Glassboard HTTP server.
 import express from 'express';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PORT, HOST, ROOT_DIR, TRUST_PROXY, DATA_DIR, IS_PRODUCTION } from './env.js';
@@ -33,6 +34,28 @@ app.use((req, _res, next) => {
 });
 
 app.use(express.json({ limit: '16mb' }));
+
+// JSON compresses by 80% or more, and a month of GPS tracks is the payload that
+// makes it worth it. zlib is built in, so this costs no dependency.
+const GZIP_THRESHOLD = 1024;
+app.use((req, res, next) => {
+  const sendJson = res.json.bind(res);
+  res.json = (body) => {
+    const text = JSON.stringify(body);
+    if (text.length < GZIP_THRESHOLD || !/\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+      return sendJson(body);
+    }
+    zlib.gzip(text, (error, buffer) => {
+      if (error) return sendJson(body);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.end(buffer);
+    });
+    return res;
+  };
+  next();
+});
 
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');

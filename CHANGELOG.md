@@ -5,6 +5,13 @@ Notable changes, newest first. The format follows
 
 ## Unreleased
 
+### Changed
+
+- The GeoRide detail view fetches the last 30 days once, in the background, and
+  keeps the map between selections: picking another ride or another period no
+  longer waits on the network or rebuilds the map.
+- JSON responses are gzipped, without adding a dependency.
+
 ### Added
 
 - **Settings → About**, with the installed version, the version the repository

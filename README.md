@@ -348,14 +348,21 @@ Endpoints used, from the official documentation at <https://api.georide.fr>:
 `GET /tracker/:id/trips`, `GET /tracker/:id/trips/positions`. Speeds are
 returned in knots and converted to km/h, distances are in metres.
 
+The last 30 days are fetched once, as the dashboard settles, so the panel opens
+on data that is already there and switching between rides or periods costs
+nothing: the shorter periods are slices of the month in hand, and picking a ride
+only restyles the tracks already on the map. JSON responses are gzipped, which
+takes a month of tracks from about 100 kB down to 35 kB on the wire.
+
 Two details about the tracks, because the API decides them for us. The
 positions endpoint returns the whole period in one list and never says which
 trip a point belongs to, so each ride takes the points that fall inside its own
 start and end times. And the trips endpoint carries an average speed but no
 maximum, so the top speed of a ride is computed from those same points. A long
 ride holds thousands of them; each track is thinned down to 400 points on the
-server, keeping both ends, which leaves the shape of the ride intact and the
-map quick to draw.
+server, keeping both ends, and the whole month is held to 12 000 points, which
+leaves the shape of every ride intact and the map quick to draw. Coordinates are
+rounded to five decimals, about a metre.
 
 Map tiles come from OpenStreetMap through the server, and are cached on disk.
 If you expect real traffic, point the proxy at your own tile server. See
