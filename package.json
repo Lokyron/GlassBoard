@@ -2,7 +2,28 @@
   "name": "glassboard",
   "version": "1.0.0",
   "description": "Self-hosted, live-editable service dashboard with native TOTP authentication and pluggable integrations.",
+  "keywords": [
+    "dashboard",
+    "self-hosted",
+    "homelab",
+    "startpage",
+    "bookmarks",
+    "pwa",
+    "totp",
+    "express",
+    "sqlite",
+    "no-build"
+  ],
+  "homepage": "https://github.com/Lokyron/GlassBoard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lokyron/GlassBoard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Lokyron/GlassBoard/issues"
+  },
   "license": "MIT",
+  "author": "Lokyron (https://github.com/Lokyron)",
   "type": "module",
   "engines": {
     "node": ">=24"

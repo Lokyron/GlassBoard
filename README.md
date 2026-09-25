@@ -1,12 +1,17 @@
 # Glassboard
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Node 24+](https://img.shields.io/badge/node-%E2%89%A5%2024-5e5ce6)
+![No build step](https://img.shields.io/badge/build%20step-none-0a84ff)
+
 A self-hosted dashboard for the services you use every day: a grid of shortcuts,
 weather tiles and optional integrations, all editable from the page itself,
 behind a login with two-factor authentication.
 
 ![The Glassboard dashboard in dark mode](docs/images/dashboard-dark.png)
 
-<sub>Screenshots come from a real instance, with the names and places blurred out.</sub>
+<sub>Screenshots come from a real instance, with the names and places blurred
+out. There is no public demo: Glassboard is meant to run on your own machine.</sub>
 
 Glassboard keeps a strict line between **the software** (this repository) and
 **your data** (a directory you own). A fresh install starts empty, with a
@@ -23,6 +28,23 @@ export, version and restore anywhere.
 
 Every call to a third-party API happens on the server. No API token ever
 reaches the browser, and no request goes out to a service you did not enable.
+
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install](#install) — [Docker](#with-docker), [without Docker](#without-docker), [as a service](#as-a-system-service)
+- [First run](#first-run)
+- [Updating](#updating)
+- [Using Glassboard](#using-glassboard) — [editing](#editing-the-dashboard), [settings](#settings), [themes](#themes-and-wallpaper), [on a phone](#on-a-phone), [installing it as an app](#installing-it-as-an-app), [languages](#languages)
+- [Integrations](#integrations)
+- [Backup and restore](#backup-and-restore)
+- [Behind a reverse proxy](#behind-a-reverse-proxy)
+- [Configuration reference](#configuration-reference)
+- [Security](#security)
+- [How it works](#how-it-works)
+- [Contributing](#contributing)
+- [Credits](#credits) and [licence](#license)
 
 ## Features
 
@@ -57,33 +79,69 @@ reaches the browser, and no request goes out to a service you did not enable.
 
 ## Requirements
 
-- **Node.js 24 or newer** (uses the built-in `node:sqlite`), or
+- **Node.js 24 or newer** (it uses the built-in `node:sqlite`, so there is no
+  native module to compile), **or**
 - **Docker** with Compose.
 
-## Quick start with Docker
+Nothing else: no database server, no build tool chain, no CDN.
+
+## Install
+
+### With Docker
 
 ```bash
-git clone https://github.com/<you>/glassboard.git
-cd glassboard
+git clone https://github.com/Lokyron/GlassBoard.git
+cd GlassBoard
 cp .env.example .env
 # Generate a secret and put it in .env as APP_SECRET
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 docker compose up -d
 ```
 
-Open <http://localhost:8080> and create your account.
+Open <http://localhost:8080>. Your data lives in the `glassboard-data` volume,
+never in the image, so rebuilding never touches it.
 
-## Quick start without Docker
+### Without Docker
 
 ```bash
-git clone https://github.com/<you>/glassboard.git
-cd glassboard
+git clone https://github.com/Lokyron/GlassBoard.git
+cd GlassBoard
 npm ci --omit=dev
 cp .env.example .env     # then set APP_SECRET
 npm start
 ```
 
 Open <http://localhost:3000>.
+
+### As a system service
+
+On a server, run it as its own user behind a reverse proxy. A minimal unit:
+
+```ini
+[Unit]
+Description=Glassboard dashboard
+After=network.target
+
+[Service]
+User=glassboard
+WorkingDirectory=/opt/glassboard
+EnvironmentFile=/opt/glassboard/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+
+# Keep the service away from everything but its own data.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/glassboard
+
+[Install]
+WantedBy=multi-user.target
+```
+
+With `DATA_DIR=/var/lib/glassboard` in the `.env`, and `HOST=127.0.0.1` so only
+the proxy can reach it.
 
 ## First run
 
@@ -96,7 +154,27 @@ Open <http://localhost:3000>.
 4. The dashboard opens with a neutral example configuration. Open the account
    menu (top right), pick **Edit dashboard**, and make it yours.
 
-## Editing
+## Updating
+
+Glassboard has no database migrations to run: new tables and columns are created
+at start-up, and a configuration written by an older version is completed with
+the fields it lacks the first time it is read. Still, take a backup first, from
+the account menu or with `npm run config:export`.
+
+```bash
+# Docker
+git pull && docker compose up -d --build
+
+# Without Docker
+git pull && npm ci --omit=dev && systemctl restart glassboard
+```
+
+An installed app picks the new version up on its own: the service worker and the
+manifest are always served fresh.
+
+## Using Glassboard
+
+### Editing the dashboard
 
 The account menu in the top bar switches between read and edit mode.
 
@@ -124,26 +202,95 @@ link released outside the folder goes back to the main grid.
 
 Nothing is written to the server until you press **Save**.
 
+### Settings
+
 Everything that is not a tile lives in **Settings**, reachable from the same
 menu: the dashboard name, the language, the clocks, the search engine, the
 integrations, the appearance, the account and the backups.
 
 ![The settings dialog](docs/images/settings.png)
 
-## Environment variables
+### Themes and wallpaper
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `APP_SECRET` | none | **Required in production.** Signs sessions and encrypts stored credentials. Changing it invalidates both. |
-| `PORT` | `3000` | HTTP port. |
-| `HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` in a container. |
-| `DATA_DIR` | `./data` | Where the database, backups and the tile cache live. |
-| `TRUST_PROXY` | `0` | Set to `1` behind a reverse proxy so client IPs and the HTTPS flag come from `X-Forwarded-*`. |
-| `COOKIE_SECURE` | `auto` | `auto` marks the session cookie `Secure` only on HTTPS requests. Force with `true` / `false`. |
-| `SESSION_TTL_HOURS` | `720` | Session lifetime. |
-| `LOGIN_MAX_ATTEMPTS` | `5` | Failed logins before a lockout. |
-| `LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration. |
-| `OSM_CONTACT` | none | Optional contact address sent to OpenStreetMap services, as their usage policy asks. |
+**Settings → Appearance** holds six presets: Glass blue (the default), Ember,
+Forest, Violet, Rose and Slate. Each one drives the accent colour, the glow, the
+animated background orbs and the backdrop, in both light and dark mode. Choices
+preview live on the real dashboard, and nothing is written until you save.
+
+You can also upload your own background: PNG, JPEG, WebP or GIF, up to 4 MB.
+The image is stored in your data directory, served only to authenticated
+sessions, and identified by its magic bytes rather than by its declared type.
+Two sliders control how much the image is dimmed and blurred, so the glass
+surfaces stay readable over any photograph, and the orbs can be switched off.
+
+The wallpaper travels inside the configuration export, so restoring on a blank
+instance gives back the same dashboard, image included. An image larger than
+4 MB is left out and flagged in the file rather than silently dropped.
+
+A new preset is one block in `public/assets/themes.css` plus one entry in
+`THEME_PRESETS` (`server/config-schema.js`).
+
+![The same dashboard in light mode](docs/images/dashboard-light.png)
+
+### On a phone
+
+Below 820 px the layout changes rather than shrinks:
+
+- the page is reordered for a thumb: greeting and search, the tiles, the
+  shortcuts, and the clock and year cards last;
+- navigation moves to a **bottom dock**, where a thumb reaches it; while
+  editing, the **Save** / **Cancel** bar takes its place;
+- weather tiles pair up side by side, other tiles keep the full width;
+- shortcuts become a four-column home screen grid (three below 360 px), with
+  one-line labels, and hover effects are disabled so no card stays stuck
+  highlighted after a tap;
+- modals become **bottom sheets** with a grab handle, their **Save** button
+  stays pinned at the bottom, the settings tabs scroll sideways and the seven
+  forecast days fit on one line;
+- `viewport-fit=cover` plus `env(safe-area-inset-*)` keep the bars clear of a
+  notch, a Dynamic Island, a home indicator and curved screen edges;
+- the status bar takes the colour of the current theme.
+
+Backdrop blur is the expensive part of this design on a phone GPU, so it is
+lightened on small screens, one of the background orbs is dropped, and the
+parallax runs only on a device with a real pointer.
+
+### Installing it as an app
+
+Glassboard is a Progressive Web App: it installs from the browser and then runs
+in its own window, with its own icon, like a native app.
+
+- **Chrome, Edge, Android**: use the install icon in the address bar or the
+  browser menu, or **Install the app** in Glassboard's account menu.
+- **iPhone and iPad**: **Install the app** in the account menu shows the steps:
+  Share menu, then **Add to Home Screen**.
+- **Safari on a Mac**: **File → Add to Dock**.
+
+The menu entry only appears where the browser can install, and disappears once
+you are inside the installed app.
+
+Installing needs **HTTPS**, like every browser feature of this kind. Over plain
+`http://` on a LAN address the dashboard works as usual but cannot be
+installed; `localhost` is the only exception. The manifest is requested with
+credentials, so installing also works behind a proxy that asks for a login
+(basic auth, Authelia, Authentik).
+
+A service worker makes the app installable and shows a small offline page when
+the server cannot be reached; the page comes back by itself when the connection
+does. It never stores your data: API responses and pages are not cached, only
+the files the offline page needs.
+
+### Languages
+
+The interface ships in **English (`en`), French (`fr`), Spanish (`es`), German
+(`de`), Italian (`it`), Portuguese (`pt`) and Dutch (`nl`)**. Pick one in
+**Settings → General → Language**, it also drives date and time formatting. The
+login and first-run screens run before any configuration exists, so they follow
+the browser's preferred language instead.
+
+Adding a language is one file: in `public/assets/i18n.js`, add an entry to
+`LOCALE_NAMES` and copy the `en` table. Missing keys fall back to English one by
+one, so a partial translation is perfectly usable and no key ever shows up raw.
 
 ## Integrations
 
@@ -214,7 +361,7 @@ anything. An invalid file is refused with a precise error and changes nothing.
 The format is versioned and documented in
 [docs/configuration-format.md](docs/configuration-format.md).
 
-## Reverse proxy
+## Behind a reverse proxy
 
 ```nginx
 server {
@@ -233,21 +380,29 @@ server {
 
 Set `TRUST_PROXY=1` so the lockout counts real client addresses.
 
-## What lives where
+Glassboard itself has no IP allow list: its own sign-in is the gate. If you put
+one in the proxy, remember that a browser fetches the web manifest without
+credentials, which is why the manifest link carries `crossorigin`.
 
-```
-glassboard/
-├── server/            HTTP server, storage, auth, integrations
-├── public/            the dashboard itself (HTML/CSS/JS, no build)
-├── scripts/           export and import CLI
-├── docs/              format documentation
-└── $DATA_DIR/         YOUR data, never in git
-    ├── glassboard.db  configuration, account, encrypted credentials
-    ├── backups/       automatic snapshots taken before imports
-    └── tiles/         cached map tiles
-```
+## Configuration reference
 
-## Security notes
+Every setting is an environment variable, read from the process environment or
+from a `.env` file next to the server. See [.env.example](.env.example).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `APP_SECRET` | none | **Required in production.** Signs sessions and encrypts stored credentials. Changing it invalidates both. |
+| `PORT` | `3000` | HTTP port. |
+| `HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` in a container. |
+| `DATA_DIR` | `./data` | Where the database, backups and the tile cache live. |
+| `TRUST_PROXY` | `0` | Set to `1` behind a reverse proxy so client IPs and the HTTPS flag come from `X-Forwarded-*`. |
+| `COOKIE_SECURE` | `auto` | `auto` marks the session cookie `Secure` only on HTTPS requests. Force with `true` / `false`. |
+| `SESSION_TTL_HOURS` | `720` | Session lifetime. |
+| `LOGIN_MAX_ATTEMPTS` | `5` | Failed logins before a lockout. |
+| `LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration. |
+| `OSM_CONTACT` | none | Optional contact address sent to OpenStreetMap services, as their usage policy asks. |
+
+## Security
 
 - Passwords are hashed with argon2id. TOTP secrets and integration credentials
   are encrypted with AES-256-GCM.
@@ -263,7 +418,28 @@ glassboard/
 - Losing `APP_SECRET` means losing the sessions and the stored credentials. The
   dashboard configuration itself stays readable.
 
-## Housekeeping
+Found a hole? Please report it privately: see [SECURITY.md](SECURITY.md).
+
+## How it works
+
+```
+glassboard/
+├── server/            HTTP server, storage, auth, integrations
+├── public/            the dashboard itself (HTML/CSS/JS, no build)
+├── scripts/           export and import CLI
+├── docs/              format documentation
+└── $DATA_DIR/         YOUR data, never in git
+    ├── glassboard.db  configuration, account, encrypted credentials
+    ├── backups/       automatic snapshots taken before imports
+    └── tiles/         cached map tiles
+```
+
+The server is plain Express 5 on Node 24, storing everything in one SQLite file
+through the built-in `node:sqlite`. The front end is hand-written HTML, CSS and
+JavaScript: no framework, no bundler, no build step, and the only two vendored
+libraries are Leaflet and the Phosphor icon set. The whole configuration is a
+single versioned JSON document, validated on the way in and kept for 20
+revisions, which is what makes export, import and rollback so simple.
 
 An hourly job keeps the footprint flat without any attention: it drops expired
 cache rows and caps the table, deletes expired sessions and sign-in challenges,
@@ -275,87 +451,15 @@ In the browser, the clock and the polling stop while the tab is hidden and pick
 up again when it comes back. A dashboard left open on a phone all day should
 not cost battery.
 
-## Themes and wallpaper
+The architecture notes, in French, are in
+[docs/architecture.fr.md](docs/architecture.fr.md).
 
-**Settings → Appearance** holds six presets: Glass blue (the default), Ember,
-Forest, Violet, Rose and Slate. Each one drives the accent colour, the glow, the
-animated background orbs and the backdrop, in both light and dark mode. Choices
-preview live on the real dashboard, and nothing is written until you save.
+## Contributing
 
-You can also upload your own background: PNG, JPEG, WebP or GIF, up to 4 MB.
-The image is stored in your data directory, served only to authenticated
-sessions, and identified by its magic bytes rather than by its declared type.
-Two sliders control how much the image is dimmed and blurred, so the glass
-surfaces stay readable over any photograph, and the orbs can be switched off.
-
-The wallpaper travels inside the configuration export, so restoring on a blank
-instance gives back the same dashboard, image included. An image larger than
-4 MB is left out and flagged in the file rather than silently dropped.
-
-A new preset is one block in `public/assets/themes.css` plus one entry in
-`THEME_PRESETS` (`server/config-schema.js`).
-
-![The same dashboard in light mode](docs/images/dashboard-light.png)
-
-## On a phone
-
-Below 820 px the layout changes rather than shrinks:
-
-- the page is reordered for a thumb: greeting and search, the tiles, the
-  shortcuts, and the clock and year cards last;
-- navigation moves to a **bottom dock**, where a thumb reaches it; while
-  editing, the **Save** / **Cancel** bar takes its place;
-- weather tiles pair up side by side, other tiles keep the full width;
-- shortcuts become a four-column home screen grid (three below 360 px), with
-  one-line labels, and hover effects are disabled so no card stays stuck
-  highlighted after a tap;
-- modals become **bottom sheets** with a grab handle, their **Save** button
-  stays pinned at the bottom, the settings tabs scroll sideways and the seven
-  forecast days fit on one line;
-- `viewport-fit=cover` plus `env(safe-area-inset-*)` keep the bars clear of a
-  notch, a Dynamic Island, a home indicator and curved screen edges;
-- the status bar takes the colour of the current theme.
-
-## Installing it as an app
-
-Glassboard is a Progressive Web App: it installs from the browser and then runs
-in its own window, with its own icon, like a native app.
-
-- **Chrome, Edge, Android**: use the install icon in the address bar or the
-  browser menu, or **Install the app** in Glassboard's account menu.
-- **iPhone and iPad**: **Install the app** in the account menu shows the steps:
-  Share menu, then **Add to Home Screen**.
-- **Safari on a Mac**: **File → Add to Dock**.
-
-The menu entry only appears where the browser can install, and disappears once
-you are inside the installed app.
-
-Installing needs **HTTPS**, like every browser feature of this kind. Over plain
-`http://` on a LAN address the dashboard works as usual but cannot be
-installed; `localhost` is the only exception. The manifest is requested with
-credentials, so installing also works behind a proxy that asks for a login
-(basic auth, Authelia, Authentik).
-
-A service worker makes the app installable and shows a small offline page when
-the server cannot be reached; the page comes back by itself when the connection
-does. It never stores your data: API responses and pages are not cached, only
-the files the offline page needs.
-
-Backdrop blur is the expensive part of this design on a phone GPU, so it is
-lightened on small screens, one of the background orbs is dropped, and the
-parallax runs only on a device with a real pointer.
-
-## Languages
-
-The interface ships in **English (`en`), French (`fr`), Spanish (`es`), German
-(`de`), Italian (`it`), Portuguese (`pt`) and Dutch (`nl`)**. Pick one in
-**Settings → General → Language**, it also drives date and time formatting. The
-login and first-run screens run before any configuration exists, so they follow
-the browser's preferred language instead.
-
-Adding a language is one file: in `public/assets/i18n.js`, add an entry to
-`LOCALE_NAMES` and copy the `en` table. Missing keys fall back to English one by
-one, so a partial translation is perfectly usable and no key ever shows up raw.
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
+how to run it locally, what the code style is, and how to add a tile type, a
+theme or a language. Please do not paste your own URLs, tokens or addresses into
+an issue.
 
 ## Credits
 
@@ -368,4 +472,4 @@ one, so a partial translation is perfectly usable and no key ever shows up raw.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Copyright holders are the Glassboard contributors.

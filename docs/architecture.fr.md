@@ -1,8 +1,13 @@
 # Glassboard
 
-> Documentation de reprise, générée le 2026-09-21. Le [`README.md`](README.md) public
-> (en anglais) décrit l'usage ; le format du fichier de configuration est dans
-> [`docs/configuration-format.md`](docs/configuration-format.md).
+> **Architecture notes, in French.** English readers: the [README](../README.md)
+> covers usage and installation, and [configuration-format.md](configuration-format.md)
+> documents the configuration document.
+>
+> Documentation de reprise : la pile, l'arborescence, les commandes, les routes et les
+> pièges connus. Le [`README`](../README.md) (en anglais) décrit l'installation et l'usage ;
+> le format du fichier de configuration est dans
+> [`configuration-format.md`](configuration-format.md).
 
 ## 1. Vue d'ensemble
 

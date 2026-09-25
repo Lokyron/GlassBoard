@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest something Glassboard should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to do
+      description: The need first, rather than the solution. What do you do today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This keeps Glassboard dependency-free on the front end (no framework, no build step)
+        - label: I would be willing to work on it

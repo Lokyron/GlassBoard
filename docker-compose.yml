@@ -1,8 +1,7 @@
 services:
   glassboard:
+    # Built from this repository: no prebuilt image is published.
     build: .
-    # Or use a prebuilt image once you publish one:
-    # image: ghcr.io/<you>/glassboard:latest
     container_name: glassboard
     restart: unless-stopped
     ports:
@@ -15,6 +14,8 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-0}
       COOKIE_SECURE: ${COOKIE_SECURE:-auto}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-720}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
       OSM_CONTACT: ${OSM_CONTACT:-}
     volumes:
       - glassboard-data:/data
