@@ -52,9 +52,13 @@ status running "$STEP"
 
 STEP=swap
 status running "$STEP"
+chown -R root:root "$STAGING"
+# mktemp gives 0700, which the service user cannot even enter: give the tree the
+# same shape as a normal install, readable by all and writable by root only.
+chmod -R a+rX,go-w "$STAGING"
+# The .env is copied after that, keeping its own restrictive mode: it holds APP_SECRET.
 [ -f "$APP_DIR/.env" ] && cp -a "$APP_DIR/.env" "$STAGING/.env"
 printf '{"commit":"%s","branch":"%s","installedAt":"%s"}\n' "$SHA" "$BRANCH" "$(date -Is)" > "$STAGING/VERSION"
-chown -R root:root "$STAGING"
 PREVIOUS="${APP_DIR}.previous"
 rm -rf "$PREVIOUS"
 mv "$APP_DIR" "$PREVIOUS"
