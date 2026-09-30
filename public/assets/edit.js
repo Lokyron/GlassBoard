@@ -1150,7 +1150,82 @@ function parcelsPane(draft) {
   pane.appendChild(field(t('set.parcelsMaxOnTile'), textInput(parcels.maxOnTile, { type: 'number', min: '1', max: '10', oninput: (e) => { parcels.maxOnTile = Number(e.target.value); } })));
   pane.appendChild(el('p', { class: 'fld-h', text: t('set.parcelsManualHint') }));
 
+  /* -------------------------- the mailbox scan -------------------------- */
+
+  const mail = parcels.mail;
+  pane.appendChild(el('h4', { class: 'pane-title', text: t('set.mailTitle') }));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.mailIntro') }));
+
+  const mailStatus = el('div', { class: 'status', text: '…' });
+  pane.appendChild(mailStatus);
+
+  const mailPassword = textInput('', { type: 'password', placeholder: '••••••••••••', autocomplete: 'off' });
+  const saveMail = el('button', { class: 'btn primary', type: 'button', text: t('set.mailSave'), onclick: async () => {
+    saveMail.disabled = true;
+    try {
+      await api('/api/integrations/parcels/mail/password', { method: 'PUT', body: { password: mailPassword.value } });
+      mailPassword.value = '';
+      mail.enabled = true;
+      await showMailStatus();
+      toast(t('msg.saved'));
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      saveMail.disabled = false;
+    }
+  } });
+  const forgetMail = el('button', { class: 'btn ghost', type: 'button', text: t('set.mailForget'), onclick: async () => {
+    await api('/api/integrations/parcels/mail/password', { method: 'DELETE' });
+    mail.enabled = false;
+    await showMailStatus();
+    toast(t('msg.saved'));
+  } });
+  // Saving the whole settings dialog is not needed to find out whether the
+  // credentials work: the test signs in and hangs up, and says what failed.
+  const testMail = el('button', { class: 'btn ghost', type: 'button', text: t('set.mailTest'), onclick: async () => {
+    testMail.disabled = true;
+    mailStatus.textContent = t('set.mailTesting');
+    try {
+      const result = await api('/api/integrations/parcels/mail/test', { method: 'POST' });
+      mailStatus.textContent = t('set.mailWorks', { n: result.recent });
+    } catch (error) {
+      mailStatus.textContent = error.message;
+    } finally {
+      testMail.disabled = false;
+    }
+  } });
+
+  async function showMailStatus() {
+    try {
+      const result = await api('/api/integrations/parcels/status');
+      if (!result.mail?.configured) {
+        mailStatus.textContent = t('set.mailNoPassword');
+      } else if (result.mail.lastScan) {
+        mailStatus.textContent = t('set.mailLastScan', {
+          when: new Date(result.mail.lastScan).toLocaleString(state.config.site.locale),
+          n: result.mail.pending,
+        });
+      } else {
+        mailStatus.textContent = t('set.mailNeverScanned');
+      }
+    } catch (error) {
+      mailStatus.textContent = error.message;
+    }
+  }
+
+  pane.appendChild(checkbox(t('set.mailEnabled'), mail.enabled, (value) => { mail.enabled = value; }));
+  pane.appendChild(field(t('set.mailAddress'), textInput(mail.user, { type: 'email', placeholder: 'you@gmail.com', oninput: (e) => { mail.user = e.target.value.trim(); } })));
+  pane.appendChild(field(t('set.mailPassword'), mailPassword, t('set.mailPasswordHint')));
+  pane.appendChild(el('div', { class: 'row' }, [saveMail, forgetMail, testMail]));
+  pane.appendChild(field(t('set.mailHost'), textInput(mail.host, { oninput: (e) => { mail.host = e.target.value.trim(); } })));
+  pane.appendChild(field(t('set.mailPort'), textInput(mail.port, { type: 'number', min: '1', max: '65535', oninput: (e) => { mail.port = Number(e.target.value); } })));
+  pane.appendChild(field(t('set.mailSenders'), textInput(mail.senders, { placeholder: '@colissimo.fr, @amazon.fr', oninput: (e) => { mail.senders = e.target.value; } }), t('set.mailSendersHint')));
+  pane.appendChild(field(t('set.mailSinceDays'), textInput(mail.sinceDays, { type: 'number', min: '1', max: '60', oninput: (e) => { mail.sinceDays = Number(e.target.value); } }), t('set.mailSinceDaysHint')));
+  pane.appendChild(field(t('set.mailScanHours'), textInput(mail.scanHours, { type: 'number', min: '1', max: '48', oninput: (e) => { mail.scanHours = Number(e.target.value); } })));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.mailPrivacy') }));
+
   showStatus();
+  showMailStatus();
   return pane;
 }
 

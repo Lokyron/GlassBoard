@@ -403,6 +403,43 @@ and no automatic status, which is more honest than an empty timeline.
 A parcel that has been delivered leaves the list on its own after a few days,
 which is what keeps the tile readable without any housekeeping.
 
+#### Finding parcels in your mail
+
+Typing a tracking number in by hand gets old. Glassboard can read your mailbox
+and propose what it finds, in **Settings → Parcels**.
+
+The scan **proposes, it never decides**. Every number it turns up appears as a
+suggestion above the parcel list, with a **Follow** and an **Ignore** button.
+That is the credit rule showing through the design: accepting a suggestion is
+what registers a number and spends a credit, so a scanner that acted on its own
+would empty the allowance on parcels nobody asked about. Because a human
+confirms, the extraction can afford to be generous, and an ignored number is
+remembered so it is not offered again.
+
+This is also what makes Amazon work. A `TBA` number cannot be queried by anyone
+but Amazon, but Amazon *writes to you*: shipped, out for delivery, delivered. So
+those parcels are followed by hand and their state is moved along by the mails
+themselves, without a single credit being spent. A carrier feed always wins over
+a sentence in a subject line: a parcel the provider reports on is never moved
+this way.
+
+Set-up, with Gmail: turn on two-step verification, create a **16-character app
+password**, and give Glassboard your address and that password. Your account
+password will not work, and Outlook or Microsoft 365 mailboxes cannot be used
+this way at all: Microsoft turned off password-based IMAP for them in 2024.
+
+The mailbox is opened **read-only**, with `EXAMINE` rather than `SELECT` and
+`BODY.PEEK` rather than `BODY`. The server itself refuses any write, so a bug
+here cannot mark a message as read, move it or delete it. Nothing of a mail is
+kept: only the tracking number and the subject line of the message it came from.
+
+Two things worth knowing before you turn it on. An IMAP password grants read
+access to the **whole** mailbox; restricting the scan to certain senders limits
+what the scanner looks at, not what the credential would allow. And the app
+password is stored encrypted with `APP_SECRET`, so it is exactly as safe as that
+secret and as the machine holding it. Use a dedicated app password, revocable on
+its own without touching your account.
+
 ### Adding your own
 
 A tile type is one entry in `TILE_TYPES` (`server/config-schema.js`), one

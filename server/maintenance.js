@@ -11,6 +11,9 @@ import path from 'node:path';
 import { db } from './db.js';
 import { DATA_DIR } from './env.js';
 import { purgeExpiredSessions, purgeExpiredChallenges } from './auth.js';
+import { getConfig } from './store.js';
+import { getMeta } from './db.js';
+import * as mailbox from './integrations/mailbox.js';
 
 const TILE_DIR = path.join(DATA_DIR, 'tiles');
 const TILE_CACHE_MAX_BYTES = 128 * 1024 * 1024;
@@ -77,8 +80,36 @@ export async function runMaintenance({ quiet = true } = {}) {
     // A checkpoint can be refused while a read is in flight; next hour will do.
   }
 
+  const mail = await scanMailbox();
+
   if (!quiet) console.log(`[glassboard] maintenance: ${cacheRows} cache rows, ${tiles} tiles removed`);
-  return { cacheRows, tiles };
+  return { cacheRows, tiles, mail };
+}
+
+/**
+ * Look through the mailbox for parcels, at most every `scanHours`.
+ * Runs on the housekeeping timer rather than one of its own: the mailbox does
+ * not need its own clock, and a failure here must never stop the rest.
+ */
+async function scanMailbox() {
+  let settings;
+  try {
+    settings = getConfig().integrations.parcels;
+  } catch {
+    return null;
+  }
+  if (!settings?.enabled || !settings.mail?.enabled || !mailbox.isConfigured()) return null;
+
+  const last = getMeta('mail.last_scan');
+  const due = !last || Date.now() - new Date(last).getTime() >= Math.max(1, settings.mail.scanHours) * 3_600_000;
+  if (!due) return null;
+
+  try {
+    return await mailbox.scan(settings.mail);
+  } catch (error) {
+    console.warn(`[glassboard] mailbox scan failed: ${error.message}`);
+    return null;
+  }
 }
 
 export function scheduleMaintenance() {

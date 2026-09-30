@@ -52,7 +52,7 @@ Glassboard/
 │   ├── maintenance.js      # Tâche horaire : cache, sessions, tuiles, wal_checkpoint, ANALYZE
 │   ├── update.js           # Canaux stable / bêta, fichier de requête lu par le service root
 │   ├── routes/             # auth.js, config.js, integrations.js, appearance.js, update.js
-│   └── integrations/       # weather.js, georide.js, parcels.js, map-tiles.js
+│   └── integrations/       # weather.js, georide.js, parcels.js, mailbox.js, imap.js, mime.js, map-tiles.js
 ├── public/                 # index.html, login.html, setup.html, assets/ (app.js, edit.js, i18n.js,
 │                           #   themes.css, mobile.css, vendor/leaflet), manifest.webmanifest
 ├── scripts/                # config-export.mjs, config-import.mjs (CLI)
@@ -126,7 +126,7 @@ Pas de tests, linter ni CI configurés.
 | `GET /api/health` | Santé + indicateur `setupRequired` |
 | `/api/auth` | `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
-| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /parcels/suggestions`, `POST /parcels/suggestions/:id/accept\|ignore`, `POST /parcels/mail/scan\|test`, `PUT/DELETE /parcels/mail/password`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
 
@@ -165,6 +165,22 @@ Pas de tests, linter ni CI configurés.
   choisirait la référence à installer.
 - **Ne jamais répondre `409`** depuis une route d'API appelée par le tableau de bord : `api()` dans
   `app.js` interprète ce code comme « instance à configurer » et quitte la page pour `/setup`.
+- **Lecture de la boîte mail** (`imap.js`, client maison sans dépendance) : le piège central du protocole
+  est le **littéral** (`{123}` en fin de ligne suivi de 123 octets bruts, CRLF compris) ; le lecteur est
+  bâti autour. Boîte ouverte avec **`EXAMINE`** et non `SELECT`, lecture en **`BODY.PEEK`** : le serveur
+  lui-même refuse toute écriture, la lecture seule ne repose pas sur ma discipline.
+- **Piège accent + `\b`** : en expression régulière JavaScript, une lettre accentuée n'est pas un caractère
+  de mot, donc `expédié\b` ne correspond jamais en fin de mot. Ce détail avait silencieusement désactivé
+  toutes les phrases françaises de détection d'état.
+- **Piège `href`** : retirer les balises HTML avec `/<[^>]+>/g` jette aussi les liens, or le numéro de suivi
+  ne vit souvent que dans le `href`. Les liens sont extraits **avant** le décapage des balises.
+- **`AggregateError`** : Node signale un refus de connexion en double pile par un `AggregateError` dont le
+  `message` est vide ; il faut lire `.errors` sous peine d'afficher une erreur muette.
+- **La suggestion n'est consommée qu'après création du colis** : la marquer acceptée avant l'appel au
+  fournisseur la faisait disparaître à jamais quand le numéro était refusé (bug corrigé avant livraison).
+- **Outlook / Microsoft 365 sont hors jeu en IMAP** depuis octobre 2024 : plus d'authentification par mot de
+  passe, même d'application. Il faudrait OAuth2, et dans ce cas Microsoft Graph serait plus simple que
+  IMAP+XOAUTH2. Gmail accepte toujours l'IMAP avec un mot de passe d'application (2FA obligatoire).
 - **Pas de tests automatisés** : prioriser le validateur de configuration (`config-schema.js`) et le flux d'authentification.
 - `express.json({ limit: '16mb' })` global : large (motivé par l'import avec fond d'écran en base64) ;
   le restreindre aux routes d'import si possible.

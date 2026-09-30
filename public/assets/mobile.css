@@ -218,6 +218,9 @@
   .pc-form .btn { width: 100%; }
   /* On a phone the list is what you came for; the form goes under it. */
   .pc-form { order: 2; }
+  .pc-suggest-row { align-items: stretch; }
+  .pc-suggest-row .row { width: 100%; }
+  .pc-suggest-row .btn { flex: 1 1 0; }
   .gr-trips#pc-list { max-height: none; }
   /* The seven days fit on one line instead of scrolling out of sight. */
   #modal-day-selector { width: 100%; gap: 5px; }

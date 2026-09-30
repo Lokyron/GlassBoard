@@ -209,9 +209,14 @@ function present(row) {
  * away, which is the one operation that spends quota: it happens here and
  * nowhere else. Without a number the parcel is followed manually.
  */
+// Amazon Logistics runs a closed network: registering one of its numbers would
+// spend a credit to be told, at best, that nothing is known about it. Such a
+// parcel is followed by hand even though it does carry a number.
+const AMAZON_OWN_NETWORK = /^TBA\d/i;
+
 export async function addParcel({ label = '', trackingNumber = '', carrier = null, url = '' } = {}) {
   const number = String(trackingNumber || '').trim();
-  const provider = number ? '17track' : 'manual';
+  const provider = number && !AMAZON_OWN_NETWORK.test(number) ? '17track' : 'manual';
 
   if (number && !TRACKING_NUMBER.test(number)) {
     const error = new Error('A tracking number is 5 to 50 letters, digits or hyphens.');

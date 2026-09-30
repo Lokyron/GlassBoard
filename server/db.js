@@ -98,6 +98,22 @@ CREATE TABLE IF NOT EXISTS parcels (
 );
 CREATE INDEX IF NOT EXISTS idx_parcels_created ON parcels(created_at);
 
+-- Tracking numbers found in the mailbox, waiting for a yes or a no. They are
+-- not parcels: registering one with the provider costs a credit, so nothing is
+-- followed until the user says so. An ignored row is kept, which is what stops
+-- the same number being proposed at every scan.
+CREATE TABLE IF NOT EXISTS parcel_suggestions (
+  id           TEXT PRIMARY KEY,
+  tracking_no  TEXT NOT NULL,
+  carrier_name TEXT NOT NULL DEFAULT '',
+  label        TEXT NOT NULL DEFAULT '',
+  sender       TEXT NOT NULL DEFAULT '',
+  uid          INTEGER,
+  state        TEXT NOT NULL DEFAULT 'new',
+  created_at   TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_suggestions_number ON parcel_suggestions(tracking_no);
+
 -- Upstream API responses, so integrations never hammer third-party services.
 CREATE TABLE IF NOT EXISTS cache (
   key        TEXT PRIMARY KEY,
@@ -176,6 +192,28 @@ export function updateParcelInfo(id, { status, info, carrier = null, checkedAt }
 
 export function deleteParcelRow(id) {
   db.prepare('DELETE FROM parcels WHERE id = ?').run(id);
+}
+
+/* -------------------------- parcel suggestions --------------------------- */
+
+export function listSuggestionRows() {
+  return db.prepare('SELECT * FROM parcel_suggestions ORDER BY created_at DESC').all();
+}
+
+export function getSuggestionRow(id) {
+  return db.prepare('SELECT * FROM parcel_suggestions WHERE id = ?').get(id) ?? null;
+}
+
+export function insertSuggestionRow(row) {
+  db.prepare(
+    `INSERT INTO parcel_suggestions (id, tracking_no, carrier_name, label, sender, uid, state, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(tracking_no) DO NOTHING`
+  ).run(row.id, row.tracking_no, row.carrier_name, row.label, row.sender, row.uid ?? null, row.state, row.created_at);
+}
+
+export function setSuggestionState(id, state) {
+  db.prepare('UPDATE parcel_suggestions SET state = ? WHERE id = ?').run(state, id);
 }
 
 /* ------------------------------ cache ----------------------------------- */

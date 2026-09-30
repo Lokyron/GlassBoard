@@ -5,6 +5,7 @@ import { getConfig } from '../store.js';
 import { getForecast, reverseGeocode } from '../integrations/weather.js';
 import * as georide from '../integrations/georide.js';
 import * as parcels from '../integrations/parcels.js';
+import * as mailbox from '../integrations/mailbox.js';
 import { getTile, isValidTile } from '../integrations/map-tiles.js';
 
 export const integrationsRouter = express.Router();
@@ -94,9 +95,9 @@ integrationsRouter.get('/georide/trips', async (req, res) => {
  *  and leaves the dashboard for the setup page. */
 const parcelError = (res, error) => {
   const status = error.code === 'not_found' ? 404
-    : error.code === 'not_configured' ? 503
+    : error.code === 'not_configured' || error.code === 'disabled' ? 503
       : error.code === 'rate_limited' ? 429
-        : error.code === 'bad_key' ? 502 : 400;
+        : error.code === 'bad_key' || error.code === 'network' || error.code === 'timeout' ? 502 : 400;
   res.status(status).json({ error: error.message, code: error.code ?? null });
 };
 
@@ -134,7 +135,7 @@ integrationsRouter.post('/parcels/refresh', async (_req, res) => {
 });
 
 integrationsRouter.get('/parcels/status', async (_req, res) => {
-  const payload = { ok: true, hasKey: parcels.isConfigured(), quota: null, error: null };
+  const payload = { ok: true, hasKey: parcels.isConfigured(), quota: null, error: null, mail: mailbox.status() };
   if (payload.hasKey) {
     try {
       payload.quota = await parcels.getQuota();
@@ -155,6 +156,70 @@ integrationsRouter.put('/parcels/key', (req, res) => {
 
 integrationsRouter.delete('/parcels/key', (_req, res) => {
   parcels.setApiKey(null);
+  res.json({ ok: true });
+});
+
+/* --------------------------- parcels from mail --------------------------- */
+
+integrationsRouter.get('/parcels/suggestions', (_req, res) => {
+  res.json({ ok: true, suggestions: mailbox.listSuggestions(), mail: mailbox.status() });
+});
+
+/** Accepting is the one moment a provider credit may be spent, and it is a click. */
+integrationsRouter.post('/parcels/suggestions/:id/accept', async (req, res) => {
+  try {
+    const suggestion = mailbox.getSuggestion(req.params.id);
+    const parcel = await parcels.addParcel({
+      label: suggestion.label,
+      trackingNumber: suggestion.tracking_no,
+      carrier: null,
+    });
+    // Only now: a suggestion whose parcel was refused must stay on offer.
+    mailbox.markAccepted(suggestion.id);
+    res.json({ ok: true, parcel });
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+integrationsRouter.post('/parcels/suggestions/:id/ignore', (req, res) => {
+  try {
+    mailbox.ignoreSuggestion(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+integrationsRouter.post('/parcels/mail/scan', async (_req, res) => {
+  const settings = getConfig().integrations.parcels;
+  try {
+    const result = await mailbox.scan(settings.mail);
+    res.json({ ok: true, ...result, suggestions: mailbox.listSuggestions() });
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+integrationsRouter.post('/parcels/mail/test', async (_req, res) => {
+  const settings = getConfig().integrations.parcels;
+  try {
+    res.json(await mailbox.testConnection(settings.mail));
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+/** Write-only, like every other credential here. */
+integrationsRouter.put('/parcels/mail/password', (req, res) => {
+  const password = String(req.body?.password || '').trim();
+  if (!password) return res.status(400).json({ error: 'A password is required.' });
+  mailbox.setPassword(password);
+  res.json({ ok: true });
+});
+
+integrationsRouter.delete('/parcels/mail/password', (_req, res) => {
+  mailbox.setPassword(null);
   res.json({ ok: true });
 });
 

@@ -213,6 +213,19 @@ export function validateConfig(input) {
         refreshMinutes: v.num(parcels.refreshMinutes, 'integrations.parcels.refreshMinutes', { min: 15, max: 1440, fallback: 180 }),
         hideDeliveredAfterDays: v.num(parcels.hideDeliveredAfterDays, 'integrations.parcels.hideDeliveredAfterDays', { min: 0, max: 30, fallback: 3 }),
         maxOnTile: v.num(parcels.maxOnTile, 'integrations.parcels.maxOnTile', { min: 1, max: 10, fallback: 4 }),
+        // Reading a mailbox to find parcels. The password lives in the secrets
+        // table, never here: this document is exported and restored.
+        mail: {
+          enabled: v.bool(parcels.mail?.enabled, false),
+          host: v.str(parcels.mail?.host, 'integrations.parcels.mail.host', { max: 120, fallback: 'imap.gmail.com' }),
+          port: v.num(parcels.mail?.port, 'integrations.parcels.mail.port', { min: 1, max: 65535, fallback: 993 }),
+          user: v.str(parcels.mail?.user, 'integrations.parcels.mail.user', { max: 200, fallback: '' }),
+          mailbox: v.str(parcels.mail?.mailbox, 'integrations.parcels.mail.mailbox', { max: 120, fallback: 'INBOX' }),
+          senders: v.str(parcels.mail?.senders, 'integrations.parcels.mail.senders', { max: 1000, fallback: '' }),
+          sinceDays: v.num(parcels.mail?.sinceDays, 'integrations.parcels.mail.sinceDays', { min: 1, max: 60, fallback: 14 }),
+          maxMessages: v.num(parcels.mail?.maxMessages, 'integrations.parcels.mail.maxMessages', { min: 10, max: 500, fallback: 150 }),
+          scanHours: v.num(parcels.mail?.scanHours, 'integrations.parcels.mail.scanHours', { min: 1, max: 48, fallback: 6 }),
+        },
       },
       georide: {
         enabled: v.bool(georide.enabled, false),

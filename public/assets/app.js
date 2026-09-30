@@ -30,6 +30,7 @@ const state = {
   tripMap: null,
   parcels: null,        // the parcel payload, list and counts
   selectedParcel: null, // id of the parcel whose history is shown
+  suggestions: null,    // tracking numbers found in the mailbox, awaiting a yes
   themePresets: {},
   wallpaperVersion: '',
   map: null,
@@ -955,6 +956,8 @@ function renderParcelsTile(tile, payload) {
   el('dot').style.background = worst;
   el('dot').style.boxShadow = `0 0 0 5px ${worst}29`;
   const parts = [];
+  const waiting = state.suggestions?.length ?? 0;
+  if (waiting > 0) parts.push(t('pc.foundInMail', { n: waiting }));
   if (counts.delivered > 0) parts.push(t('pc.deliveredCount', { n: counts.delivered }));
   if (counts.problem > 0) parts.push(t('pc.problemCount', { n: counts.problem }));
   if (payload.error) parts.push(t('pc.stale'));
@@ -970,7 +973,80 @@ async function loadParcels() {
     state.parcels = { ok: false, error: error.message };
   }
   renderParcelsTile(tile, state.parcels);
+  loadSuggestions();
   if (id('parcels-modal')?.classList.contains('open')) renderParcels();
+}
+
+/* ---------------------- parcels found in the mailbox ---------------------- */
+/* The scan proposes and the user decides, because accepting one of these is
+   what spends a tracking credit. */
+
+async function loadSuggestions() {
+  if (!state.config.integrations.parcels?.mail?.enabled) {
+    state.suggestions = [];
+    renderSuggestions();
+    return;
+  }
+  try {
+    state.suggestions = (await api('/api/integrations/parcels/suggestions')).suggestions;
+  } catch {
+    state.suggestions = [];   // an instance without the scan: nothing to show
+  }
+  renderSuggestions();
+}
+
+function renderSuggestions() {
+  const holder = id('pc-suggestions');
+  if (!holder) return;
+  const suggestions = state.suggestions ?? [];
+  holder.hidden = suggestions.length === 0;
+  if (suggestions.length === 0) {
+    holder.innerHTML = '';
+    return;
+  }
+
+  holder.innerHTML = `<div class="pc-suggest-head">${svg('envelope', 'font-size:16px')}<span>${esc(t('pc.foundInMail', { n: suggestions.length }))}</span></div>`
+    + suggestions.map((suggestion) => `<div class="pc-suggest-row" data-suggestion="${esc(suggestion.id)}">
+        <span class="pc-suggest-what">
+          <span class="pc-suggest-label">${esc(suggestion.label || suggestion.trackingNumber)}</span>
+          <span class="pc-suggest-meta">${esc(suggestion.trackingNumber)}${suggestion.carrier ? ` · ${esc(suggestion.carrier)}` : ''}${suggestion.trackable ? '' : ` · ${esc(t('pc.byHandOnly'))}`}</span>
+        </span>
+        <span class="row">
+          <button class="btn primary" type="button" data-accept>${esc(t('pc.follow'))}</button>
+          <button class="btn ghost" type="button" data-ignore>${esc(t('pc.ignore'))}</button>
+        </span>
+      </div>`).join('');
+
+  holder.querySelectorAll('[data-suggestion]').forEach((row) => {
+    const answer = async (action) => {
+      row.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+      try {
+        await api(`/api/integrations/parcels/suggestions/${encodeURIComponent(row.dataset.suggestion)}/${action}`, { method: 'POST' });
+        await loadParcels();
+        if (action === 'accept') toast(t('pc.added'));
+      } catch (error) {
+        toast(error.message, 'error');
+        row.querySelectorAll('button').forEach((button) => { button.disabled = false; });
+      }
+    };
+    row.querySelector('[data-accept]').addEventListener('click', () => answer('accept'));
+    row.querySelector('[data-ignore]').addEventListener('click', () => answer('ignore'));
+  });
+}
+
+async function scanMailbox(button) {
+  button.disabled = true;
+  try {
+    const result = await api('/api/integrations/parcels/mail/scan', { method: 'POST' });
+    state.suggestions = result.suggestions;
+    renderSuggestions();
+    await loadParcels();
+    toast(result.proposed > 0 ? t('pc.scanFound', { n: result.proposed }) : t('pc.scanNothing'));
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 /* ----------------------- parcel detail view (history) --------------------- */
@@ -979,6 +1055,8 @@ const closeParcelsModal = () => id('parcels-modal')?.classList.remove('open');
 
 function openParcelsModal() {
   if (!state.parcels?.ok || !id('parcels-modal')) return;
+  const scan = id('pc-scan');
+  if (scan) scan.hidden = !state.config.integrations.parcels?.mail?.enabled;
   id('parcels-modal').classList.add('open');
   renderParcels();
 }
@@ -993,6 +1071,7 @@ function renderParcels() {
     return;
   }
 
+  renderSuggestions();
   const parcels = [...payload.parcels].sort(parcelOrder);
   if (parcels.length === 0) {
     list.innerHTML = `<p class="gr-empty">${esc(t('pc.empty'))}</p>`;
@@ -1381,6 +1460,7 @@ async function boot() {
   // and a missing element here would stop the whole dashboard from starting.
   id('pc-form')?.addEventListener('submit', submitParcel);
   id('pc-refresh')?.addEventListener('click', (event) => refreshParcels(event.currentTarget));
+  id('pc-scan')?.addEventListener('click', (event) => scanMailbox(event.currentTarget));
   id('dialog-close').addEventListener('click', closeDialog);
   id('dialog-modal').addEventListener('click', (event) => { if (event.target === id('dialog-modal')) closeDialog(); });
   document.addEventListener('keydown', (event) => {

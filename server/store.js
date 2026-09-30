@@ -69,6 +69,7 @@ const EXPORTABLE_SECRETS = {
   'georide.email': 'GeoRide account email',
   'georide.password': 'GeoRide account password',
   'parcels.17track_key': '17TRACK API key',
+  'mail.password': 'Mailbox app password',
 };
 
 export function buildExport({ includeSecrets = false, includeWallpaper = true } = {}) {

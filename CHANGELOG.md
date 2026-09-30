@@ -3,6 +3,34 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.7.0 — 2026-09-30
+
+Parcels can now be found in your mail.
+
+### Added
+
+- **Mailbox scan**: Glassboard reads an IMAP mailbox and proposes the tracking
+  numbers it finds. Each one waits above the parcel list with a **Follow** and
+  an **Ignore** button, because accepting is what spends a tracking credit. An
+  ignored number is not offered again.
+- Mails move the parcels they are about: an Amazon `TBA` shipment, which no
+  third party can query, is followed by hand and its state advances from the
+  subject lines Amazon sends. A parcel the tracking provider reports on is never
+  moved this way, since a carrier feed beats a sentence in a subject.
+- A read-only IMAP client written against RFC 3501, with no dependency: the
+  mailbox is opened with `EXAMINE` and read with `BODY.PEEK`, so the server
+  refuses any write. Quoted-printable and base64 parts are decoded, and links
+  are lifted out of HTML before the tags are dropped, which is where a tracking
+  number usually hides.
+- **Settings → Parcels** gained the mailbox section, with a connection test that
+  signs in and reports what failed without saving anything first.
+- The scan also runs on the housekeeping timer, at most every `scanHours`.
+
+### Fixed
+
+- A suggestion whose parcel the provider refused stayed marked as accepted and
+  was never offered again. It is now consumed only once the parcel exists.
+
 ## 1.6.0 — 2026-09-30
 
 A parcels tile, and a beta channel for updates.
