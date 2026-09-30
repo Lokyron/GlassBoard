@@ -245,8 +245,8 @@
   }
   .editbar-hint, .editbar-label { display: none; }
   .editbar-touch { display: block; flex: 1; min-width: 0; color: var(--muted); font-size: .78rem; line-height: 1.3; }
-  /* Columns collapse to one, so the resize grip has nothing to resize. */
-  .tile-grip { display: none; }
+  /* The resize grip is hidden from 1180px down, in app-extra.css, where the
+     tile columns stop obeying their spans. */
   .tinybtn { width: 34px; height: 34px; }
   .tile-add { grid-column: 1 / -1; min-height: 64px; flex-direction: row; }
   .iconpick { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); max-height: 30vh; }

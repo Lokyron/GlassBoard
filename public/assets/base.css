@@ -56,7 +56,16 @@ body{min-height:100vh;color:var(--text);overflow-x:hidden;letter-spacing:-.012em
   border:1px solid var(--border);background:var(--surface-strong);transition:transform .3s var(--ease)}
 .iconbtn:hover{transform:translateY(-2px) scale(1.05)}
 /* layout desktop */
-.shell{position:relative;z-index:1;display:grid;grid-template-columns:296px minmax(0,1fr);gap:22px;max-width:1520px;margin:82px auto 64px;padding:0 22px;align-items:start}
+/* The page takes the width it is given, up to a point. The gutter is not a
+   round number: it is the top bar's own inset, 18px offset + 1px border + 16px
+   padding, so the sidebar lines up under the brand at every width.
+
+   The cap is deliberately far out. Every ordinary screen, up to and including
+   1920, is edge to edge; past 2200 the growth stops because a weather tile a
+   thousand pixels wide reads worse than a margin does. Raise it if you disagree
+   with that, it is one number. */
+.shell{position:relative;z-index:1;display:grid;grid-template-columns:296px minmax(0,1fr);gap:22px;
+  max-width:2200px;margin:82px auto 64px;padding:0 35px;align-items:start}
 .stack{display:grid;gap:22px}
 /* sidebar */
 .sidebar{position:sticky;top:82px;padding:18px;display:grid;gap:16px;border-radius:var(--rxl)}
@@ -147,6 +156,16 @@ body{min-height:100vh;color:var(--text);overflow-x:hidden;letter-spacing:-.012em
 .cgrid{display:grid;gap:16px;grid-template-columns:repeat(3,1fr)}
 .cbox{height:150px}.clab{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-bottom:8px}
 canvas{width:100%;height:100%;display:block}
-@media(max-width:1180px){.shell{grid-template-columns:1fr}.sidebar{position:relative;top:0}.wgrid{grid-template-columns:1fr}}
+/* Below this the sidebar sits on top and the tiles stop obeying their spans.
+   The !important is not decoration: the resize handles write the column widths
+   as an inline style, which would otherwise outrank anything written here and
+   leave three desktop-width tiles crushed into a narrow window. Tiles wrap by
+   their own readable width instead. */
+@media(max-width:1180px){.shell{grid-template-columns:1fr}
+  /* Laid across instead of stacked: once it spans the whole page, a column
+     of cards leaves most of the row empty and pushes everything else down. */
+  .sidebar{position:relative;top:0;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));align-items:start}
+  .side-head,.nav{grid-column:1/-1}
+  .wgrid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) !important}}
 @media(max-width:740px){.topbar{grid-template-columns:1fr auto;gap:10px}.tb-c{display:none}.shell{margin-top:76px;padding:0 14px}
   .wxgrid,.cgrid{grid-template-columns:1fr}.links{grid-template-columns:repeat(2,1fr)}}

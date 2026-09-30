@@ -3,6 +3,26 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased — on the beta channel
+
+### Changed
+
+- The dashboard uses the width it is given instead of stopping at 1520px and
+  sitting in the middle of the screen. The gutter matches the top bar's own
+  inset, so the sidebar lines up under the brand rather than drifting away from
+  it. Growth stops at 2200px, because past that a tile is wider than it is
+  readable.
+- Between 820 and 1180 pixels the sidebar cards are laid across the row instead
+  of stacked in a column that left most of the width empty, and the tiles wrap
+  by their own readable width, two or three to a row.
+
+### Fixed
+
+- Below 1180px the tiles kept their desktop column widths and were crushed
+  together: the breakpoint was written without `!important` and lost to the
+  inline widths the resize handles write. The resize grip is now hidden wherever
+  those widths no longer apply, instead of being a control that does nothing.
+
 ## 1.7.0 — 2026-09-30
 
 Parcels can now be found in your mail.
