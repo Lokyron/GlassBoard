@@ -5,15 +5,25 @@
 // watching that file runs the updater as root, which downloads the new version,
 // installs it and restarts the service, then writes its progress to a status
 // file the app reads back. See deploy/ for the units and the script.
+//
+// Two channels are offered: stable, which follows the main branch, and beta,
+// which follows a branch meant for trying a change before it lands. The request
+// file carries a *channel name*, never a branch name: the mapping lives in the
+// environment of the root service, so the application cannot point the updater
+// at an arbitrary ref.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_DIR, ROOT_DIR, UPDATE_ENABLED, UPDATE_REPO, UPDATE_BRANCH, UPDATE_CHECK_HOURS } from './env.js';
+import {
+  DATA_DIR, ROOT_DIR, UPDATE_ENABLED, UPDATE_REPO, UPDATE_BRANCH, UPDATE_BETA_BRANCH, UPDATE_CHECK_HOURS,
+} from './env.js';
+import { getMeta, setMeta } from './db.js';
 
 const REQUEST_FILE = path.join(DATA_DIR, 'update.request');
 const STATUS_FILE = path.join(DATA_DIR, 'update.status');
 const VERSION_FILE = path.join(ROOT_DIR, 'VERSION');
+const META_CHANNEL = 'update.channel';
 
-let lastCheck = null; // { at, commit, message, date }
+const lastCheck = new Map(); // channel -> { at, commit, message, date }
 
 const readJson = (file) => {
   try {
@@ -23,6 +33,35 @@ const readJson = (file) => {
   }
 };
 
+/** The channels this instance offers, in the order they are shown. */
+export function channels() {
+  const list = [{ id: 'stable', branch: UPDATE_BRANCH }];
+  if (UPDATE_BETA_BRANCH && UPDATE_BETA_BRANCH !== UPDATE_BRANCH) {
+    list.push({ id: 'beta', branch: UPDATE_BETA_BRANCH });
+  }
+  return list;
+}
+
+const isChannel = (name) => channels().some((channel) => channel.id === name);
+
+/** The channel in use, falling back to stable when beta was turned off since. */
+export function currentChannel() {
+  const stored = getMeta(META_CHANNEL);
+  return stored && isChannel(stored) ? stored : 'stable';
+}
+
+export function setChannel(name) {
+  if (!isChannel(name)) {
+    const error = new Error(`Unknown update channel "${name}".`);
+    error.code = 'bad_channel';
+    throw error;
+  }
+  setMeta(META_CHANNEL, name);
+  return name;
+}
+
+export const branchOf = (channel) => channels().find((entry) => entry.id === channel)?.branch ?? UPDATE_BRANCH;
+
 /** What is installed: written by the updater, or unknown on a manual install. */
 export function installedVersion() {
   const fromFile = readJson(VERSION_FILE);
@@ -31,31 +70,42 @@ export function installedVersion() {
     version: pkg?.version ?? null,
     commit: fromFile?.commit ?? null,
     branch: fromFile?.branch ?? null,
+    channel: fromFile?.channel ?? null,
     installedAt: fromFile?.installedAt ?? null,
   };
 }
 
-/** Ask GitHub for the head of the tracked branch. Cached, so a tab left open does not hammer it. */
-export async function checkForUpdate({ force = false } = {}) {
+/** Ask GitHub for the head of a channel's branch. Cached per channel, so a tab left open does not hammer it. */
+export async function checkForUpdate({ force = false, channel = currentChannel() } = {}) {
+  const branch = branchOf(channel);
+  const known = lastCheck.get(channel);
   const maxAge = Math.max(1, UPDATE_CHECK_HOURS) * 3_600_000;
-  if (!force && lastCheck && Date.now() - new Date(lastCheck.at).getTime() < maxAge) return lastCheck;
+  if (!force && known && Date.now() - new Date(known.at).getTime() < maxAge) return known;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/commits/${UPDATE_BRANCH}`, {
+    const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/commits/${encodeURIComponent(branch)}`, {
       signal: controller.signal,
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Glassboard' },
     });
+    // GitHub answers 422 for a ref it cannot resolve, and 404 for a repository
+    // it cannot see. Both mean the same thing to whoever is reading the panel.
+    if (response.status === 404 || response.status === 422) {
+      throw new Error(`No branch "${branch}" on ${UPDATE_REPO} yet.`);
+    }
     if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
     const data = await response.json();
-    lastCheck = {
+    const found = {
       at: new Date().toISOString(),
+      channel,
+      branch,
       commit: String(data.sha || '').slice(0, 40),
       message: String(data.commit?.message || '').split('\n')[0].slice(0, 120),
       date: data.commit?.committer?.date ?? null,
     };
-    return lastCheck;
+    lastCheck.set(channel, found);
+    return found;
   } finally {
     clearTimeout(timer);
   }
@@ -66,7 +116,7 @@ export function updateStatus() {
   return status && typeof status.state === 'string' ? status : { state: 'idle' };
 }
 
-/** Drop the request file the updater watches for. */
+/** Drop the request file the updater watches for, naming the channel to install. */
 export function requestUpdate() {
   if (!UPDATE_ENABLED) {
     const error = new Error('In-app updates are turned off on this instance.');
@@ -79,10 +129,18 @@ export function requestUpdate() {
     error.code = 'busy';
     throw error;
   }
-  fs.writeFileSync(STATUS_FILE, JSON.stringify({ state: 'running', step: 'requested', at: new Date().toISOString() }));
-  fs.writeFileSync(REQUEST_FILE, `${new Date().toISOString()}\n`);
+  const channel = currentChannel();
+  fs.writeFileSync(STATUS_FILE, JSON.stringify({ state: 'running', step: 'requested', channel, at: new Date().toISOString() }));
+  fs.writeFileSync(REQUEST_FILE, `channel=${channel}\nat=${new Date().toISOString()}\n`);
+  return channel;
 }
 
 export function updateSettings() {
-  return { enabled: UPDATE_ENABLED, repo: UPDATE_REPO, branch: UPDATE_BRANCH };
+  return {
+    enabled: UPDATE_ENABLED,
+    repo: UPDATE_REPO,
+    channel: currentChannel(),
+    channels: channels(),
+    branch: branchOf(currentChannel()),
+  };
 }

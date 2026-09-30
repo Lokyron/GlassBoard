@@ -50,8 +50,9 @@ Glassboard/
 │   ├── default-config.js   # Configuration d'exemple neutre
 │   ├── wallpaper.js        # Fond d'écran (contrôle des magic bytes, 4 Mo max)
 │   ├── maintenance.js      # Tâche horaire : cache, sessions, tuiles, wal_checkpoint, ANALYZE
-│   ├── routes/             # auth.js, config.js, integrations.js, appearance.js
-│   └── integrations/       # weather.js, georide.js, map-tiles.js
+│   ├── update.js           # Canaux stable / bêta, fichier de requête lu par le service root
+│   ├── routes/             # auth.js, config.js, integrations.js, appearance.js, update.js
+│   └── integrations/       # weather.js, georide.js, parcels.js, map-tiles.js
 ├── public/                 # index.html, login.html, setup.html, assets/ (app.js, edit.js, i18n.js,
 │                           #   themes.css, mobile.css, vendor/leaflet), manifest.webmanifest
 ├── scripts/                # config-export.mjs, config-import.mjs (CLI)
@@ -125,7 +126,8 @@ Pas de tests, linter ni CI configurés.
 | `GET /api/health` | Santé + indicateur `setupRequired` |
 | `/api/auth` | `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
-| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status|trackers|summary|trips`, `POST /georide/login|logout`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
 
 - **Ports** : 3000 (natif), 8080 → 3000 (Docker).
@@ -150,6 +152,19 @@ Pas de tests, linter ni CI configurés.
   contenu mis en cache ⇒ incrémenter `CACHE` dans `sw.js`.
 - **Vue téléphone** : `.sidebar` et `.stack` passent en `display: contents` pour réordonner la page ;
   un élément sans boîte ne peut pas servir de cible à `scrollIntoView` (voir `goTo`).
+- **Colis (17TRACK)** : un crédit est consommé à l'**enregistrement** d'un numéro, jamais à la lecture
+  d'un statut. D'où la règle : on n'enregistre que sur action explicite de l'utilisateur, jamais sur une
+  minuterie, et la lecture se fait en une requête groupée (40 numéros maximum par appel). Les colis
+  vivent dans leur propre table, pas dans la configuration : ils vont et viennent chaque semaine et une
+  révision de config par colis noierait l'historique réel du tableau de bord.
+- **Colis Amazon Logistics** (numéro `TBA…`) : réseau fermé, aucun tiers ne peut les interroger, 17TRACK
+  compris. D'où le suivi « à la main » (nom + lien vers la commande), sans statut automatique.
+- **Canal de mise à jour** : le fichier de requête écrit par l'application contient un **nom de canal**,
+  jamais un nom de branche. C'est le script root qui fait la correspondance, depuis son propre fichier
+  unit, et tout ce qu'il ne reconnaît pas installe la branche stable. Sans cela, le côté non privilégié
+  choisirait la référence à installer.
+- **Ne jamais répondre `409`** depuis une route d'API appelée par le tableau de bord : `api()` dans
+  `app.js` interprète ce code comme « instance à configurer » et quitte la page pour `/setup`.
 - **Pas de tests automatisés** : prioriser le validateur de configuration (`config-schema.js`) et le flux d'authentification.
 - `express.json({ limit: '16mb' })` global : large (motivé par l'import avec fond d'écran en base64) ;
   le restreindre aux routes d'import si possible.

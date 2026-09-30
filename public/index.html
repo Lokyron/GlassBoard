@@ -120,6 +120,28 @@
   </div>
 </div>
 
+<div id="parcels-modal" class="modal">
+  <div class="sheet glass" style="width:min(1040px,100%)">
+    <div class="m-head"><div><h3 data-t="pc.title">Parcels</h3><div class="muted" id="pc-count"></div></div>
+      <button class="btn ghost" type="button" id="pc-refresh" data-t="pc.refresh">Refresh</button></div>
+    <div class="m-body">
+      <div class="gr-split pc-split">
+        <div class="gr-side">
+          <form class="pc-form" id="pc-form">
+            <input class="inp" id="pc-label" maxlength="80" placeholder="" data-tp="pc.namePlaceholder" autocomplete="off">
+            <input class="inp" id="pc-number" maxlength="50" placeholder="" data-tp="pc.numberPlaceholder" autocomplete="off" spellcheck="false">
+            <input class="inp" id="pc-url" type="url" maxlength="2000" placeholder="" data-tp="pc.urlPlaceholder" autocomplete="off">
+            <button class="btn primary" type="submit" data-t="pc.add">Follow</button>
+            <p class="fld-h" data-t="pc.addHint">A tracking number is queried automatically. Without one, the parcel is followed by hand with a link to the order.</p>
+          </form>
+          <div class="gr-trips" id="pc-list"></div>
+        </div>
+        <div class="pc-detail" id="pc-detail"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="dialog-modal" class="modal">
   <div class="sheet glass" style="width:min(620px,100%)">
     <div class="m-head"><div><h3 id="dialog-title">…</h3><div class="muted" id="dialog-subtitle"></div></div>

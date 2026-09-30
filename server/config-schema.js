@@ -9,6 +9,7 @@ export const TILE_TYPES = {
   'weather-local': { label: 'Weather — current position', integration: 'weather', singleton: true },
   'weather-secondary': { label: 'Weather — followed city', integration: 'weather', singleton: true },
   georide: { label: 'GeoRide — weekly stats and map', integration: 'georide', singleton: true },
+  parcels: { label: 'Parcels — delivery tracking', integration: 'parcels', singleton: true },
   note: { label: 'Note', integration: null, singleton: false },
 };
 
@@ -162,6 +163,7 @@ export function validateConfig(input) {
   const integrations = input.integrations ?? {};
   const weather = integrations.weather ?? {};
   const georide = integrations.georide ?? {};
+  const parcels = integrations.parcels ?? {};
 
   const value = {
     version: CONFIG_VERSION,
@@ -202,6 +204,15 @@ export function validateConfig(input) {
         },
         reverseGeocoding: v.bool(weather.reverseGeocoding, true),
         refreshMinutes: v.num(weather.refreshMinutes, 'integrations.weather.refreshMinutes', { min: 5, max: 720, fallback: 30 }),
+      },
+      parcels: {
+        enabled: v.bool(parcels.enabled, false),
+        // One provider for now. A parcel with no usable tracking number is
+        // followed manually instead, which is decided per parcel, not here.
+        provider: '17track',
+        refreshMinutes: v.num(parcels.refreshMinutes, 'integrations.parcels.refreshMinutes', { min: 15, max: 1440, fallback: 180 }),
+        hideDeliveredAfterDays: v.num(parcels.hideDeliveredAfterDays, 'integrations.parcels.hideDeliveredAfterDays', { min: 0, max: 30, fallback: 3 }),
+        maxOnTile: v.num(parcels.maxOnTile, 'integrations.parcels.maxOnTile', { min: 1, max: 10, fallback: 4 }),
       },
       georide: {
         enabled: v.bool(georide.enabled, false),

@@ -14,3 +14,5 @@ Environment=SERVICE=glassboard
 Environment=APP_USER=glassboard
 Environment=UPDATE_REPO=Lokyron/GlassBoard
 Environment=UPDATE_BRANCH=main
+# The branch the beta channel installs. Leave it empty to offer stable only.
+Environment=UPDATE_BETA_BRANCH=beta

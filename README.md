@@ -56,11 +56,12 @@ reaches the browser, and no request goes out to a service you did not enable.
   enrolment, single-use recovery codes, argon2id hashing, signed `HttpOnly`
   session cookies and a temporary lockout after repeated failures. Only the
   login page is public.
-- **Optional integrations**: weather (Open-Meteo) and GeoRide motorcycle
-  tracking. Both tiles open a detail view: seven days of forecast, or the rides
-  of the period on an interactive map. A disabled or unconfigured integration
-  never breaks the page. The tile explains what is missing, and the rest of the
-  dashboard carries on.
+- **Optional integrations**: weather (Open-Meteo), parcel tracking (17TRACK) and
+  GeoRide motorcycle tracking. Each tile opens a detail view: seven days of
+  forecast, the steps a parcel has been through, or the rides of the period on
+  an interactive map. A disabled or unconfigured integration never breaks the
+  page. The tile explains what is missing, and the rest of the dashboard carries
+  on.
 - **Backup and restore**: a single versioned JSON file, from the interface or
   from the command line, with automatic snapshots before every import.
 - **Themes and wallpapers**: six colour presets, light and dark, plus your own
@@ -185,6 +186,13 @@ file in the data directory; a systemd path unit runs the updater as root, which
 downloads the new version, installs it, restarts the service, and rolls back if
 it fails to start. Setting it up takes three commands, in
 [deploy/README.md](deploy/README.md).
+
+Two channels are offered there: **stable**, which follows the main branch, and
+**beta**, which follows a branch meant for trying a change out first. Switching
+between them installs that branch, in either direction, so going back to stable
+is one click. The request file names a channel and never a branch: turning a
+channel into a branch is the updater's job, from its own unit file, so the web
+application cannot point it at a ref of its choosing.
 
 ## Using Glassboard
 
@@ -368,6 +376,33 @@ Map tiles come from OpenStreetMap through the server, and are cached on disk.
 If you expect real traffic, point the proxy at your own tile server. See
 [OSM's tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
 
+### Parcels, 17TRACK
+
+The parcels tile lists what is on its way, coloured by state, and opens a view
+with every step each parcel has been through. Parcels are followed in two ways.
+
+**With a tracking number**, the number goes to
+[17TRACK](https://api.17track.net/en/doc), which detects the carrier itself and
+covers the usual ones. Put your API key in **Settings → Parcels**; it is stored
+encrypted with `APP_SECRET` and never reaches the browser, like every other
+credential here.
+
+That provider charges a credit when a number is **registered**, not when its
+status is read, which decides how the integration behaves: a number is declared
+once, when you add the parcel and never on a timer, and reading statuses is one
+batched request for the whole list. The panel shows what is left of your
+allowance. The provider refreshes its own data every 6 to 12 hours, so asking
+more often than that gains nothing; the default is every three hours.
+
+**By hand**, with a name and a link to the order, for anything no third party
+can query. That is the case for an Amazon Logistics parcel, whose number starts
+with `TBA`: it never enters a carrier's network, so it exists in no system
+reachable from outside Amazon. Such a parcel shows up in the list with its link
+and no automatic status, which is more honest than an empty timeline.
+
+A parcel that has been delivered leaves the list on its own after a few days,
+which is what keeps the tile readable without any housekeeping.
+
 ### Adding your own
 
 A tile type is one entry in `TILE_TYPES` (`server/config-schema.js`), one
@@ -447,7 +482,8 @@ from a `.env` file next to the server. See [.env.example](.env.example).
 | `OSM_CONTACT` | none | Optional contact address sent to OpenStreetMap services, as their usage policy asks. |
 | `UPDATE_ENABLED` | `0` | `1` turns on the **Update now** button. Needs the updater from [deploy/](deploy/README.md). |
 | `UPDATE_REPO` | `Lokyron/GlassBoard` | The GitHub repository updates come from. |
-| `UPDATE_BRANCH` | `main` | The branch that is tracked. |
+| `UPDATE_BRANCH` | `main` | The branch the stable channel installs. |
+| `UPDATE_BETA_BRANCH` | `beta` | The branch the beta channel installs. Empty offers the stable channel only. |
 | `UPDATE_CHECK_HOURS` | `24` | How often the instance asks GitHub whether a newer version exists. |
 
 ## Security

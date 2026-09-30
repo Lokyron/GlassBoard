@@ -4,10 +4,20 @@ With this wired up, **Settings → About** shows the installed version, what the
 repository has, and an **Update now** button. A dot appears next to the account
 button when a newer version is waiting.
 
+Two channels are offered: **stable**, which follows `UPDATE_BRANCH`, and
+**beta**, which follows `UPDATE_BETA_BRANCH`. Picking beta lets you try a change
+on your own instance before it reaches the main branch, and picking stable again
+puts the main branch back.
+
 The application never updates itself. It only writes a request file in its data
 directory; systemd notices that file and runs the updater **as root**. So an
 application that gets compromised still cannot rewrite its own code or call
 `systemctl`.
+
+That request file names a *channel*, never a branch. The updater is the one that
+turns `channel=beta` into a branch name, from its own unit file, and anything it
+does not recognise installs the stable branch. The unprivileged side therefore
+cannot point the updater at a ref of its choosing.
 
 ```
  you click            the app writes              systemd sees the file
@@ -35,6 +45,7 @@ Then turn the button on, in the application's own `.env`:
 UPDATE_ENABLED=1
 UPDATE_REPO=Lokyron/GlassBoard
 UPDATE_BRANCH=main
+UPDATE_BETA_BRANCH=beta
 ```
 
 and restart Glassboard. The application needs to be able to write its data

@@ -28,6 +28,8 @@ const state = {
   tripPeriod: null,     // days shown in the detail view
   selectedTrip: 'all',
   tripMap: null,
+  parcels: null,        // the parcel payload, list and counts
+  selectedParcel: null, // id of the parcel whose history is shown
   themePresets: {},
   wallpaperVersion: '',
   map: null,
@@ -231,6 +233,14 @@ function georideTileMarkup(tile, index) {
         <div class="insight-foot"><div class="dot" data-role="dot"></div><span data-role="foot">…</span></div></article>`;
 }
 
+function parcelsTileMarkup(tile, index) {
+  const delay = `animation-delay:.${String(5 * (index + 1)).padStart(2, '0')}s`;
+  return `<article class="card glass rise parcels" style="${delay}" data-tile="${tile.id}" data-type="parcels">
+        <div class="wtop"><div><div class="lbl">${esc(t('pc.title'))}</div><h3 data-role="head">…</h3></div><div class="emoji">${svg('package', 'font-size:28px')}</div></div>
+        <div class="pc-list" data-role="list"></div>
+        <div class="insight-foot"><div class="dot" data-role="dot"></div><span data-role="foot">…</span></div></article>`;
+}
+
 function noteTileMarkup(tile, index) {
   const delay = `animation-delay:.${String(5 * (index + 1)).padStart(2, '0')}s`;
   return `<article class="card glass insight rise" style="${delay}" data-tile="${tile.id}" data-type="note">
@@ -250,6 +260,7 @@ function renderTiles() {
       if (tile.type === 'weather-local') return weatherTileMarkup(tile, index, { local: true });
       if (tile.type === 'weather-secondary') return weatherTileMarkup(tile, index, { local: false });
       if (tile.type === 'georide') return georideTileMarkup(tile, index);
+      if (tile.type === 'parcels') return parcelsTileMarkup(tile, index);
       return noteTileMarkup(tile, index);
     })
     .join('');
@@ -265,6 +276,13 @@ function renderTiles() {
     article.addEventListener('click', (event) => {
       if (state.editing || event.target.closest('.gr-map')) return; // the small map pans on its own
       openGeorideModal();
+    });
+  });
+
+  grid.querySelectorAll('[data-type="parcels"]').forEach((article) => {
+    article.addEventListener('click', () => {
+      if (state.editing) return;
+      openParcelsModal();
     });
   });
 
@@ -875,6 +893,227 @@ async function loadGeoride() {
   }
 }
 
+/* --------------------------------- parcels -------------------------------- */
+/* The six states the server folds every carrier status into, each with the one
+   colour it is worth on a dashboard. `manual` is a parcel followed by hand,
+   typically an Amazon Logistics shipment no third party can query. */
+
+const PARCEL_STATES = {
+  pending: '#8e8e93',
+  transit: '#0a84ff',
+  delivery: '#5e5ce6',
+  pickup: '#ff9f0a',
+  delivered: '#34c759',
+  problem: '#ff453a',
+  manual: '#8e8e93',
+};
+
+const parcelColour = (parcel) => PARCEL_STATES[parcel?.state] ?? PARCEL_STATES.pending;
+const parcelStateLabel = (parcel) => t(`pc.state.${parcel?.state ?? 'pending'}`);
+const parcelName = (parcel) => parcel.label || parcel.trackingNumber || t('pc.untitled');
+
+/** Newest first, but anything delivered sinks below what is still moving. */
+const parcelOrder = (a, b) => {
+  const done = (parcel) => (parcel.state === 'delivered' ? 1 : 0);
+  if (done(a) !== done(b)) return done(a) - done(b);
+  return (b.lastEvent?.at ?? 0) - (a.lastEvent?.at ?? 0);
+};
+
+const parcelWhen = (at) => (at
+  ? new Date(at).toLocaleString(state.config.site.locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  : '—');
+
+function renderParcelsTile(tile, payload) {
+  const article = tileElement(tile.id);
+  if (!article) return;
+  const el = (role) => article.querySelector(`[data-role="${role}"]`);
+  const usable = Boolean(payload?.ok);
+  article.classList.toggle('pc-clickable', usable);
+
+  if (!usable) {
+    safe(el('head'), '');
+    el('list').innerHTML = `<p class="gr-message">${esc(payload?.configured === false ? t('pc.notConfigured') : payload?.error || t('pc.unavailable'))}</p>`;
+    el('dot').style.background = '#ff9f0a';
+    el('dot').style.boxShadow = '0 0 0 5px rgba(255,159,10,.16)';
+    safe(el('foot'), payload?.configured === false ? `${t('set.title')} → ${t('set.parcels')}` : t('pc.unavailable'));
+    return;
+  }
+
+  const { counts } = payload;
+  safe(el('head'), counts.active > 0 ? t('pc.onTheWay', { n: counts.active }) : t('pc.nothingMoving'));
+
+  const shown = [...payload.parcels].sort(parcelOrder).slice(0, state.config.integrations.parcels.maxOnTile ?? 4);
+  el('list').innerHTML = shown.length === 0
+    ? `<p class="gr-message">${esc(t('pc.empty'))}</p>`
+    : shown.map((parcel) => `<div class="pc-row">
+        <span class="pc-dot" style="background:${parcelColour(parcel)}"></span>
+        <span class="pc-name">${esc(parcelName(parcel))}</span>
+        <span class="pc-state">${esc(parcelStateLabel(parcel))}</span>
+      </div>`).join('');
+
+  const worst = counts.problem > 0 ? '#ff453a' : counts.active > 0 ? '#0a84ff' : '#34c759';
+  el('dot').style.background = worst;
+  el('dot').style.boxShadow = `0 0 0 5px ${worst}29`;
+  const parts = [];
+  if (counts.delivered > 0) parts.push(t('pc.deliveredCount', { n: counts.delivered }));
+  if (counts.problem > 0) parts.push(t('pc.problemCount', { n: counts.problem }));
+  if (payload.error) parts.push(t('pc.stale'));
+  safe(el('foot'), parts.length ? parts.join(' · ') : t('pc.upToDate'));
+}
+
+async function loadParcels() {
+  const tile = state.config.tiles.find((item) => item.type === 'parcels');
+  if (!tile) return;
+  try {
+    state.parcels = await api('/api/integrations/parcels');
+  } catch (error) {
+    state.parcels = { ok: false, error: error.message };
+  }
+  renderParcelsTile(tile, state.parcels);
+  if (id('parcels-modal')?.classList.contains('open')) renderParcels();
+}
+
+/* ----------------------- parcel detail view (history) --------------------- */
+
+const closeParcelsModal = () => id('parcels-modal')?.classList.remove('open');
+
+function openParcelsModal() {
+  if (!state.parcels?.ok || !id('parcels-modal')) return;
+  id('parcels-modal').classList.add('open');
+  renderParcels();
+}
+
+/** The list on the left; the selection drives the panel on the right. */
+function renderParcels() {
+  const list = id('pc-list');
+  const payload = state.parcels;
+  if (!payload?.ok) {
+    list.innerHTML = `<p class="gr-empty">${esc(payload?.error || t('pc.unavailable'))}</p>`;
+    id('pc-detail').innerHTML = '';
+    return;
+  }
+
+  const parcels = [...payload.parcels].sort(parcelOrder);
+  if (parcels.length === 0) {
+    list.innerHTML = `<p class="gr-empty">${esc(t('pc.empty'))}</p>`;
+  } else {
+    if (!parcels.some((parcel) => parcel.id === state.selectedParcel)) state.selectedParcel = parcels[0].id;
+    list.innerHTML = parcels.map((parcel) => `<button class="gr-trip pc-item${parcel.id === state.selectedParcel ? ' active' : ''}" data-parcel="${esc(parcel.id)}">
+        <span class="gr-trip-when"><span class="pc-dot" style="background:${parcelColour(parcel)}"></span>${esc(parcelName(parcel))}</span>
+        <span class="gr-trip-where">${esc(parcelStateLabel(parcel))}${parcel.carrier?.name ? ` · ${esc(parcel.carrier.name)}` : ''}</span>
+        <span class="gr-trip-figures">${esc(parcel.lastEvent?.at ? parcelWhen(parcel.lastEvent.at) : t('pc.noEvent'))}</span>
+      </button>`).join('');
+    list.querySelectorAll('[data-parcel]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.selectedParcel = button.dataset.parcel;
+        renderParcels();
+      });
+    });
+  }
+
+  safe(id('pc-count'), payload.hidden > 0
+    ? `${t('pc.following', { n: parcels.length })} · ${t('pc.hidden', { n: payload.hidden })}`
+    : t('pc.following', { n: parcels.length }));
+  renderParcelDetail(parcels.find((parcel) => parcel.id === state.selectedParcel) ?? null);
+}
+
+/** The chosen parcel: what it is, and every step the carrier reported. */
+function renderParcelDetail(parcel) {
+  const panel = id('pc-detail');
+  if (!parcel) {
+    panel.innerHTML = `<p class="gr-empty">${esc(t('pc.pick'))}</p>`;
+    return;
+  }
+
+  const facts = [];
+  if (parcel.trackingNumber) facts.push([t('pc.number'), parcel.trackingNumber]);
+  if (parcel.carrier?.name) facts.push([t('pc.carrier'), parcel.carrier.name]);
+  if (parcel.destination) facts.push([t('pc.destination'), parcel.destination]);
+  if (parcel.daysInTransit !== null && parcel.daysInTransit !== undefined) {
+    facts.push([t('pc.transit'), t(parcel.daysInTransit === 1 ? 'pc.day' : 'pc.days', { n: parcel.daysInTransit })]);
+  }
+
+  // A manually followed parcel has no history to show: it has a link instead.
+  const events = parcel.events ?? [];
+  const history = events.length > 0
+    ? `<ol class="pc-steps">${events.map((event, index) => `<li class="pc-step${index === 0 ? ' now' : ''}">
+          <span class="pc-step-dot"></span>
+          <span class="pc-step-when">${esc(parcelWhen(event.at))}</span>
+          <span class="pc-step-what">${esc(event.description || '—')}</span>
+          ${event.location ? `<span class="pc-step-where">${esc(event.location)}</span>` : ''}
+        </li>`).join('')}</ol>`
+    : `<p class="gr-empty">${esc(parcel.provider === 'manual' ? t('pc.manualHint') : t('pc.noEvent'))}</p>`;
+
+  panel.innerHTML = `
+    <div class="pc-head">
+      <div>
+        <div class="pc-badge" style="background:${parcelColour(parcel)}1f;color:${parcelColour(parcel)}">${esc(parcelStateLabel(parcel))}</div>
+        <h4>${esc(parcelName(parcel))}</h4>
+      </div>
+      <div class="row">
+        ${parcel.url ? `<a class="btn ghost" href="${esc(parcel.url)}" target="_blank" rel="noopener noreferrer">${esc(t('pc.open'))}</a>` : ''}
+        <button class="btn ghost danger" type="button" data-remove="${esc(parcel.id)}">${esc(t('pc.remove'))}</button>
+      </div>
+    </div>
+    ${facts.length ? `<dl class="pc-facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+    ${history}`;
+
+  panel.querySelector('[data-remove]')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    if (!confirm(t('pc.confirmRemove', { name: parcelName(parcel) }))) return;
+    button.disabled = true;
+    try {
+      await api(`/api/integrations/parcels/${encodeURIComponent(parcel.id)}`, { method: 'DELETE' });
+      state.selectedParcel = null;
+      await loadParcels();
+      toast(t('pc.removed'));
+    } catch (error) {
+      toast(error.message, 'error');
+      button.disabled = false;
+    }
+  });
+}
+
+/** Follow a new parcel. Without a number it is followed by hand, with a link. */
+async function submitParcel(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const parcel = await api('/api/integrations/parcels', {
+      method: 'POST',
+      body: {
+        label: id('pc-label').value,
+        trackingNumber: id('pc-number').value,
+        url: id('pc-url').value,
+      },
+    });
+    form.reset();
+    state.selectedParcel = parcel.parcel.id;
+    await loadParcels();
+    toast(t('pc.added'));
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function refreshParcels(button) {
+  button.disabled = true;
+  try {
+    state.parcels = await api('/api/integrations/parcels/refresh', { method: 'POST' });
+    const tile = state.config.tiles.find((item) => item.type === 'parcels');
+    if (tile) renderParcelsTile(tile, state.parcels);
+    renderParcels();
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /* ------------------------------ clock & date ----------------------------- */
 
 function updateTime() {
@@ -1024,6 +1263,7 @@ function refreshData() {
   lastRefresh = Date.now();
   loadWeather();
   loadGeoride();
+  loadParcels();
 }
 
 /* --------------------------------- updates -------------------------------- */
@@ -1134,6 +1374,13 @@ async function boot() {
   id('georide-modal').addEventListener('click', (event) => {
     if (event.target === id('georide-modal')) closeGeorideModal();
   });
+  id('parcels-modal')?.addEventListener('click', (event) => {
+    if (event.target === id('parcels-modal')) closeParcelsModal();
+  });
+  // Optional: a browser holding an older page in its cache has no parcel view,
+  // and a missing element here would stop the whole dashboard from starting.
+  id('pc-form')?.addEventListener('submit', submitParcel);
+  id('pc-refresh')?.addEventListener('click', (event) => refreshParcels(event.currentTarget));
   id('dialog-close').addEventListener('click', closeDialog);
   id('dialog-modal').addEventListener('click', (event) => { if (event.target === id('dialog-modal')) closeDialog(); });
   document.addEventListener('keydown', (event) => {

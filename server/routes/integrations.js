@@ -4,6 +4,7 @@ import { requireAuth } from '../auth.js';
 import { getConfig } from '../store.js';
 import { getForecast, reverseGeocode } from '../integrations/weather.js';
 import * as georide from '../integrations/georide.js';
+import * as parcels from '../integrations/parcels.js';
 import { getTile, isValidTile } from '../integrations/map-tiles.js';
 
 export const integrationsRouter = express.Router();
@@ -84,6 +85,77 @@ integrationsRouter.get('/georide/trips', async (req, res) => {
   const days = Number.parseInt(req.query.days, 10);
   const periodDays = Number.isFinite(days) && days >= 1 && days <= 31 ? days : settings.periodDays;
   res.json(await georide.getTrips({ ...settings, periodDays }));
+});
+
+/* -------------------------------- parcels -------------------------------- */
+
+/** Every failure mode of the parcel module, mapped to a status code once.
+ *  Never 409: the browser reads that one as "this instance needs setting up"
+ *  and leaves the dashboard for the setup page. */
+const parcelError = (res, error) => {
+  const status = error.code === 'not_found' ? 404
+    : error.code === 'not_configured' ? 503
+      : error.code === 'rate_limited' ? 429
+        : error.code === 'bad_key' ? 502 : 400;
+  res.status(status).json({ error: error.message, code: error.code ?? null });
+};
+
+integrationsRouter.get('/parcels', async (_req, res) => {
+  const settings = getConfig().integrations.parcels;
+  if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The parcel integration is disabled.' });
+  res.json(await parcels.getParcels(settings));
+});
+
+integrationsRouter.post('/parcels', async (req, res) => {
+  try {
+    res.json({ ok: true, parcel: await parcels.addParcel(req.body ?? {}) });
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+integrationsRouter.delete('/parcels/:id', async (req, res) => {
+  try {
+    await parcels.removeParcel(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+integrationsRouter.post('/parcels/refresh', async (_req, res) => {
+  const settings = getConfig().integrations.parcels;
+  try {
+    await parcels.refresh({ force: true, refreshMinutes: settings.refreshMinutes });
+    res.json(await parcels.getParcels(settings));
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
+integrationsRouter.get('/parcels/status', async (_req, res) => {
+  const payload = { ok: true, hasKey: parcels.isConfigured(), quota: null, error: null };
+  if (payload.hasKey) {
+    try {
+      payload.quota = await parcels.getQuota();
+    } catch (error) {
+      payload.error = error.message;
+    }
+  }
+  res.json(payload);
+});
+
+/** The key is write-only: it goes in, it never comes back out. */
+integrationsRouter.put('/parcels/key', (req, res) => {
+  const key = String(req.body?.apiKey || '').trim();
+  if (!key) return res.status(400).json({ error: 'An API key is required.' });
+  parcels.setApiKey(key);
+  res.json({ ok: true });
+});
+
+integrationsRouter.delete('/parcels/key', (_req, res) => {
+  parcels.setApiKey(null);
+  res.json({ ok: true });
 });
 
 /* ------------------------------- map tiles ------------------------------- */

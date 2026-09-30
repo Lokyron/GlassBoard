@@ -78,6 +78,26 @@ CREATE TABLE IF NOT EXISTS secrets (
   updated_at TEXT NOT NULL
 );
 
+-- Parcels being followed. Kept out of the configuration document on purpose:
+-- they come and go every week, and a config revision per parcel would bury the
+-- real dashboard history. The info column holds the last normalised answer
+-- from the provider, so the tile still renders when that API is unreachable.
+CREATE TABLE IF NOT EXISTS parcels (
+  id          TEXT PRIMARY KEY,
+  label       TEXT NOT NULL DEFAULT '',
+  tracking_no TEXT NOT NULL DEFAULT '',
+  carrier     INTEGER,
+  provider    TEXT NOT NULL DEFAULT '17track',
+  url         TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT '',
+  info        TEXT,
+  registered  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  checked_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_parcels_created ON parcels(created_at);
+
 -- Upstream API responses, so integrations never hammer third-party services.
 CREATE TABLE IF NOT EXISTS cache (
   key        TEXT PRIMARY KEY,
@@ -119,6 +139,43 @@ export function getSecret(name) {
 
 export function listSecretNames() {
   return db.prepare('SELECT name FROM secrets ORDER BY name').all().map((r) => r.name);
+}
+
+/* ----------------------------- parcels ---------------------------------- */
+
+export function listParcelRows() {
+  return db.prepare('SELECT * FROM parcels ORDER BY created_at DESC').all();
+}
+
+export function getParcelRow(id) {
+  return db.prepare('SELECT * FROM parcels WHERE id = ?').get(id) ?? null;
+}
+
+export function findParcelByNumber(trackingNumber) {
+  if (!trackingNumber) return null;
+  return db.prepare('SELECT * FROM parcels WHERE tracking_no = ? COLLATE NOCASE').get(trackingNumber) ?? null;
+}
+
+export function insertParcelRow(row) {
+  db.prepare(
+    `INSERT INTO parcels (id, label, tracking_no, carrier, provider, url, status, info, registered, created_at, updated_at, checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    row.id, row.label, row.tracking_no, row.carrier ?? null, row.provider, row.url,
+    row.status, row.info ?? null, row.registered ? 1 : 0, row.created_at, row.updated_at, row.checked_at ?? null
+  );
+}
+
+/** Store the latest normalised answer for a parcel. */
+export function updateParcelInfo(id, { status, info, carrier = null, checkedAt }) {
+  db.prepare(
+    `UPDATE parcels SET status = ?, info = ?, carrier = COALESCE(?, carrier), checked_at = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(status, info === null ? null : JSON.stringify(info), carrier, checkedAt, now(), id);
+}
+
+export function deleteParcelRow(id) {
+  db.prepare('DELETE FROM parcels WHERE id = ?').run(id);
 }
 
 /* ------------------------------ cache ----------------------------------- */

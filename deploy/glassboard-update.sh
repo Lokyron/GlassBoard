@@ -5,6 +5,9 @@
 # its request file. The application never runs this script and never writes to
 # its own directory: that separation is the whole point.
 #
+# The branch installed is the one the requested channel maps to: stable follows
+# UPDATE_BRANCH, beta follows UPDATE_BETA_BRANCH.
+#
 # Steps: download the branch as a tarball, install the production dependencies
 # in a staging directory next to the app, carry the .env over, swap the two
 # directories with a rename, restart the service, and roll back if the new
@@ -17,6 +20,7 @@ SERVICE=${SERVICE:-glassboard}
 APP_USER=${APP_USER:-glassboard}
 REPO=${UPDATE_REPO:-Lokyron/GlassBoard}
 BRANCH=${UPDATE_BRANCH:-main}
+BETA_BRANCH=${UPDATE_BETA_BRANCH:-beta}
 
 REQUEST_FILE="$DATA_DIR/update.request"
 STATUS_FILE="$DATA_DIR/update.status"
@@ -29,6 +33,16 @@ status() { # state step [message]
 }
 fail() { status failed "$STEP" "$1"; exit 1; }
 trap 'fail "the updater stopped during: $STEP"' ERR
+
+# The application writes the channel it wants, and only ever a channel name:
+# this is where a name becomes a branch, so the unprivileged side cannot point
+# the updater at some other ref. Anything unexpected falls back to stable.
+# `|| true`: an unreadable request file must not trip the ERR trap, it just means stable.
+CHANNEL=$(sed -n 's/^channel=\([a-z][a-z0-9]\{0,15\}\)$/\1/p' "$REQUEST_FILE" 2>/dev/null | head -n1 || true)
+case "$CHANNEL" in
+  beta) CHANNEL=beta; BRANCH="$BETA_BRANCH" ;;
+  *)    CHANNEL=stable ;;
+esac
 
 rm -f "$REQUEST_FILE"
 
@@ -58,7 +72,8 @@ chown -R root:root "$STAGING"
 chmod -R a+rX,go-w "$STAGING"
 # The .env is copied after that, keeping its own restrictive mode: it holds APP_SECRET.
 [ -f "$APP_DIR/.env" ] && cp -a "$APP_DIR/.env" "$STAGING/.env"
-printf '{"commit":"%s","branch":"%s","installedAt":"%s"}\n' "$SHA" "$BRANCH" "$(date -Is)" > "$STAGING/VERSION"
+printf '{"commit":"%s","branch":"%s","channel":"%s","installedAt":"%s"}\n' \
+  "$SHA" "$BRANCH" "$CHANNEL" "$(date -Is)" > "$STAGING/VERSION"
 PREVIOUS="${APP_DIR}.previous"
 rm -rf "$PREVIOUS"
 mv "$APP_DIR" "$PREVIOUS"
@@ -77,5 +92,5 @@ if ! systemctl is-active --quiet "$SERVICE"; then
   fail "the new version did not start, the previous one was put back"
 fi
 
-status done complete "updated to ${SHA:0:7}"
+status done complete "installed ${BRANCH} at ${SHA:0:7}"
 rm -rf "$PREVIOUS"

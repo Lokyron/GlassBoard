@@ -452,6 +452,9 @@ function removeTile(index) {
   refreshData();
 }
 
+/** The icon each tile type is offered with; anything new falls back to weather. */
+const TILE_ICONS = { georide: 'motorcycle', note: 'notebook', parcels: 'package' };
+
 function openAddTileDialog() {
   const used = new Set(state.config.tiles.map((tile) => tile.type));
   const available = Object.entries(state.tileTypes).filter(([type, meta]) => !meta.singleton || !used.has(type));
@@ -459,7 +462,7 @@ function openAddTileDialog() {
     el('div', { class: 'tile-choices' }, available.map(([type, meta]) =>
       el('button', {
         class: 'tile-choice', type: 'button',
-        html: `${svg(type === 'georide' ? 'motorcycle' : type === 'note' ? 'notebook' : 'cloud-sun', 'font-size:22px')}<span>${esc(meta.label)}</span>`,
+        html: `${svg(TILE_ICONS[type] ?? 'cloud-sun', 'font-size:22px')}<span>${esc(meta.label)}</span>`,
         onclick: () => { addTile(type); closeDialog(); },
       })
     )),
@@ -709,6 +712,10 @@ function aboutPane() {
     const latest = payload?.latest ?? null;
     const behind = Boolean(latest?.commit && installed.commit && latest.commit !== installed.commit);
     const unknown = !installed.commit;
+    const running = payload?.status?.state === 'running';
+    // Coming from another branch is not "being behind": it is a switch, and the
+    // button says so rather than promising an update.
+    const switching = Boolean(latest?.branch && installed.branch && latest.branch !== installed.branch);
 
     const line = (label, value, hint) => {
       const rows = [el('div', { class: 'fld-l', text: label }), el('div', { class: 'about-v', text: value })];
@@ -719,18 +726,50 @@ function aboutPane() {
     body.appendChild(line(
       t('upd.installed'),
       installed.commit ? `${installed.version ?? ''} · ${shortCommit(installed.commit)}`.trim() : (installed.version ?? t('upd.unknown')),
-      installed.installedAt ? new Date(installed.installedAt).toLocaleString(state.config.site.locale) : undefined
+      [
+        installed.branch ? t('upd.fromBranch', { branch: installed.branch }) : null,
+        installed.installedAt ? new Date(installed.installedAt).toLocaleString(state.config.site.locale) : null,
+      ].filter(Boolean).join(' · ') || undefined
     ));
+
+    // The channel picker comes before the version it points at, because it is
+    // what the next two lines are talking about.
+    if ((payload?.channels?.length ?? 0) > 1) {
+      const picker = el('div', { class: 'seg' });
+      payload.channels.forEach((channel) => {
+        picker.appendChild(el('button', {
+          class: `seg-btn${channel.id === payload.channel ? ' on' : ''}`,
+          type: 'button',
+          text: t(`upd.channel.${channel.id}`),
+          disabled: running,
+          onclick: async () => {
+            if (channel.id === payload.channel) return;
+            picker.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+            try {
+              draw(await api('/api/update/channel', { method: 'POST', body: { channel: channel.id } }));
+            } catch (error) {
+              toast(error.message, 'error');
+              loadAbout(draw, false);
+            }
+          },
+        }));
+      });
+      body.appendChild(el('div', { class: 'about-row' }, [
+        el('div', { class: 'fld-l', text: t('upd.channel') }),
+        picker,
+        el('p', { class: 'fld-h', text: t(`upd.channelHint.${payload.channel}`) }),
+      ]));
+    }
+
     body.appendChild(line(
       t('upd.latest'),
       latest ? `${shortCommit(latest.commit)}` : (payload?.error || t('upd.unknown')),
-      latest?.message
+      [latest?.branch ? t('upd.onBranch', { branch: latest.branch }) : null, latest?.message].filter(Boolean).join(' · ') || undefined
     ));
 
-    const state_ = payload?.status?.state;
-    if (state_ === 'running') {
+    if (running) {
       body.appendChild(el('p', { class: 'fld-h', text: `${t('upd.running')} ${payload.status.step ?? ''}` }));
-    } else if (state_ === 'failed') {
+    } else if (payload?.status?.state === 'failed') {
       body.appendChild(el('p', { class: 'fld-h danger-text', text: t('upd.failed', { message: payload.status.message || '' }) }));
     } else if (!unknown && !behind && latest) {
       body.appendChild(el('p', { class: 'fld-h', text: t('upd.upToDate') }));
@@ -743,10 +782,14 @@ function aboutPane() {
     const button = el('button', {
       class: `btn ${behind ? 'primary' : 'ghost'}`,
       type: 'button',
-      text: state_ === 'running' ? t('upd.updating') : t('upd.update'),
-      disabled: state_ === 'running',
+      text: running ? t('upd.updating')
+        : switching ? t('upd.switchTo', { channel: t(`upd.channel.${payload.channel}`) })
+          : t('upd.update'),
+      // Nothing to install when the channel's branch could not be read: the
+      // updater would only download a 404 and roll itself back.
+      disabled: running || !latest,
       onclick: () => {
-        if (!confirm(t('upd.confirm'))) return;
+        if (!confirm(switching ? t('upd.confirmSwitch', { branch: latest.branch }) : t('upd.confirm'))) return;
         startUpdate(draw);
       },
     });
@@ -816,13 +859,14 @@ async function openSettings(section = 'general') {
     appearance: () => appearancePane(draft),
     weather: () => weatherPane(draft),
     georide: () => georidePane(draft),
+    parcels: () => parcelsPane(draft),
     account: () => accountPane(),
     data: () => dataPane(),
     about: () => aboutPane(),
   };
   const labels = {
     general: t('set.general'), appearance: t('set.appearance'), weather: t('set.weather'),
-    georide: t('set.georide'), account: t('set.account'), data: t('set.data'),
+    georide: t('set.georide'), parcels: t('set.parcels'), account: t('set.account'), data: t('set.data'),
     about: t('set.about'),
   };
 
@@ -1051,6 +1095,62 @@ function georidePane(draft) {
     })
     .catch(() => { status.textContent = t('gr.unavailable'); });
 
+  return pane;
+}
+
+function parcelsPane(draft) {
+  const parcels = draft.integrations.parcels;
+  const pane = el('div', { class: 'pane' });
+  const status = el('div', { class: 'status', text: '…' });
+  pane.appendChild(status);
+
+  const key = textInput('', { type: 'password', placeholder: '••••••••••••', autocomplete: 'off' });
+  const save = el('button', { class: 'btn primary', type: 'button', text: t('set.parcelsSaveKey'), onclick: async () => {
+    save.disabled = true;
+    try {
+      await api('/api/integrations/parcels/key', { method: 'PUT', body: { apiKey: key.value } });
+      key.value = '';
+      parcels.enabled = true;
+      await showStatus();
+      toast(t('msg.saved'));
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      save.disabled = false;
+    }
+  } });
+  const forget = el('button', { class: 'btn ghost', type: 'button', text: t('set.parcelsForgetKey'), onclick: async () => {
+    await api('/api/integrations/parcels/key', { method: 'DELETE' });
+    await showStatus();
+    toast(t('msg.saved'));
+  } });
+
+  // The remaining allowance matters here: with this provider a unit is spent
+  // when a parcel is added, never when its status is read.
+  async function showStatus() {
+    try {
+      const result = await api('/api/integrations/parcels/status');
+      if (!result.hasKey) {
+        status.textContent = t('set.parcelsNoKey');
+      } else if (result.quota) {
+        status.textContent = t('set.parcelsQuota', { remaining: result.quota.remaining, total: result.quota.total });
+      } else {
+        status.textContent = result.error || t('set.parcelsConnected');
+      }
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+
+  pane.appendChild(checkbox(t('set.parcelsEnabled'), parcels.enabled, (value) => { parcels.enabled = value; }));
+  pane.appendChild(field(t('set.parcelsKey'), key, t('set.parcelsKeyHint')));
+  pane.appendChild(el('div', { class: 'row' }, [save, forget]));
+  pane.appendChild(field(t('set.refresh'), textInput(parcels.refreshMinutes, { type: 'number', min: '15', max: '1440', oninput: (e) => { parcels.refreshMinutes = Number(e.target.value); } }), t('set.parcelsRefreshHint')));
+  pane.appendChild(field(t('set.parcelsHideAfter'), textInput(parcels.hideDeliveredAfterDays, { type: 'number', min: '0', max: '30', oninput: (e) => { parcels.hideDeliveredAfterDays = Number(e.target.value); } }), t('set.parcelsHideAfterHint')));
+  pane.appendChild(field(t('set.parcelsMaxOnTile'), textInput(parcels.maxOnTile, { type: 'number', min: '1', max: '10', oninput: (e) => { parcels.maxOnTile = Number(e.target.value); } })));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.parcelsManualHint') }));
+
+  showStatus();
   return pane;
 }
 

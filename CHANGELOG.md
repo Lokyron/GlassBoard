@@ -3,6 +3,38 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.6.0 — 2026-09-30
+
+A parcels tile, and a beta channel for updates.
+
+### Added
+
+- **Parcels tile**, with a detail view listing every step each parcel has been
+  through. A parcel with a tracking number is followed through
+  [17TRACK](https://api.17track.net/en/doc), which detects the carrier itself; a
+  parcel with no usable number is followed by hand, with a link to the order.
+  That second way is the only one that works for an Amazon Logistics shipment
+  (a `TBA` number), which no third party can query.
+- The provider charges a credit when a number is registered and nothing when a
+  status is read, so a number is declared once, on the explicit action of the
+  user, and statuses are read in one batched request for the whole list. The
+  settings panel shows the remaining allowance.
+- Parcels delivered more than `hideDeliveredAfterDays` ago leave the list on
+  their own.
+- **A beta update channel**, next to the stable one in **Settings → About**.
+  Stable follows `UPDATE_BRANCH`, beta follows the new `UPDATE_BETA_BRANCH`;
+  switching installs that branch, in either direction. The request file the
+  application writes names a channel and never a branch, so the unprivileged
+  side cannot point the root updater at a ref of its choosing.
+- `data-tp` translates a field's placeholder, the way `data-t` translates text.
+
+### Changed
+
+- The update check is cached per channel, and the About panel says which branch
+  a version comes from.
+- A failing update request answers `503` rather than `409`, which the browser
+  reads as "this instance needs setting up" and acts on by leaving the page.
+
 ## 1.5.0 — 2026-09-26
 
 The dashboard can now update itself, and the GeoRide tile opens on a map of

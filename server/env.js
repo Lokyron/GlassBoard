@@ -50,6 +50,10 @@ export const OSM_CONTACT = process.env.OSM_CONTACT || '';
 export const UPDATE_ENABLED = process.env.UPDATE_ENABLED === '1' || process.env.UPDATE_ENABLED === 'true';
 export const UPDATE_REPO = process.env.UPDATE_REPO || 'Lokyron/GlassBoard';
 export const UPDATE_BRANCH = process.env.UPDATE_BRANCH || 'main';
+// The branch the beta channel follows. Set it to an empty string to offer the
+// stable channel only. The application never sends a branch name to the
+// updater, only a channel name, so what can be installed is decided here.
+export const UPDATE_BETA_BRANCH = process.env.UPDATE_BETA_BRANCH === undefined ? 'beta' : process.env.UPDATE_BETA_BRANCH;
 export const UPDATE_CHECK_HOURS = num(process.env.UPDATE_CHECK_HOURS, 24);
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
