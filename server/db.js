@@ -63,6 +63,23 @@ CREATE TABLE IF NOT EXISTS login_challenges (
   expires_at TEXT NOT NULL
 );
 
+-- A sign-in waiting to be approved from a device that is already trusted.
+-- The browser showing the QR code only ever learns the id, which grants
+-- nothing but the right to wait. The power to approve lives in the secret, and
+-- the secret travels only inside the QR code, so a stolen id cannot approve
+-- itself. Only the hash is stored, like a password.
+CREATE TABLE IF NOT EXISTS login_requests (
+  id          TEXT PRIMARY KEY,
+  secret_hash TEXT NOT NULL UNIQUE,
+  user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  client_ip   TEXT,
+  user_agent  TEXT,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  approved_at TEXT,
+  consumed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS login_attempts (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
   bucket  TEXT NOT NULL,
@@ -121,6 +138,20 @@ CREATE TABLE IF NOT EXISTS cache (
   expires_at INTEGER NOT NULL
 );
 `);
+
+/** Add a column to a table that already exists, once.
+ *  The schema above uses CREATE TABLE IF NOT EXISTS, which does nothing at all
+ *  to a table that is already there, so a column added in a later version
+ *  needs this to reach instances that were installed before it. */
+function addColumn(table, column, definition) {
+  const columns = db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all().map((row) => row.name);
+  if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+// 1.8.0: the session list in the settings needs to say when a session was last
+// used and how it was opened.
+addColumn('sessions', 'last_seen_at', 'TEXT');
+addColumn('sessions', 'origin', "TEXT NOT NULL DEFAULT 'password'");
 
 export const now = () => new Date().toISOString();
 

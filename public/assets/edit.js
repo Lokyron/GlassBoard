@@ -1266,11 +1266,79 @@ function accountPane() {
   } }));
   pane.appendChild(codesBox);
 
+  pane.appendChild(el('div', { class: 'divider' }));
+  pane.appendChild(el('div', { class: 'fld-l', text: t('set.sessions') }));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.sessionsHint') }));
+  const sessions = el('div', { class: 'sess-list' });
+  pane.appendChild(sessions);
+  loadSessions(sessions);
+
   api('/api/auth/me').then((me) => {
     status.textContent = `${t('set.signedInAs', { name: me.username })} — ${t('set.recoveryLeft', { n: me.recoveryCodesLeft })}`;
   }).catch(() => { status.textContent = ''; });
 
   return pane;
+}
+
+/** Which devices hold a session, and the means to end any of them.
+ *  A user agent is chosen by the device that sent it, so it is only ever read
+ *  into a text node, never into markup. */
+function loadSessions(container) {
+  container.innerHTML = '';
+  api('/api/auth/sessions').then(({ sessions }) => {
+    container.innerHTML = '';
+    if (sessions.length <= 1) {
+      container.appendChild(el('p', { class: 'fld-h', text: t('set.sessionsEmpty') }));
+    }
+    for (const session of sessions) {
+      const when = session.lastSeenAt
+        ? t('set.sessionLastSeen', {
+          when: new Date(session.lastSeenAt).toLocaleString(state.config.site.locale, {
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+          }),
+        })
+        : t('set.sessionNever');
+      const how = session.origin === 'qr' ? t('set.sessionQr') : t('set.sessionPassword');
+      const row = el('div', { class: 'sess', title: session.userAgent || '' }, [
+        el('div', { class: 'sess-main' }, [
+          el('div', { class: 't', text: describeAgent(session.userAgent) }),
+          el('div', { class: 's', text: `${when} — ${how}` }),
+        ]),
+        session.current
+          ? el('span', { class: 'sess-now', text: t('set.sessionCurrent') })
+          : el('button', {
+            class: 'btn ghost', type: 'button', text: t('set.sessionRevoke'),
+            onclick: async () => {
+              try {
+                await api(`/api/auth/sessions/${encodeURIComponent(session.id)}`, { method: 'DELETE' });
+                toast(t('set.sessionRevoked'));
+                loadSessions(container);
+              } catch (error) {
+                toast(error.message, 'error');
+              }
+            },
+          }),
+      ]);
+      container.appendChild(row);
+    }
+  }).catch(() => { container.innerHTML = ''; });
+}
+
+/* A label for a user agent string. Read, never trusted: the raw value goes in
+   the tooltip, as a text attribute, so a crafted one cannot pose as a name. */
+function describeAgent(agent) {
+  const ua = String(agent || '');
+  if (!ua) return t('qr.unknownDevice');
+  const browser = [
+    [/\bEdg\//, 'Edge'], [/\bOPR\//, 'Opera'], [/\bFirefox\//, 'Firefox'],
+    [/\bChrome\//, 'Chrome'], [/\bSafari\//, 'Safari'],
+  ].find(([re]) => re.test(ua))?.[1];
+  const system = [
+    [/\bWindows\b/, 'Windows'], [/\b(iPhone|iPad|iPod)\b/, 'iOS'], [/\bMac OS X\b/, 'macOS'],
+    [/\bAndroid\b/, 'Android'], [/\bLinux\b/, 'Linux'],
+  ].find(([re]) => re.test(ua))?.[1];
+  if (browser && system) return t('qr.agentOn', { browser, system });
+  return browser || system || t('qr.unknownDevice');
 }
 
 function dataPane() {

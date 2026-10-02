@@ -10,7 +10,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { db } from './db.js';
 import { DATA_DIR } from './env.js';
-import { purgeExpiredSessions, purgeExpiredChallenges } from './auth.js';
+import { purgeExpiredSessions, purgeExpiredChallenges, purgeExpiredLoginRequests } from './auth.js';
 import { getConfig } from './store.js';
 import { getMeta } from './db.js';
 import * as mailbox from './integrations/mailbox.js';
@@ -69,6 +69,7 @@ export async function runMaintenance({ quiet = true } = {}) {
   const cacheRows = pruneCache();
   purgeExpiredSessions();
   purgeExpiredChallenges();
+  purgeExpiredLoginRequests();
   const tiles = await pruneTiles().catch(() => 0);
 
   // Fold the write-ahead log back into the database and refresh the planner's

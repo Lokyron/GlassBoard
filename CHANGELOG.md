@@ -5,6 +5,21 @@ Notable changes, newest first. The format follows
 
 ## Unreleased — on the beta channel
 
+### Added
+
+- **Sign in by QR code.** The sign-in screen can show a code instead of asking
+  for a password; a phone that already holds a session scans it with its own
+  camera and approves. The waiting screen is handed a request id, which grants
+  nothing but the right to wait: the power to approve travels only inside the QR
+  code, so watching the network buys nothing. Both screens show the same
+  four-character code to compare, and the approving device is told which
+  browser, which address and how long ago, before anything is granted. A request
+  lasts two minutes and can be spent once.
+- **Open sessions**, under Settings → Account: which devices hold a session, how
+  each one was opened and when it was last used, with a button to sign any of
+  them out. A sign-in that can be granted with a camera is one worth being able
+  to look at afterwards.
+
 ### Changed
 
 - The dashboard uses the width it is given instead of stopping at 1520px and

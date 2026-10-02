@@ -95,6 +95,13 @@ app.get('/login', (req, res) => {
   sendPage(res, 'login.html');
 });
 
+// Served whether or not this device is signed in: the page itself says so, and
+// the secret it needs lives in the URL fragment, which never reaches us.
+app.get('/approve', (req, res) => {
+  if (needsSetup()) return res.redirect('/setup');
+  sendPage(res, 'approve.html');
+});
+
 app.get('/setup', (req, res) => {
   if (!needsSetup() && req.user?.totp_enabled) return res.redirect('/');
   if (!needsSetup() && !req.user) return res.redirect('/login');

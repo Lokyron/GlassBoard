@@ -13,7 +13,22 @@ import {
 
 export const SESSION_COOKIE = 'glassboard_session';
 export const PENDING_COOKIE = 'glassboard_pending';
+/* The waiting browser holds its request id here rather than in the URL it polls.
+   A path is written to every access log in front of this server; a cookie is
+   not, and it also ties the claim to the browser that opened the request. */
+export const QR_COOKIE = 'glassboard_qr';
 const CHALLENGE_TTL_MINUTES = 5;
+/* Long enough to lift a phone, open the camera and tap once; short enough that
+   a QR code left on a screen is worthless by the time anyone walks past it. */
+const LOGIN_REQUEST_TTL_SECONDS = 120;
+/* Per address, so one machine cannot fill the table. Behind a reverse proxy
+   this only separates devices when TRUST_PROXY is on; without it they all share
+   the proxy's address, which is why the cap is generous rather than tight. */
+const MAX_PENDING_REQUESTS_PER_IP = 10;
+/* No I, O, 0 or 1: this code exists to be read off one screen and compared
+   with another, and those four are where that goes wrong. */
+const PAIRING_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const SESSION_TOUCH_MINUTES = 5;
 const TOTP_ISSUER = 'Glassboard';
 const TOTP_TOLERANCE_SECONDS = 30; // one time step of drift either way, per RFC 6238 §5.2
 
@@ -177,14 +192,36 @@ export function clearAttempts(bucket) {
 
 /* -------------------------------- sessions ------------------------------- */
 
-export function createSession(userId, userAgent) {
+export function createSession(userId, userAgent, origin = 'password') {
   const id = randomId(32);
   const expiresAt = new Date(Date.now() + SESSION_TTL_HOURS * 3_600_000).toISOString();
   db.prepare(
-    'INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, userId, now(), expiresAt, String(userAgent || '').slice(0, 200));
+    `INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent, last_seen_at, origin)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, userId, now(), expiresAt, String(userAgent || '').slice(0, 200), now(), origin);
   purgeExpiredSessions();
   return { id, expiresAt };
+}
+
+/** Sessions are long-lived, so "last used" is the only way to tell a forgotten
+ *  one from a live one. Written at most once every few minutes: the alternative
+ *  is a database write on every single request. */
+export function touchSession(session) {
+  if (!session) return;
+  const last = session.last_seen_at ? new Date(session.last_seen_at).getTime() : 0;
+  if (Date.now() - last < SESSION_TOUCH_MINUTES * 60_000) return;
+  db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(now(), session.id);
+}
+
+export function listSessions(userId) {
+  return db
+    .prepare('SELECT id, created_at, expires_at, user_agent, last_seen_at, origin FROM sessions WHERE user_id = ? ORDER BY COALESCE(last_seen_at, created_at) DESC')
+    .all(userId);
+}
+
+/** Scoped to the owner on purpose: a session id is never enough to delete one. */
+export function destroyUserSession(userId, id) {
+  return db.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
 }
 
 export function destroySession(id) {
@@ -250,6 +287,101 @@ export function purgeExpiredChallenges() {
   db.prepare("DELETE FROM login_challenges WHERE expires_at < datetime('now')").run();
 }
 
+/* --------------------------- QR login requests ---------------------------- */
+/* Signing in from a screen that holds no credentials: that screen opens a
+   request and waits, and a device that already carries a session approves it.
+   The waiting browser is given the request id only. Approving needs the secret,
+   which exists nowhere but inside the QR code it displays, so knowing the id
+   buys an attacker nothing but the same wait. */
+
+/** A short code both screens can derive from the request id, so the person can
+ *  check that the phone is approving the sign-in in front of them. Not a
+ *  secret: its whole job is to be read out loud and compared. */
+export const pairingCode = (id) => {
+  const digest = sha256(`glassboard.pairing:${id}`);
+  let code = '';
+  for (let i = 0; i < 4; i += 1) {
+    code += PAIRING_ALPHABET[Number.parseInt(digest.slice(i * 2, i * 2 + 2), 16) % PAIRING_ALPHABET.length];
+  }
+  return code;
+};
+
+export function createLoginRequest({ ip, userAgent }) {
+  purgeExpiredLoginRequests();
+  const pending = db
+    .prepare("SELECT COUNT(*) AS n FROM login_requests WHERE client_ip = ? AND expires_at > datetime('now')")
+    .get(String(ip || 'unknown')).n;
+  if (pending >= MAX_PENDING_REQUESTS_PER_IP) {
+    const error = new Error('Too many sign-in requests at once. Wait a moment and try again.');
+    error.code = 'too_many_requests';
+    throw error;
+  }
+
+  const id = randomId(32);
+  const secret = randomId(32);
+  const expiresAt = new Date(Date.now() + LOGIN_REQUEST_TTL_SECONDS * 1000).toISOString();
+  db.prepare(
+    `INSERT INTO login_requests (id, secret_hash, client_ip, user_agent, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(id, sha256(secret), String(ip || 'unknown'), String(userAgent || '').slice(0, 200), now(), expiresAt);
+
+  return { id, secret, expiresAt, ttlSeconds: LOGIN_REQUEST_TTL_SECONDS, pairingCode: pairingCode(id) };
+}
+
+/** What the waiting browser is allowed to know: nothing but the state. */
+export function loginRequestState(id) {
+  const row = db.prepare('SELECT * FROM login_requests WHERE id = ?').get(String(id || ''));
+  if (!row || new Date(row.expires_at) < new Date()) return 'expired';
+  if (row.consumed_at) return 'used';
+  return row.approved_at ? 'approved' : 'pending';
+}
+
+/** Turn an approved request into a session, once.
+ *  The UPDATE is the lock: two polls landing together, only one changes a row. */
+export function claimApprovedLoginRequest(id) {
+  const claimed = db
+    .prepare(
+      `UPDATE login_requests SET consumed_at = ?
+       WHERE id = ? AND approved_at IS NOT NULL AND consumed_at IS NULL AND expires_at > datetime('now')`
+    )
+    .run(now(), String(id || '')).changes;
+  if (!claimed) return null;
+  const row = db.prepare('SELECT user_id FROM login_requests WHERE id = ?').get(String(id || ''));
+  return findUserById(row.user_id) ?? null;
+}
+
+/** Look a request up by the secret carried in the QR code. */
+export function findLoginRequestBySecret(secret) {
+  const value = String(secret || '');
+  if (!value) return null;
+  const row = db.prepare('SELECT * FROM login_requests WHERE secret_hash = ?').get(sha256(value));
+  if (!row) return null;
+  if (new Date(row.expires_at) < new Date()) return { ...row, state: 'expired' };
+  return { ...row, state: row.consumed_at ? 'used' : row.approved_at ? 'approved' : 'pending' };
+}
+
+export function approveLoginRequest(secret, userId) {
+  const changed = db
+    .prepare(
+      `UPDATE login_requests SET approved_at = ?, user_id = ?
+       WHERE secret_hash = ? AND approved_at IS NULL AND expires_at > datetime('now')`
+    )
+    .run(now(), userId, sha256(String(secret || ''))).changes;
+  return changed > 0;
+}
+
+/** Refusing destroys the request outright: there is nothing left to approve. */
+export function rejectLoginRequest(secret) {
+  return db.prepare('DELETE FROM login_requests WHERE secret_hash = ?').run(sha256(String(secret || ''))).changes > 0;
+}
+
+/** The id the waiting browser carries, or null if the cookie is absent or forged. */
+export const loginRequestIdFromCookie = (value) => unsign(String(value || ''));
+
+export function purgeExpiredLoginRequests() {
+  db.prepare("DELETE FROM login_requests WHERE expires_at < datetime('now')").run();
+}
+
 export function sessionCookieOptions(req, maxAgeMs) {
   const secure =
     COOKIE_SECURE === 'true' ? true : COOKIE_SECURE === 'false' ? false : Boolean(req.secure);
@@ -272,6 +404,7 @@ export function attachUser(req, _res, next) {
   const resolved = raw ? resolveSession(raw) : null;
   req.user = resolved?.user ?? null;
   req.session = resolved?.session ?? null;
+  if (req.session) touchSession(req.session);
   next();
 }
 

@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import {
   SESSION_COOKIE,
   PENDING_COOKIE,
+  QR_COOKIE,
   createChallenge,
   resolveChallenge,
   destroyChallenge,
@@ -25,6 +26,16 @@ import {
   createSession,
   destroySession,
   destroyAllSessions,
+  listSessions,
+  destroyUserSession,
+  createLoginRequest,
+  loginRequestState,
+  claimApprovedLoginRequest,
+  loginRequestIdFromCookie,
+  findLoginRequestBySecret,
+  approveLoginRequest,
+  rejectLoginRequest,
+  pairingCode,
   sessionCookieOptions,
   signSessionId,
   requireAuth,
@@ -35,8 +46,8 @@ export const authRouter = express.Router();
 
 const clientIp = (req) => req.ip || req.socket.remoteAddress || 'unknown';
 
-function openSession(req, res, user) {
-  const { id } = createSession(user.id, req.get('user-agent'));
+function openSession(req, res, user, origin = 'password') {
+  const { id } = createSession(user.id, req.get('user-agent'), origin);
   res.cookie(SESSION_COOKIE, signSessionId(id), sessionCookieOptions(req, SESSION_TTL_HOURS * 3_600_000));
 }
 
@@ -169,6 +180,81 @@ authRouter.post('/login/cancel', (req, res) => {
   res.json({ ok: true });
 });
 
+/* ------------------------- sign in by QR code ---------------------------- */
+/* The screen with no credentials shows a code; a device that already holds a
+   session scans it and approves. See the login_requests table for why the
+   waiting screen is never told the secret. */
+
+/** Public: open a request and hand back the QR code to display. */
+authRouter.post('/qr/start', async (req, res) => {
+  if (needsSetup()) return res.status(409).json({ error: 'setup_required' });
+  let request;
+  try {
+    request = createLoginRequest({ ip: clientIp(req), userAgent: req.get('user-agent') });
+  } catch (error) {
+    return res.status(429).json({ error: error.message, code: error.code });
+  }
+
+  // The secret rides in the fragment, which browsers never put on the wire:
+  // it stays out of the access log, out of Referer and out of any proxy.
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const qr = await QRCode.toDataURL(`${origin}/approve#${request.secret}`, { margin: 1, width: 320 });
+  // The id goes in a cookie, never in the answer and never in a URL: the
+  // browser that opened the request is then the only one able to claim it.
+  res.cookie(QR_COOKIE, signSessionId(request.id), sessionCookieOptions(req, request.ttlSeconds * 1000));
+  res.json({ ok: true, qr, pairingCode: request.pairingCode, expiresInSeconds: request.ttlSeconds });
+});
+
+/** Public: the waiting screen asks whether it may come in yet.
+ *  An approved request is spent here, and only here. */
+authRouter.get('/qr/state', (req, res) => {
+  const id = loginRequestIdFromCookie(req.cookies?.[QR_COOKIE]);
+  if (!id) return res.json({ ok: true, state: 'expired' });
+
+  const state = loginRequestState(id);
+  if (state === 'pending') return res.json({ ok: true, state });
+  res.clearCookie(QR_COOKIE, { path: '/' });
+  if (state !== 'approved') return res.json({ ok: true, state });
+
+  const user = claimApprovedLoginRequest(id);
+  if (!user) return res.json({ ok: true, state: 'expired' });
+  openSession(req, res, user, 'qr');
+  res.json({ ok: true, state: 'approved', username: user.username });
+});
+
+/** What the approving device shows before anyone taps anything. */
+authRouter.get('/qr/pending', requireAuth, (req, res) => {
+  const request = findLoginRequestBySecret(req.query.secret);
+  if (!request) return res.status(404).json({ error: 'This sign-in request no longer exists.', code: 'qr_unknown' });
+  if (request.state !== 'pending') {
+    return res.status(409).json({ error: 'This sign-in request is no longer waiting.', code: `qr_${request.state}` });
+  }
+  res.json({
+    ok: true,
+    pairingCode: pairingCode(request.id),
+    clientIp: request.client_ip,
+    userAgent: request.user_agent,
+    createdAt: request.created_at,
+    expiresAt: request.expires_at,
+    username: req.user.username,
+  });
+});
+
+/** The one deliberate act. The session itself is the second factor: only a
+ *  device that already signed in with a password and a code gets here. */
+authRouter.post('/qr/approve', (req, res) => {
+  if (!req.user || !req.user.totp_enabled) return res.status(401).json({ error: 'unauthenticated' });
+  if (!approveLoginRequest(req.body?.secret, req.user.id)) {
+    return res.status(409).json({ error: 'This sign-in request expired. Scan a fresh code.', code: 'qr_expired' });
+  }
+  res.json({ ok: true });
+});
+
+authRouter.post('/qr/reject', requireAuth, (req, res) => {
+  rejectLoginRequest(req.body?.secret);
+  res.json({ ok: true });
+});
+
 authRouter.post('/logout', (req, res) => {
   destroySession(req.session?.id);
   res.clearCookie(SESSION_COOKIE, { path: '/' });
@@ -205,4 +291,33 @@ authRouter.post('/recovery-codes', requireAuth, async (req, res) => {
     return res.status(401).json({ error: 'Password is incorrect.' });
   }
   res.json({ ok: true, recoveryCodes: generateRecoveryCodes(req.user.id) });
+});
+
+/* ------------------------------- sessions -------------------------------- */
+/* A sign-in that can be granted with a camera is a sign-in worth being able to
+   look at afterwards. */
+
+authRouter.get('/sessions', requireAuth, (req, res) => {
+  res.json({
+    ok: true,
+    sessions: listSessions(req.user.id).map((row) => ({
+      id: row.id,
+      current: row.id === req.session?.id,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      userAgent: row.user_agent,
+      origin: row.origin,
+    })),
+  });
+});
+
+authRouter.delete('/sessions/:id', requireAuth, (req, res) => {
+  if (req.params.id === req.session?.id) {
+    return res.status(400).json({ error: 'Use Sign out to end the current session.', code: 'current_session' });
+  }
+  if (!destroyUserSession(req.user.id, req.params.id)) {
+    return res.status(404).json({ error: 'That session no longer exists.' });
+  }
+  res.json({ ok: true });
 });

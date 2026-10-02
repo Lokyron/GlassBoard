@@ -31,6 +31,7 @@ const ERROR_KEYS = {
   invalid_code: 'auth.errCode',
   challenge_expired: 'auth.errExpired',
   locked: 'auth.errLocked',
+  too_many_requests: 'qr.tooMany',
 };
 
 function describe(error) {
@@ -65,6 +66,26 @@ function header(title, subtitle, icon = 'house') {
 }
 
 const card = () => id('card');
+const esc = (value) =>
+  String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* A user agent string is chosen by the device asking to come in, so it is read,
+   never trusted. This only picks a label out of it; the raw string is shown
+   underneath, escaped, so a crafted one cannot hide behind a friendly name. */
+function describeAgent(agent) {
+  const ua = String(agent || '');
+  if (!ua) return t('qr.unknownDevice');
+  const browser = [
+    [/\bEdg\//, 'Edge'], [/\bOPR\//, 'Opera'], [/\bFirefox\//, 'Firefox'],
+    [/\bChrome\//, 'Chrome'], [/\bSafari\//, 'Safari'],
+  ].find(([re]) => re.test(ua))?.[1];
+  const system = [
+    [/\bWindows\b/, 'Windows'], [/\b(iPhone|iPad|iPod)\b/, 'iOS'], [/\bMac OS X\b/, 'macOS'],
+    [/\bAndroid\b/, 'Android'], [/\bLinux\b/, 'Linux'],
+  ].find(([re]) => re.test(ua))?.[1];
+  if (browser && system) return t('qr.agentOn', { browser, system });
+  return browser || system || t('qr.unknownDevice');
+}
 const showError = (message) => {
   const box = id('auth-error');
   if (!box) return;
@@ -83,7 +104,10 @@ function renderLogin() {
       <label class="fld"><span class="fld-l">${t('auth.password')}</span>
         <input class="inp" name="password" type="password" autocomplete="current-password" required></label>
       <button class="btn primary" type="submit">${t('auth.continue')}</button>
-    </form>`;
+    </form>
+    <div class="auth-sep">${t('qr.or')}</div>
+    <button class="btn ghost" type="button" id="use-phone">${svg('device-mobile')}${t('qr.signInWithPhone')}</button>`;
+  id('use-phone').addEventListener('click', renderQrLogin);
   id('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     showError('');
@@ -136,6 +160,168 @@ function renderLoginCode(username) {
       }
     }
   });
+}
+
+/* ---------------------------- sign in by QR ------------------------------- */
+/* This screen holds no credentials and never will. It opens a request, shows
+   it as a QR code, and waits. It is never told the secret: that power is in the
+   code on screen, and only a phone that already carries a session can use it.
+   What identifies the request is a cookie the server sets, so it appears in no
+   URL and in no access log. */
+
+const POLL_INTERVAL_MS = 2000;
+let pollTimer = null;
+const stopPolling = () => { clearInterval(pollTimer); pollTimer = null; };
+
+async function renderQrLogin() {
+  stopPolling();
+  card().innerHTML = `${header(t('qr.title'), t('qr.subtitle'), 'device-mobile')}
+    <div class="auth-err" id="auth-error" hidden></div>
+    <div class="auth-steps">
+      <div class="qr" id="qr-image">…</div>
+      <div class="pair-code" id="qr-pair">····</div>
+      <span class="fld-h">${t('qr.pairingHint')}</span>
+      <div class="qr-wait" id="qr-wait"><span class="qr-dot"></span><span id="qr-wait-text">…</span></div>
+      <button class="btn ghost" type="button" id="qr-password">${t('qr.usePassword')}</button>
+    </div>`;
+  id('qr-password').addEventListener('click', () => { stopPolling(); renderLogin(); });
+
+  let request;
+  try {
+    request = await api('/api/auth/qr/start', { method: 'POST' });
+  } catch (error) {
+    // Nothing to scan: drop the frame rather than leave an empty one on screen.
+    showError(describe(error));
+    card().querySelector('.auth-steps').innerHTML =
+      `<button class="btn ghost" type="button" id="qr-retry">${t('qr.newCode')}</button>
+       <button class="btn ghost" type="button" id="qr-back">${t('qr.usePassword')}</button>`;
+    id('qr-retry').addEventListener('click', renderQrLogin);
+    id('qr-back').addEventListener('click', renderLogin);
+    return;
+  }
+  id('qr-image').innerHTML = `<img alt="" src="${esc(request.qr)}">`;
+  id('qr-pair').textContent = request.pairingCode;
+
+  let remaining = request.expiresInSeconds;
+  const countdown = () => {
+    id('qr-wait-text').textContent = t('qr.expiresIn', { seconds: remaining });
+  };
+  countdown();
+
+  pollTimer = setInterval(async () => {
+    remaining -= POLL_INTERVAL_MS / 1000;
+    if (remaining <= 0) return renderQrExpired();
+    countdown();
+    let state;
+    try {
+      // No id in the URL: the browser carries it in a cookie set by /qr/start.
+      state = await api('/api/auth/qr/state');
+    } catch {
+      return undefined; // a dropped poll is not a failure; the next one will do
+    }
+    // The session cookie came back with this very response.
+    if (state.state === 'approved') {
+      stopPolling();
+      id('qr-wait-text').textContent = t('qr.approved');
+      window.location.href = '/';
+    } else if (state.state === 'expired' || state.state === 'used') {
+      renderQrExpired();
+    }
+    return undefined;
+  }, POLL_INTERVAL_MS);
+}
+
+function renderQrExpired() {
+  stopPolling();
+  card().innerHTML = `${header(t('qr.title'), t('qr.expired'), 'timer')}
+    <div class="auth-steps">
+      <button class="btn primary" type="button" id="qr-again">${t('qr.newCode')}</button>
+      <button class="btn ghost" type="button" id="qr-password">${t('qr.usePassword')}</button>
+    </div>`;
+  id('qr-again').addEventListener('click', renderQrLogin);
+  id('qr-password').addEventListener('click', renderLogin);
+}
+
+/* ------------------------- approving from the phone ----------------------- */
+
+/** The secret travels in the fragment, so it never reaches the server by
+ *  itself. Read once, then wiped from the address bar: no need to leave it in
+ *  the history of a phone that gets handed around. */
+function readApprovalSecret() {
+  const secret = window.location.hash.replace(/^#/, '');
+  if (secret) history.replaceState(null, '', window.location.pathname);
+  return secret;
+}
+
+function renderApprovalNotice(titleKey, bodyKey, { icon = 'warning', signIn = false, note = '' } = {}) {
+  card().innerHTML = `${header(t(titleKey), '', icon)}
+    <p class="fld-h">${t(bodyKey)}</p>
+    ${note ? `<p class="fld-h">${t(note)}</p>` : ''}
+    ${signIn ? `<button class="btn primary" type="button" id="go-login">${t('qr.goToLogin')}</button>` : ''}`;
+  if (signIn) id('go-login').addEventListener('click', () => { window.location.href = '/login'; });
+}
+
+async function renderApprove() {
+  const secret = readApprovalSecret();
+  if (!secret) return renderApprovalNotice('qr.noCode', 'qr.noCodeBody', { icon: 'device-mobile' });
+
+  const state = await api('/api/auth/state').catch(() => null);
+  if (!state) return renderApprovalNotice('msg.error', 'qr.gone');
+  if (state.setupRequired || (state.authenticated && state.totpEnrolmentRequired)) {
+    window.location.href = '/setup';
+    return undefined;
+  }
+  if (!state.authenticated) {
+    return renderApprovalNotice('qr.needSession', 'qr.needSessionBody', {
+      icon: 'lock-key', signIn: true, note: 'qr.needSessionNote',
+    });
+  }
+
+  let request;
+  try {
+    request = await api(`/api/auth/qr/pending?secret=${encodeURIComponent(secret)}`);
+  } catch (error) {
+    return renderApprovalNotice('qr.gone', 'qr.goneBody', { icon: 'timer' });
+  }
+
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(request.createdAt).getTime()) / 1000));
+  card().innerHTML = `${header(t('qr.approveTitle'), t('qr.approveSubtitle'), 'shield-check')}
+    <div class="auth-err" id="auth-error" hidden></div>
+    <div class="auth-steps">
+      <div class="pair-code">${esc(request.pairingCode)}</div>
+      <span class="fld-h">${t('qr.compare')}</span>
+      <div class="req-facts">
+        <div class="req-fact"><span class="k">${t('qr.factBrowser')}</span><span class="v" id="fact-agent"></span></div>
+        <div class="req-fact"><span class="k">${t('qr.factAddress')}</span><span class="v" id="fact-ip"></span></div>
+        <div class="req-fact"><span class="k">${t('qr.factWhen')}</span><span class="v">${t('qr.secondsAgo', { n: seconds })}</span></div>
+        <div class="req-fact"><span class="k">${t('qr.factAccount')}</span><span class="v" id="fact-user"></span></div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" type="button" id="qr-reject">${t('qr.reject')}</button>
+        <button class="btn primary" type="button" id="qr-approve">${t('qr.approve')}</button>
+      </div>
+    </div>`;
+  // textContent, not innerHTML: these three strings come from the other device.
+  id('fact-agent').textContent = describeAgent(request.userAgent);
+  id('fact-agent').title = request.userAgent || '';
+  id('fact-ip').textContent = request.clientIp || '—';
+  id('fact-user').textContent = request.username;
+
+  id('qr-approve').addEventListener('click', async (event) => {
+    event.target.disabled = true;
+    try {
+      await api('/api/auth/qr/approve', { method: 'POST', body: { secret } });
+      renderApprovalNotice('qr.doneTitle', 'qr.doneBody', { icon: 'seal-check' });
+    } catch (error) {
+      showError(error.message);
+      event.target.disabled = false;
+    }
+  });
+  id('qr-reject').addEventListener('click', async () => {
+    await api('/api/auth/qr/reject', { method: 'POST', body: { secret } }).catch(() => {});
+    renderApprovalNotice('qr.rejectedTitle', 'qr.rejectedBody', { icon: 'x' });
+  });
+  return undefined;
 }
 
 /* --------------------------------- setup --------------------------------- */
@@ -227,6 +413,7 @@ function renderRecoveryCodes(codes) {
 async function startAuthPage(page) {
   document.querySelectorAll('svg[data-i]').forEach((el) => { el.innerHTML = PH[el.dataset.i] || ''; });
   if (page === 'login') return renderLogin();
+  if (page === 'approve') return renderApprove();
 
   const state = await api('/api/auth/state');
   if (state.setupRequired) return renderCreateAccount();

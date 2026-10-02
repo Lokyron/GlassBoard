@@ -170,6 +170,31 @@ select.inp{appearance:none;cursor:pointer}
 .secret{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;letter-spacing:.08em;word-break:break-all;
   padding:10px 12px;border-radius:11px;background:var(--surface-soft);border:1px solid var(--border);text-align:center}
 
+/* Signing in by QR code. The pairing code is meant to be compared with the one
+   on the other screen at a glance, so it is the largest thing on the card. */
+.auth-alt{display:grid;gap:10px;justify-items:center;text-align:center}
+.auth-sep{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}
+.auth-sep::before,.auth-sep::after{content:"";flex:1;height:1px;background:var(--border)}
+.pair-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.9rem;font-weight:700;letter-spacing:.22em;
+  text-align:center;padding:12px;border-radius:14px;background:var(--surface-soft);border:1px solid var(--border)}
+.qr-wait{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:.86rem}
+.qr-dot{width:8px;height:8px;border-radius:50%;background:var(--primary);animation:qr-pulse 1.4s infinite ease-in-out}
+@keyframes qr-pulse{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+/* The request being approved: plain rows, because every value here comes from
+   the device asking to come in and is the only thing worth reading carefully. */
+.req-facts{display:grid;gap:1px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--border)}
+.req-fact{display:flex;justify-content:space-between;gap:14px;padding:11px 13px;background:var(--surface);font-size:.86rem}
+.req-fact .k{color:var(--muted);white-space:nowrap}
+.req-fact .v{text-align:right;word-break:break-word;font-weight:600}
+
+/* Open sessions, in the account settings. */
+.sess-list{display:grid;gap:8px}
+.sess{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:14px;border:1px solid var(--border);background:var(--surface)}
+.sess-main{flex:1;min-width:0;display:grid;gap:2px}
+.sess-main .t{font-size:.9rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess-main .s{font-size:.78rem;color:var(--muted)}
+.sess-now{font-size:.72rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.06em}
+
 /* Like a weather tile, it opens a detail view: say so with the cursor. */
 body:not(.editing) .georide.gr-clickable{cursor:pointer}
 body:not(.editing) .georide.gr-clickable .gr-map{cursor:auto}
