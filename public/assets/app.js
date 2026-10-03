@@ -1241,6 +1241,12 @@ function applyAppearance(appearance = state.config?.appearance, version = state.
   const settings = appearance || {};
   html.setAttribute('data-preset', settings.preset || 'default');
   html.setAttribute('data-orbs', settings.orbs === false ? 'off' : 'on');
+  // The sign-in screens run before any configuration can be read, so the chosen
+  // style is left here for them to find, next to the theme they already read.
+  try {
+    localStorage.setItem('preset', settings.preset || 'default');
+    localStorage.setItem('orbs', settings.orbs === false ? 'off' : 'on');
+  } catch { /* private mode */ }
 
   const wallpaper = settings.wallpaper || {};
   if (wallpaper.enabled) {

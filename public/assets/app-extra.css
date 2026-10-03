@@ -155,13 +155,76 @@ select.inp{appearance:none;cursor:pointer}
 .range{flex:1;accent-color:var(--primary)}
 
 /* --------------------------------- auth ---------------------------------- */
+/* The sign-in screens are the first thing the dashboard ever shows, so they
+   carry a little of what the dashboard is: the chosen accent, a greeting that
+   knows the hour, the time. Every colour here comes from a theme token, so a
+   preset change carries through without a single value being restated. */
 .auth-wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
-.auth-card{width:min(430px,100%);padding:30px;border-radius:var(--rxl);display:grid;gap:18px}
-.offline-card{justify-items:center;text-align:center}.offline-card h1{font-size:1.3rem}.offline-card p{line-height:1.55}
-.offline-icon{border-radius:16px;box-shadow:0 12px 30px rgba(10,132,255,.35)}
-.auth-head{display:flex;align-items:center;gap:13px}
-.auth-head h1{font-size:1.14rem;font-weight:700}
-.auth-head p{color:var(--muted);font-size:.86rem;margin-top:3px}
+.auth-card{width:min(900px,100%);border-radius:var(--rxl);overflow:hidden;
+  display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1fr)}
+
+/* Left half: who you are coming back to. */
+.auth-aside{position:relative;display:grid;align-content:space-between;gap:26px;padding:36px 32px;
+  border-right:1px solid var(--border);
+  background:linear-gradient(168deg,rgba(var(--glow),.20),rgba(var(--glow),.04) 58%,transparent)}
+.auth-mark{width:54px;height:54px;border-radius:17px}
+.auth-mark .i{font-size:26px}
+/* The gradient is the accent itself, so the greeting is the clearest place the
+   chosen preset shows up before anything is loaded. background-image, not the
+   background shorthand: the shorthand would reset background-clip and the text
+   would fill with the gradient instead of being cut out of it. */
+.auth-hello h1{font-size:clamp(1.55rem,1.05rem + 1.7vw,2.1rem);font-weight:700;line-height:1.08;letter-spacing:-.035em;
+  background-image:var(--accent);-webkit-background-clip:text;background-clip:text;color:transparent;
+  padding-bottom:.06em}
+/* On a near-white panel the accent's lightest stop fades the end of the word
+   out — "ember" loses its question mark. Two darker stops of the same preset
+   keep it readable without leaving the chosen colours. */
+:root[data-theme="light"] .auth-hello h1{background-image:linear-gradient(115deg,var(--primary-2),var(--primary))}
+.auth-hello p{margin-top:9px;color:var(--muted);font-size:.88rem;line-height:1.55;max-width:27ch}
+.auth-now{display:grid;gap:1px}
+.auth-now .t{font-size:1.45rem;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.auth-now .d{font-size:.78rem;color:var(--muted)}
+.auth-now .d::first-letter{text-transform:uppercase}
+
+/* Right half: the step at hand. */
+.auth-main{padding:36px 34px;display:grid;gap:17px;align-content:center;min-width:0}
+.auth-main .inp{padding:12px 14px}
+.auth-main .inp:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(var(--glow),.15)}
+.auth-main .btn{padding:12px 16px}
+.auth-main .btn.primary{font-weight:650}
+
+.auth-head{display:grid;gap:4px}
+.auth-head .chip{display:inline-flex;align-items:center;gap:7px;justify-self:start;margin-bottom:5px;
+  padding:5px 11px;border-radius:999px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--primary);background:rgba(var(--glow),.12);border:1px solid rgba(var(--glow),.22)}
+.auth-head .chip .i{font-size:14px}
+.auth-head h2{font-size:1.32rem;font-weight:700;letter-spacing:-.025em;line-height:1.2}
+.auth-head p{color:var(--muted);font-size:.86rem;line-height:1.5;margin-top:2px}
+
+/* Each panel arrives in sequence rather than all at once. */
+.auth-main>*{animation:rise .55s var(--ease) both}
+.auth-main>*:nth-child(2){animation-delay:.05s}
+.auth-main>*:nth-child(3){animation-delay:.1s}
+.auth-main>*:nth-child(4){animation-delay:.15s}
+
+.offline-card{grid-template-columns:1fr;padding:30px;gap:18px;width:min(430px,100%);justify-items:center;text-align:center}
+.offline-card h1{font-size:1.3rem}.offline-card p{line-height:1.55}
+.offline-icon{border-radius:16px;box-shadow:0 12px 30px rgba(var(--glow),.35)}
+
+/* One column below this: the aside becomes a header, and the clock goes —
+   a phone already shows one, two steps above this card. */
+@media(max-width:860px){
+  .auth-card{grid-template-columns:1fr;width:min(440px,100%)}
+  .auth-aside{grid-template-columns:auto minmax(0,1fr);align-items:center;align-content:start;gap:15px;
+    padding:24px 24px 22px;border-right:0;border-bottom:1px solid var(--border)}
+  .auth-mark{width:46px;height:46px;border-radius:15px}
+  .auth-mark .i{font-size:22px}
+  .auth-hello h1{font-size:1.35rem}
+  .auth-hello p{margin-top:4px;font-size:.82rem;max-width:none}
+  .auth-now{display:none}
+  .auth-main{padding:26px 24px 28px}
+}
+@media(prefers-reduced-motion:reduce){.auth-main>*{animation:none}}
 .auth-err{padding:11px 13px;border-radius:12px;font-size:.86rem;font-weight:600;color:#ff453a;
   background:rgba(255,69,58,.12);border:1px solid rgba(255,69,58,.35)}
 .auth-steps{display:grid;gap:16px}

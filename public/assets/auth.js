@@ -6,10 +6,17 @@ const id = (s) => document.getElementById(s);
 const svg = (name, style) =>
   `<svg class="i"${style ? ` style="${style}"` : ''} viewBox="0 0 256 256" fill="currentColor">${PH[name] || ''}</svg>`;
 
-const setTheme = (dark) => document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+const root = document.documentElement;
+const setTheme = (dark) => root.setAttribute('data-theme', dark ? 'dark' : 'light');
+
+/* These screens run before any configuration can be read, so the look is
+   restored from what the dashboard left behind. Without this the sign-in page
+   would always be the default blue, whatever preset was chosen inside. */
 try {
   const stored = localStorage.getItem('theme');
   setTheme(stored ? stored === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches);
+  root.setAttribute('data-preset', localStorage.getItem('preset') || 'default');
+  root.setAttribute('data-orbs', localStorage.getItem('orbs') === 'off' ? 'off' : 'on');
 } catch {
   setTheme(true);
 }
@@ -60,9 +67,43 @@ async function api(path, options = {}) {
   return payload;
 }
 
-function header(title, subtitle, icon = 'house') {
-  return `<div class="auth-head"><div class="brand">${svg(icon)}</div>
-    <div><h1>${title}</h1><p>${subtitle}</p></div></div>`;
+/** The heading of a panel: an optional chip saying where you are, then the
+ *  step itself. The brand mark lives in the aside, so it is not repeated. */
+function header(title, subtitle, icon = '', chip = '') {
+  const badge = chip && icon ? `<span class="chip">${svg(icon)}${chip}</span>` : '';
+  return `<div class="auth-head">${badge}<h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div>`;
+}
+
+/* --------------------------------- aside --------------------------------- */
+/* The half of the card that does not change: who you are coming back to. */
+
+/** Four slots rather than the dashboard's two — at 7am and at 11pm, "good
+ *  morning" and "good evening" are both slightly wrong. */
+function greetingKey(hour) {
+  if (hour < 5) return 'hello.night';
+  if (hour < 12) return 'hello.morning';
+  if (hour < 18) return 'hello.afternoon';
+  return 'hello.evening';
+}
+
+function startAside(taglineKey) {
+  const greeting = id('auth-greeting');
+  const tagline = id('auth-tagline');
+  const clock = id('auth-clock');
+  const date = id('auth-date');
+  if (!greeting) return;
+
+  const tick = () => {
+    const now = new Date();
+    greeting.textContent = t(greetingKey(now.getHours()));
+    clock.textContent = now.toLocaleTimeString(currentLocale, { hour: '2-digit', minute: '2-digit' });
+    date.textContent = now.toLocaleDateString(currentLocale, { weekday: 'long', day: 'numeric', month: 'long' });
+  };
+  tagline.textContent = t(taglineKey);
+  tick();
+  // Once a minute is enough for a clock without seconds, and it keeps the
+  // sign-in screen from waking the device every second while it waits.
+  setInterval(tick, 30_000);
 }
 
 const card = () => id('card');
@@ -96,7 +137,7 @@ const showError = (message) => {
 /* --------------------------------- login --------------------------------- */
 
 function renderLogin() {
-  card().innerHTML = `${header('Glassboard', t('auth.signInSubtitle'), 'lock-key')}
+  card().innerHTML = `${header(t('auth.signInTitle'), t('auth.signInHint'))}
     <div class="auth-err" id="auth-error" hidden></div>
     <form class="dlg" id="login-form">
       <label class="fld"><span class="fld-l">${t('auth.username')}</span>
@@ -128,7 +169,7 @@ function renderLogin() {
 }
 
 function renderLoginCode(username) {
-  card().innerHTML = `${header(t('auth.totpTitle'), t('auth.otpSubtitle', { name: username }), 'shield-check')}
+  card().innerHTML = `${header(t('auth.totpTitle'), t('auth.otpSubtitle', { name: username }), 'shield-check', t('auth.chipSecurity'))}
     <div class="auth-err" id="auth-error" hidden></div>
     <form class="dlg" id="code-form">
       <label class="fld"><span class="fld-l">${t('auth.code')}</span>
@@ -175,7 +216,7 @@ const stopPolling = () => { clearInterval(pollTimer); pollTimer = null; };
 
 async function renderQrLogin() {
   stopPolling();
-  card().innerHTML = `${header(t('qr.title'), t('qr.subtitle'), 'device-mobile')}
+  card().innerHTML = `${header(t('qr.title'), t('qr.subtitle'), 'device-mobile', t('auth.chipPhone'))}
     <div class="auth-err" id="auth-error" hidden></div>
     <div class="auth-steps">
       <div class="qr" id="qr-image">…</div>
@@ -233,7 +274,7 @@ async function renderQrLogin() {
 
 function renderQrExpired() {
   stopPolling();
-  card().innerHTML = `${header(t('qr.title'), t('qr.expired'), 'timer')}
+  card().innerHTML = `${header(t('qr.title'), t('qr.expired'), 'timer', t('auth.chipPhone'))}
     <div class="auth-steps">
       <button class="btn primary" type="button" id="qr-again">${t('qr.newCode')}</button>
       <button class="btn ghost" type="button" id="qr-password">${t('qr.usePassword')}</button>
@@ -254,7 +295,7 @@ function readApprovalSecret() {
 }
 
 function renderApprovalNotice(titleKey, bodyKey, { icon = 'warning', signIn = false, note = '' } = {}) {
-  card().innerHTML = `${header(t(titleKey), '', icon)}
+  card().innerHTML = `${header(t(titleKey), '', icon, t('auth.chipPhone'))}
     <p class="fld-h">${t(bodyKey)}</p>
     ${note ? `<p class="fld-h">${t(note)}</p>` : ''}
     ${signIn ? `<button class="btn primary" type="button" id="go-login">${t('qr.goToLogin')}</button>` : ''}`;
@@ -285,7 +326,7 @@ async function renderApprove() {
   }
 
   const seconds = Math.max(0, Math.round((Date.now() - new Date(request.createdAt).getTime()) / 1000));
-  card().innerHTML = `${header(t('qr.approveTitle'), t('qr.approveSubtitle'), 'shield-check')}
+  card().innerHTML = `${header(t('qr.approveTitle'), t('qr.approveSubtitle'), 'shield-check', t('auth.chipSecurity'))}
     <div class="auth-err" id="auth-error" hidden></div>
     <div class="auth-steps">
       <div class="pair-code">${esc(request.pairingCode)}</div>
@@ -327,7 +368,7 @@ async function renderApprove() {
 /* --------------------------------- setup --------------------------------- */
 
 function renderCreateAccount() {
-  card().innerHTML = `${header(t('auth.setupTitle'), t('auth.setupSubtitle'), 'user-circle')}
+  card().innerHTML = `${header(t('auth.setupTitle'), t('auth.setupSubtitle'), 'sparkle', t('auth.chipWelcome'))}
     <div class="auth-err" id="auth-error" hidden></div>
     <form class="dlg" id="setup-form">
       <label class="fld"><span class="fld-l">${t('auth.username')}</span>
@@ -354,7 +395,7 @@ function renderCreateAccount() {
 }
 
 async function renderTotpEnrolment() {
-  card().innerHTML = `${header(t('auth.totpTitle'), t('auth.totpSubtitle'), 'shield-check')}
+  card().innerHTML = `${header(t('auth.totpTitle'), t('auth.totpSubtitle'), 'shield-check', t('auth.chipSecurity'))}
     <div class="auth-err" id="auth-error" hidden></div>
     <div class="auth-steps">
       <div class="qr" id="qr">…</div>
@@ -390,7 +431,7 @@ async function renderTotpEnrolment() {
 }
 
 function renderRecoveryCodes(codes) {
-  card().innerHTML = `${header(t('auth.recoveryTitle'), t('auth.recoverySubtitle'), 'key')}
+  card().innerHTML = `${header(t('auth.recoveryTitle'), t('auth.recoverySubtitle'), 'key', t('auth.chipRecovery'))}
     <div class="codes">${codes.map((code) => `<code>${code}</code>`).join('')}</div>
     <div class="row">
       <button class="btn ghost" id="copy-codes" type="button">${t('auth.copy')}</button>
@@ -410,8 +451,15 @@ function renderRecoveryCodes(codes) {
 
 /* ---------------------------------- boot ---------------------------------- */
 
+const TAGLINES = {
+  login: 'hello.taglineSignIn',
+  approve: 'hello.taglineApprove',
+  setup: 'hello.taglineSetup',
+};
+
 async function startAuthPage(page) {
   document.querySelectorAll('svg[data-i]').forEach((el) => { el.innerHTML = PH[el.dataset.i] || ''; });
+  startAside(TAGLINES[page] || TAGLINES.login);
   if (page === 'login') return renderLogin();
   if (page === 'approve') return renderApprove();
 

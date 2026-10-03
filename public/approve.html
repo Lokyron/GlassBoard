@@ -18,7 +18,17 @@
 <body data-page="approve">
 <div id="wall"></div><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
 <main class="auth-wrap">
-  <section class="auth-card glass rise" id="card"></section>
+  <section class="auth-card glass rise">
+    <aside class="auth-aside">
+      <div class="auth-mark brand"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="house"></svg></div>
+      <div class="auth-hello">
+        <h1 id="auth-greeting">&nbsp;</h1>
+        <p id="auth-tagline">&nbsp;</p>
+      </div>
+      <div class="auth-now"><span class="t" id="auth-clock">--:--</span><span class="d" id="auth-date">&nbsp;</span></div>
+    </aside>
+    <div class="auth-main" id="card"></div>
+  </section>
 </main>
 <div id="toast" class="glass" hidden></div>
 <script src="/assets/icons.js"></script>

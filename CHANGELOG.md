@@ -22,6 +22,13 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The sign-in screens were redrawn.** A single column of fields became a card
+  in two halves: the left one greets you by the hour, says the date and the
+  time; the right one carries the step at hand, introduced by a small badge.
+  They now also follow the colour preset chosen in the settings — until now
+  they were always the default blue, whatever the dashboard behind them looked
+  like, because nothing told them. Every colour comes from a theme token, so
+  nothing had to be restated to make a preset carry through.
 - The dashboard uses the width it is given instead of stopping at 1520px and
   sitting in the middle of the screen. The gutter matches the top bar's own
   inset, so the sidebar lines up under the brand rather than drifting away from
