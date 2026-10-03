@@ -1034,6 +1034,24 @@ function renderSuggestions() {
   });
 }
 
+/** Take over the numbers already registered on the 17TRACK account — the ones
+ *  added by hand on their site. Costs no quota: those numbers are declared
+ *  already, so this only reads. */
+async function importParcels(button) {
+  button.disabled = true;
+  try {
+    const result = await api('/api/integrations/parcels/import', { method: 'POST' });
+    state.parcels = result;
+    renderParcelsTile(state.config.tiles.find((item) => item.type === 'parcels'), result);
+    renderParcels();
+    toast(result.imported > 0 ? t('pc.imported', { n: result.imported }) : t('pc.importNothing'));
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function scanMailbox(button) {
   button.disabled = true;
   try {
@@ -1057,6 +1075,8 @@ function openParcelsModal() {
   if (!state.parcels?.ok || !id('parcels-modal')) return;
   const scan = id('pc-scan');
   if (scan) scan.hidden = !state.config.integrations.parcels?.mail?.enabled;
+  const importButton = id('pc-import');
+  if (importButton) importButton.hidden = !state.parcels?.hasKey;
   id('parcels-modal').classList.add('open');
   renderParcels();
 }
@@ -1467,6 +1487,7 @@ async function boot() {
   id('pc-form')?.addEventListener('submit', submitParcel);
   id('pc-refresh')?.addEventListener('click', (event) => refreshParcels(event.currentTarget));
   id('pc-scan')?.addEventListener('click', (event) => scanMailbox(event.currentTarget));
+  id('pc-import')?.addEventListener('click', (event) => importParcels(event.currentTarget));
   id('dialog-close').addEventListener('click', closeDialog);
   id('dialog-modal').addEventListener('click', (event) => { if (event.target === id('dialog-modal')) closeDialog(); });
   document.addEventListener('keydown', (event) => {

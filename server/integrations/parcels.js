@@ -7,6 +7,7 @@
 //   /gettrackinfo   -> the current status and event history of declared numbers
 //   /deletetrack    -> stop following a number
 //   /getquota       -> quota_total / quota_used / quota_remain
+//   /gettracklist   -> everything the account follows, however it was declared
 //
 // Quota discipline, which shapes the whole module: a unit is spent when a number
 // is *registered*, not when its status is read. So registration happens once, on
@@ -26,6 +27,7 @@ import { encrypt, decrypt } from '../crypto.js';
 const BASE_URL = 'https://api.17track.net/track/v2.4';
 const SECRET_KEY = 'parcels.17track_key';
 const MAX_PER_CALL = 40;      // documented limit of register and gettrackinfo
+const MAX_IMPORT_PAGES = 20;  // a stop, so a surprising answer cannot loop for ever
 const CACHE_KEY = 'parcels:list';
 /* A number registered moments ago has nothing to say yet: the provider answers
    "within seconds after the tracking number is registered (sometime it may go
@@ -140,7 +142,8 @@ const cleanEvent = (event) => ({
   at: timeOf(event),
   location: String(event?.location || '').trim(),
   description: String(event?.description_translation || event?.description || '').trim(),
-  status: event?.status || null,
+  // An event carries no `status`: what it has is a milestone and a sub-status.
+  status: event?.stage || event?.sub_status || null,
 });
 
 /** Turn one `accepted` entry of gettrackinfo into the shape the browser gets. */
@@ -148,7 +151,12 @@ function normalise(entry) {
   const info = entry?.track_info ?? {};
   const latest = info.latest_status ?? {};
   const metrics = info.time_metrics ?? {};
-  const providers = Array.isArray(info.providers) ? info.providers : [];
+  // track_info.tracking.providers, and not track_info.providers: the carriers
+  // sit one level deeper than they read in the documentation. Reading the wrong
+  // path is silent -- an empty list of events and a nameless carrier, with the
+  // status still arriving because it comes from latest_status -- which is
+  // exactly how this went unnoticed. Confirmed against a live answer.
+  const providers = Array.isArray(info.tracking?.providers) ? info.tracking.providers : [];
   const events = providers
     .flatMap((provider) => (Array.isArray(provider?.events) ? provider.events : []))
     .map(cleanEvent)
@@ -164,8 +172,8 @@ function normalise(entry) {
     state: stateOf(status),
     subStatus: latest.sub_status || null,
     carrier: {
-      id: Number(entry?.carrier) || null,
-      name: providers[0]?.carrier_name || '',
+      id: Number(entry?.carrier) || Number(providers[0]?.provider?.key) || null,
+      name: providers[0]?.provider?.name || '',
     },
     lastEvent,
     destination: info.shipping_info?.recipient_address?.city || '',
@@ -398,6 +406,70 @@ export async function getParcels({ refreshMinutes = 180, hideDeliveredAfterDays 
     error,
     fetchedAt: now(),
   };
+}
+
+/* --------------------------- import from 17TRACK -------------------------- */
+
+/**
+ * Take over the numbers already registered on the account — the ones added by
+ * hand on 17track.net, which come back with `data_origin: "Manual"`, as well as
+ * any this dashboard registered itself.
+ *
+ * This spends nothing. The quota is charged when a number is declared, and
+ * these already are: importing only ever reads, so /register is never called
+ * here. That is the whole point of the operation, and the reason it may be run
+ * as often as wanted.
+ */
+export async function importFromProvider({ refreshMinutes = 180 } = {}) {
+  const items = [];
+  let pageSize = null;
+  for (let page = 1; page <= MAX_IMPORT_PAGES; page += 1) {
+    const payload = await call('/gettracklist', { page_no: page });
+    const accepted = payload?.data?.accepted ?? [];
+    items.push(...accepted);
+    if (accepted.length === 0) break;
+    // The page size belongs to the provider: the first page sets it, and a
+    // shorter page after that is the last one.
+    if (pageSize === null) pageSize = accepted.length;
+    if (accepted.length < pageSize) break;
+  }
+
+  let imported = 0;
+  let known = 0;
+  for (const item of items) {
+    const number = String(item?.number || '').trim();
+    if (!number || !TRACKING_NUMBER.test(number)) continue;
+    if (findParcelByNumber(number)) {
+      known += 1;
+      continue;
+    }
+    const registeredAt = item.register_time ? new Date(item.register_time) : null;
+    insertParcelRow({
+      id: shortId(),
+      // Whatever the account was told about the parcel, in order of usefulness;
+      // the tile falls back to the number itself when there is nothing.
+      label: String(item.remark || item.order_no || item.tag || '').trim().slice(0, 80),
+      tracking_no: number,
+      carrier: Number(item.carrier) || null,
+      provider: '17track',
+      url: '',
+      status: '',
+      info: null,
+      registered: 1,
+      created_at: registeredAt && !Number.isNaN(registeredAt.getTime()) ? registeredAt.toISOString() : now(),
+      updated_at: now(),
+    });
+    imported += 1;
+  }
+
+  cacheDeletePrefix('parcels:');
+  if (imported > 0) {
+    // Free as well, and it is what turns the new rows into something to look at.
+    try {
+      await refresh({ force: true, refreshMinutes });
+    } catch { /* the statuses will come on the next read */ }
+  }
+  return { imported, known, seen: items.length };
 }
 
 /** What is left of the provider's allowance, for the settings panel. */

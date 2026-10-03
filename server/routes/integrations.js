@@ -135,6 +135,18 @@ integrationsRouter.post('/parcels/refresh', async (_req, res) => {
   }
 });
 
+/** Take over what the 17TRACK account already follows. Reads only, so it costs
+ *  no quota and can be run as often as wanted. */
+integrationsRouter.post('/parcels/import', async (_req, res) => {
+  const settings = getConfig().integrations.parcels;
+  try {
+    const result = await parcels.importFromProvider(settings);
+    res.json({ ok: true, ...result, ...(await parcels.getParcels(settings)) });
+  } catch (error) {
+    parcelError(res, error);
+  }
+});
+
 integrationsRouter.get('/parcels/status', async (_req, res) => {
   const payload = { ok: true, hasKey: parcels.isConfigured(), quota: null, error: null, mail: mailbox.status() };
   if (payload.hasKey) {

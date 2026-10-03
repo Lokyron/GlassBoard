@@ -7,6 +7,12 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Import from the 17TRACK account.** A button in the parcel window takes over
+  every number the account already follows, including those added by hand on
+  17track.net. It spends nothing: the quota is charged when a number is
+  declared, and these already are, so the import only ever reads and can be run
+  as often as wanted. Numbers already on the dashboard are left alone, and the
+  provider's own remark or order number becomes the parcel's name.
 - **Sign in by QR code.** The sign-in screen can show a code instead of asking
   for a password; a phone that already holds a session scans it with its own
   camera and approves. The waiting screen is handed a request id, which grants
@@ -40,6 +46,13 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **A parcel's history and its carrier name never arrived.** The carriers sit at
+  `track_info.tracking.providers`, one level deeper than they were being read
+  from. Nothing about this failed loudly: the status kept coming, because it is
+  read elsewhere in the answer, so what showed was a parcel with a state, no
+  carrier and no events at all. Confirmed against a live answer, which is the
+  only thing that settled it — a real parcel that reads as empty turns out to
+  carry fourteen events.
 - **A parcel added by hand stayed blank for hours.** The provider answers
   "within seconds after the tracking number is registered, sometime over five
   minutes", so the status read taken immediately after registering almost always
