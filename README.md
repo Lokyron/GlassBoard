@@ -10,8 +10,9 @@ behind a login with two-factor authentication.
 
 ![The Glassboard dashboard in dark mode](docs/images/dashboard-dark.png)
 
-<sub>Screenshots come from a real instance, with the names and places blurred
-out. There is no public demo: Glassboard is meant to run on your own machine.</sub>
+<sub>Screenshots come either from a real instance with the names and places
+blurred out, or from a demo instance holding nothing but invented data. There is
+no public demo: Glassboard is meant to run on your own machine.</sub>
 
 Glassboard keeps a strict line between **the software** (this repository) and
 **your data** (a directory you own). A fresh install starts empty, with a
@@ -22,7 +23,9 @@ export, version and restore anywhere.
 ┌─────────┐      ┌───────────────┐      ┌──────────────────────────────┐
 │ browser │ ───▶ │ Glassboard    │ ───▶ │ SQLite  (your data dir)      │
 └─────────┘      │ Node/Express  │ ───▶ │ Open-Meteo / OpenStreetMap   │
-                 └───────────────┘ ───▶ │ GeoRide API                  │
+                 │               │ ───▶ │ GeoRide API                  │
+                 │               │ ───▶ │ 17TRACK API                  │
+                 └───────────────┘ ───▶ │ your IMAP mailbox, read-only │
                                         └──────────────────────────────┘
 ```
 
@@ -37,6 +40,7 @@ reaches the browser, and no request goes out to a service you did not enable.
 - [First run](#first-run)
 - [Updating](#updating)
 - [Using Glassboard](#using-glassboard) — [editing](#editing-the-dashboard), [settings](#settings), [themes](#themes-and-wallpaper), [on a phone](#on-a-phone), [installing it as an app](#installing-it-as-an-app), [languages](#languages)
+- [Signing in](#signing-in) — [with your phone](#signing-in-with-your-phone), [open sessions](#open-sessions)
 - [Integrations](#integrations)
 - [Backup and restore](#backup-and-restore)
 - [Behind a reverse proxy](#behind-a-reverse-proxy)
@@ -55,7 +59,13 @@ reaches the browser, and no request goes out to a service you did not enable.
 - **Native authentication**: a two-step sign-in (password, then TOTP) with QR
   enrolment, single-use recovery codes, argon2id hashing, signed `HttpOnly`
   session cookies and a temporary lockout after repeated failures. Only the
-  login page is public.
+  sign-in screens are public, and they hold nothing.
+- **Sign in by scanning a code**: on a screen that holds none of your
+  credentials, show a QR code and approve it from a phone that is already
+  signed in. The approving device is told which browser is asking, from which
+  address and how long ago, and both screens show the same short code to
+  compare. Settings list every open session, how each was opened and when it
+  was last used, with a button to end any of them.
 - **Optional integrations**: weather (Open-Meteo), parcel tracking (17TRACK) and
   GeoRide motorcycle tracking. Each tile opens a detail view: seven days of
   forecast, the steps a parcel has been through, or the rides of the period on
@@ -314,6 +324,56 @@ Adding a language is one file: in `public/assets/i18n.js`, add an entry to
 `LOCALE_NAMES` and copy the `en` table. Missing keys fall back to English one by
 one, so a partial translation is perfectly usable and no key ever shows up raw.
 
+## Signing in
+
+The sign-in screen greets you by the hour, shows the date and the time, and
+follows the colour preset chosen in the settings.
+
+![The sign-in screen](docs/images/signin.jpg)
+
+Signing in takes two steps. A correct password opens no session: it issues a
+single-use challenge, valid five minutes, that grants nothing but the right to
+present a second factor for that one account.
+
+### Signing in with your phone
+
+Typing a long password and six digits on a borrowed keyboard is the worst part
+of a dashboard you only open now and then. **Sign in with my phone** shows a QR
+code instead.
+
+![Signing in with a QR code](docs/images/signin-qr.jpg)
+
+Scan it with the **camera app** — there is nothing to install and nothing to
+open: the code is a link, and your phone follows it. A device that already
+carries a session is then asked to approve, and it is told what it is approving
+before anything is granted.
+
+<p align="center">
+  <img src="docs/images/signin-approve.png" alt="Approving a sign-in from the phone" width="330">
+</p>
+
+The waiting screen is never told the secret. It is handed a request id, in a
+cookie of its own, which grants nothing but the right to wait; the power to
+approve travels only inside the QR image. So watching the network, or reading
+the access log of the proxy in front, buys nothing. Both screens show the same
+four-character code, to be compared before approving — if they differ, you are
+not looking at your own request. A request lasts two minutes and can be spent
+once.
+
+The second factor here is the session of the phone: only a device that signed in
+with a password and a code can approve. On an iPhone, the camera opens the link
+in Safari, which keeps its own cookies, separate from the installed app — so if
+you have only ever signed in inside the app, Safari will ask you to sign in
+once, and the page says so.
+
+### Open sessions
+
+A sign-in that can be granted with a camera is one worth being able to look at
+afterwards. **Settings → Account** lists every device holding a session, how it
+was opened, when it was last used, and ends any of them on one click.
+
+![The list of open sessions](docs/images/sessions.png)
+
 ## Integrations
 
 ### Weather, Open-Meteo
@@ -379,26 +439,62 @@ If you expect real traffic, point the proxy at your own tile server. See
 ### Parcels, 17TRACK
 
 The parcels tile lists what is on its way, coloured by state, and opens a view
-with every step each parcel has been through. Parcels are followed in two ways.
+with every step each parcel has been through.
 
-**With a tracking number**, the number goes to
-[17TRACK](https://api.17track.net/en/doc), which detects the carrier itself and
-covers the usual ones. Put your API key in **Settings → Parcels**; it is stored
-encrypted with `APP_SECRET` and never reaches the browser, like every other
-credential here.
+![The parcels tile on the dashboard](docs/images/parcels-tile.jpg)
 
-That provider charges a credit when a number is **registered**, not when its
-status is read, which decides how the integration behaves: a number is declared
-once, when you add the parcel and never on a timer, and reading statuses is one
-batched request for the whole list. The panel shows what is left of your
-allowance. The provider refreshes its own data every 6 to 12 hours, so asking
-more often than that gains nothing; the default is every three hours.
+![Parcels, with the steps of the selected one](docs/images/parcels.png)
+
+<sub>Invented parcels: the screenshots come from a demo instance. Those tracking
+numbers lead nowhere.</sub>
+
+#### Getting a 17TRACK key
+
+The provider is [17TRACK](https://api.17track.net/en/doc), which recognises the
+carrier on its own and covers the usual ones. Getting a key takes two minutes
+and no payment method:
+
+1. Create an **API account** at <https://api.17track.net> — this is the
+   developer side of the service, separate from the 17track.net site and its
+   mobile app, even though both read the same account.
+2. Sign in, open **Settings** in that dashboard, and copy the security key.
+3. Paste it into **Settings → Parcels** in Glassboard. It is stored encrypted
+   with `APP_SECRET`, never leaves the server and is never shown again.
+
+New accounts get a **one-time allowance of 200 tracking numbers**, which is
+plenty for a household: a number is charged once, when it is first declared,
+and then followed for free until it is delivered. The panel shows what is left.
+
+A detail worth knowing, because it surprises: numbers you add **by hand on
+17track.net** draw on that same allowance. It is one pool, not two.
+
+That the credit is charged on **registration** and not on reading decides how
+the whole integration behaves: a number is declared once, and reading statuses
+is one batched request for the whole list, as often as you like. The provider
+refreshes its own data every 6 to 12 hours, so asking more often gains nothing;
+the default is every three hours. A parcel added moments ago is re-read sooner,
+because the provider needs a short while before it has anything to say about a
+number it has only just been given.
+
+#### Three ways to follow a parcel
+
+**With a tracking number.** Type it in and the number is declared to the
+provider, which works the carrier out by itself. The status comes in on its own
+from then on, and the detail view fills with the steps the parcel has been
+through.
 
 **By hand**, with a name and a link to the order, for anything no third party
 can query. That is the case for an Amazon Logistics parcel, whose number starts
 with `TBA`: it never enters a carrier's network, so it exists in no system
 reachable from outside Amazon. Such a parcel shows up in the list with its link
 and no automatic status, which is more honest than an empty timeline.
+
+**By importing what the account already follows.** If you are used to typing
+your numbers on 17track.net, **Import from 17TRACK** adopts the lot, carriers
+and histories included, and leaves alone the ones already on the dashboard.
+It costs nothing: those numbers are declared already, so the import only ever
+reads, and you can press it as often as you like. Whatever remark or order
+number you gave them over there becomes the parcel's name here.
 
 A parcel that has been delivered leaves the list on its own after a few days,
 which is what keeps the tile readable without any housekeeping.
@@ -532,8 +628,15 @@ from a `.env` file next to the server. See [.env.example](.env.example).
   single-use challenge, valid five minutes, that grants nothing but the right to
   present a second factor for that one account. Both steps share the same
   lockout counter, so the code step cannot be brute-forced either.
-- Every page and every API route requires a session, except the login and
-  first-run setup screens.
+- Every page and every API route requires a session, except the login screen,
+  the first-run setup screen and the approval page — which is served to anyone
+  but shows nothing at all until the device looking at it is itself signed in.
+- A sign-in approved from a phone never puts the deciding secret on the wire:
+  the waiting browser holds a request id, in an `HttpOnly` cookie rather than in
+  the URL it polls, so the id reaches no access log; the secret that approves
+  exists only inside the QR image. A request lasts two minutes, is spent once,
+  and can only be approved by a device that itself signed in with a password and
+  a code. Every session is listed in the settings and can be ended from there.
 - Shortcut URLs are restricted to `http:` and `https:`, in the browser and on
   the server, so an imported file cannot inject a `javascript:` link.
 - Losing `APP_SECRET` means losing the sessions and the stored credentials. The
@@ -591,6 +694,7 @@ an issue.
 - [OpenStreetMap](https://www.openstreetmap.org/copyright), map tiles and
   reverse geocoding
 - [GeoRide](https://georide.fr), tracker API
+- [17TRACK](https://www.17track.net), parcel tracking API
 
 ## License
 

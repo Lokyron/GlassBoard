@@ -3,7 +3,9 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## Unreleased — on the beta channel
+## 1.8.0 — 2026-10-03
+
+Sign in by scanning a code, and parcels that actually report.
 
 ### Added
 
