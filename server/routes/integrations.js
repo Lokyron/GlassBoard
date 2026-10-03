@@ -108,8 +108,9 @@ integrationsRouter.get('/parcels', async (_req, res) => {
 });
 
 integrationsRouter.post('/parcels', async (req, res) => {
+  const settings = getConfig().integrations.parcels;
   try {
-    res.json({ ok: true, parcel: await parcels.addParcel(req.body ?? {}) });
+    res.json({ ok: true, parcel: await parcels.addParcel(req.body ?? {}, settings) });
   } catch (error) {
     parcelError(res, error);
   }
@@ -173,7 +174,7 @@ integrationsRouter.post('/parcels/suggestions/:id/accept', async (req, res) => {
       label: suggestion.label,
       trackingNumber: suggestion.tracking_no,
       carrier: null,
-    });
+    }, getConfig().integrations.parcels);
     // Only now: a suggestion whose parcel was refused must stay on offer.
     mailbox.markAccepted(suggestion.id);
     res.json({ ok: true, parcel });

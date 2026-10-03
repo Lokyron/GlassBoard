@@ -27,6 +27,14 @@ const BASE_URL = 'https://api.17track.net/track/v2.4';
 const SECRET_KEY = 'parcels.17track_key';
 const MAX_PER_CALL = 40;      // documented limit of register and gettrackinfo
 const CACHE_KEY = 'parcels:list';
+/* A number registered moments ago has nothing to say yet: the provider answers
+   "within seconds after the tracking number is registered (sometime it may go
+   over 5 minutes)". Caching that silence for the whole refresh window is what
+   left a freshly added parcel empty for hours, so as long as one recent parcel
+   is still waiting for its first answer the list is re-read in a minute. Past
+   the window, silence is the answer and the normal rhythm resumes. */
+const SETTLING_TTL_SECONDS = 60;
+const SETTLING_WINDOW_MS = 30 * 60_000;
 
 /* ------------------------------ credentials ------------------------------ */
 
@@ -214,7 +222,10 @@ function present(row) {
 // parcel is followed by hand even though it does carry a number.
 const AMAZON_OWN_NETWORK = /^TBA\d/i;
 
-export async function addParcel({ label = '', trackingNumber = '', carrier = null, url = '' } = {}) {
+export async function addParcel(
+  { label = '', trackingNumber = '', carrier = null, url = '' } = {},
+  { refreshMinutes = 180 } = {}
+) {
   const number = String(trackingNumber || '').trim();
   const provider = number && !AMAZON_OWN_NETWORK.test(number) ? '17track' : 'manual';
 
@@ -269,7 +280,14 @@ export async function addParcel({ label = '', trackingNumber = '', carrier = nul
 
   insertParcelRow(row);
   cacheDeletePrefix('parcels:');
-  if (row.registered) await refresh({ force: true });
+  // The parcel exists from here on, and the credit is spent either way. A first
+  // read that fails or finds nothing must not make the whole call look like a
+  // failure: the next one is a minute away.
+  if (row.registered) {
+    try {
+      await refresh({ force: true, refreshMinutes });
+    } catch { /* still settling upstream, or the API blinked */ }
+  }
   return present(getParcelRow(row.id));
 }
 
@@ -323,8 +341,19 @@ export async function refresh({ force = false, refreshMinutes = 180 } = {}) {
     }
   }
   // The cache entry is a timestamp, not the payload: the rows are the truth.
-  cacheSet(CACHE_KEY, { at: now() }, Math.max(300, refreshMinutes * 60));
-  return { checked };
+  const ttl = stillSettling() ? SETTLING_TTL_SECONDS : Math.max(300, refreshMinutes * 60);
+  cacheSet(CACHE_KEY, { at: now() }, ttl);
+  return { checked, settling: ttl === SETTLING_TTL_SECONDS };
+}
+
+/** True while a parcel added recently has yet to hear anything back. */
+function stillSettling() {
+  const limit = Date.now() - SETTLING_WINDOW_MS;
+  return listParcelRows().some((row) => {
+    if (!row.registered || !row.tracking_no) return false;
+    const known = row.status && row.status !== 'NotFound';
+    return !known && new Date(row.created_at).getTime() >= limit;
+  });
 }
 
 /**

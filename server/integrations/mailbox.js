@@ -55,6 +55,10 @@ const CARRIER_HOSTS = [
 ];
 
 // Query parameters those links use for the number itself.
+// Parameter names carriers put a tracking number in. Several are generic to the
+// point of meaninglessness -- `code` is La Poste's, and also what a marketing
+// link calls its campaign token -- so the name alone decides nothing. The shape
+// of the value is what separates a parcel from a token.
 const NUMBER_PARAMS = [
   'numero', 'number', 'tracking', 'trackingnumber', 'tracknumbers', 'trackingid',
   'code', 'colis', 'expeditionnumber', 'nums', 'idab', 'shipmentid', 'trackid',
@@ -72,7 +76,16 @@ const NUMBER_PATTERNS = [
   [/\b[0-9]{2}[A-Z]{2}[0-9]{9,11}\b/g, null],
 ];
 
-const looksLikeNumber = (value) => /^[A-Za-z0-9-]{5,50}$/.test(value);
+/**
+ * A value only counts as a tracking number when it carries enough digits to be
+ * one. Without this, the query-string branch below accepted any token sitting
+ * on a carrier's domain: a link to amazon.fr with `code=A1BCD2EFG` was being
+ * proposed as a parcel. The path branch already demanded digits; both ends of
+ * the function now use the same rule. Eight characters and six digits keeps the
+ * shortest real formats — Mondial Relay's eight digits — and drops the rest.
+ */
+const looksLikeNumber = (value) =>
+  /^[A-Za-z0-9-]{8,40}$/.test(value) && (value.match(/\d/g) ?? []).length >= 6;
 
 /** Every candidate a single message holds, strongest signal first. */
 export function extractCandidates(text) {
@@ -97,7 +110,7 @@ export function extractCandidates(text) {
     }
     // Several carriers put the number in the path instead.
     const tail = url.pathname.split('/').filter(Boolean).pop();
-    if (tail && looksLikeNumber(tail) && /\d{6,}/.test(tail)) found.set(tail.toUpperCase(), carrier[1]);
+    if (tail && looksLikeNumber(tail)) found.set(tail.toUpperCase(), carrier[1]);
   }
 
   for (const [pattern, carrier] of NUMBER_PATTERNS) {

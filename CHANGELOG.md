@@ -40,6 +40,22 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **A parcel added by hand stayed blank for hours.** The provider answers
+  "within seconds after the tracking number is registered, sometime over five
+  minutes", so the status read taken immediately after registering almost always
+  found nothing — and that silence was then cached for the full refresh window.
+  While a parcel added in the last half hour is still waiting for its first
+  answer, the list is re-read a minute later instead of three hours later; past
+  that window, silence is the answer and the normal rhythm resumes. A first read
+  that fails no longer makes the whole call look like a failure either: the
+  parcel exists, and the credit is spent, whatever the provider says next.
+- Adding a parcel ignored the configured refresh interval and used the default.
+- **The mailbox proposed tracking numbers that were not tracking numbers.** Any
+  token sitting in the query string of a link to a carrier's domain was taken
+  for a parcel, so a marketing link to amazon.fr carrying `code=A1BCD2EFG` was
+  offered as a shipment. A value now has to carry at least six digits in eight
+  characters to count, the rule the path branch already applied — which keeps
+  the shortest real formats, Mondial Relay's eight digits among them.
 - Below 1180px the tiles kept their desktop column widths and were crushed
   together: the breakpoint was written without `!important` and lost to the
   inline widths the resize handles write. The resize grip is now hidden wherever
