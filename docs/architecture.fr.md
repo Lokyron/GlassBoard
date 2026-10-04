@@ -147,6 +147,16 @@ Pas de tests, linter ni CI configurés.
 ## 8. Dette technique, TODOs & points d'attention
 
 - **Aucun marqueur `TODO`/`FIXME`** dans le code.
+- **Animation des modales** (`openModal` / `closeModal` dans `app.js`, styles `.sheet.fly-*` dans
+  `app-extra.css`) : la géométrie est mesurée en JS et transmise en variables CSS (`--ox`, `--oy`, `--os`) ;
+  le timing et l'allure restent dans la feuille de style. **Toutes** les ouvertures et fermetures passent
+  par ces deux fonctions — un `classList.remove('open')` direct couperait l'animation de sortie.
+  `closeModal` renvoie une promesse : la carte GeoRide doit attendre sa résolution avant `destroyTripMap`,
+  sinon le panneau se vide pendant qu'il est encore à l'écran. Garde-fou : un `setTimeout` double
+  l'`animationend`, qui ne se déclenche jamais dans un onglet masqué. Sur téléphone, `mobile.css`
+  réaffecte `.sheet.fly-in` à `sheetUp` : une feuille du bas monte, elle ne jaillit pas d'une carte — et
+  il faut bien cibler `.sheet.fly-in`, car `.sheet` seul perd en spécificité quel que soit l'ordre des
+  fichiers.
 - **Fenêtre « Nouveautés »** : le contenu vient de `CHANGELOG.md`, analysé au vol (`release-notes.js`),
   **jamais d'un second fichier** — deux listes des mêmes changements divergent, et c'est toujours celle que
   personne ne lit qui se périme. L'accusé de lecture est **par compte et côté serveur** (`meta`,

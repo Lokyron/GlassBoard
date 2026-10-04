@@ -531,3 +531,60 @@ a.btn{text-decoration:none}
 .news-lead{display:block;font-weight:700;color:var(--text)}
 .news-lead + span{color:var(--muted)}
 .news-items li::marker{color:var(--muted)}
+
+/* ------------------------------ modal motion ------------------------------ */
+/* A panel grows out of the card that opened it and shrinks back into it. The
+   translation and the scale are measured in JavaScript and arrive as --ox,
+   --oy and --os; everything about how it looks stays here. */
+
+/* The backdrop and its blur come up on their own, slightly ahead of the sheet,
+   so the page recedes before the panel lands on it. */
+.modal{opacity:0;transition:opacity .22s var(--ease)}
+.modal.open{opacity:1}
+.modal.closing{opacity:0;transition-duration:.2s}
+
+/* These win over the `pop` animation in base.css by being later in the
+   cascade, which is the whole reason this file is loaded after it. */
+.sheet.fly-in{
+  animation:sheet-in .42s cubic-bezier(.2,.8,.26,1) both;
+  transform-origin:center;
+}
+.sheet.fly-out{
+  animation:sheet-out .22s cubic-bezier(.4,0,.75,.3) both;
+  transform-origin:center;
+}
+@keyframes sheet-in{
+  from{opacity:0;transform:translate(var(--ox,0),var(--oy,0)) scale(var(--os,.5))}
+  60%{opacity:1}
+  to{opacity:1;transform:none}
+}
+@keyframes sheet-out{
+  from{opacity:1;transform:none}
+  to{opacity:0;transform:translate(var(--ox,0),var(--oy,0)) scale(var(--os,.6))}
+}
+
+/* The links inside a folder arrive one after another, left to right, the way
+   they do when a folder opens on a phone. Capped at the tenth: past that the
+   wait is longer than the gesture that caused it. */
+#folder-links-grid .app.in{animation:card-in .34s var(--ease) both;
+  animation-delay:calc(min(var(--i,0),10) * 26ms)}
+@keyframes card-in{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+
+/* Press feedback. A card that answers the finger before the panel arrives is
+   most of what makes an interface feel attached to you. */
+.app,.wx,.card.georide,.card.parcels{transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
+.app:active,.wx:active,.card.georide:active,.card.parcels:active{transform:scale(.975);transition-duration:.1s}
+.day-btn:active,.gr-period .day-btn:active{transform:scale(.94);transition-duration:.08s}
+.iconbtn:active,.btn:active{transform:scale(.95);transition-duration:.08s}
+.menu-item:active{transform:scale(.985);transition-duration:.08s}
+
+/* A folder lifts its icon as it opens, so the card acknowledges the click
+   before the panel has drawn anything. */
+.app[data-folder]:active .appic{transform:scale(1.1) rotate(-6deg)}
+
+@media(prefers-reduced-motion:reduce){
+  .modal,.modal.closing{transition:none}
+  .sheet.fly-in,.sheet.fly-out,#folder-links-grid .app.in{animation:none!important}
+  .app:active,.wx:active,.card.georide:active,.card.parcels:active,
+  .day-btn:active,.iconbtn:active,.btn:active,.menu-item:active{transform:none}
+}

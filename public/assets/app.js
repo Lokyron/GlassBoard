@@ -204,12 +204,13 @@ function renderLinks() {
     .join('');
   grid.querySelectorAll('[data-folder]').forEach((el) => {
     // In edit mode too: that is where its links are added and rearranged.
-    el.addEventListener('click', () => openFolder(Number(el.dataset.link)));
+    // The card itself goes along, so the folder opens out of it.
+    el.addEventListener('click', () => openFolder(Number(el.dataset.link), el));
   });
   if (state.editing) decorateLinksForEditing();
 }
 
-function openFolder(index) {
+function openFolder(index, origin = null) {
   const folder = state.config.links[index];
   if (!folder?.items) return;
   safe(id('folder-modal-title'), folder.title);
@@ -219,15 +220,118 @@ function openFolder(index) {
   id('folder-links-grid').innerHTML = folder.items
     .map(
       (item, i) =>
-        `<a class="app" data-item="${i}" href="${esc(item.url)}" target="_blank" rel="noopener">` +
+        `<a class="app in" data-item="${i}" style="--i:${i}" href="${esc(item.url)}" target="_blank" rel="noopener">` +
         `<div class="appic" style="background:${esc(item.color)};box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 18px ${esc(item.color)}44">${svg(item.icon)}</div>` +
         `<div><div class="app-tt">${esc(item.title)}</div><div class="app-sub">${esc(t('apps.direct'))}</div></div></a>`
     )
     .join('');
   if (state.editing) decorateFolderForEditing(index);
-  id('folder-modal').classList.add('open');
+  openModal('folder-modal', origin ?? document.querySelector(`[data-folder][data-link="${index}"]`));
 }
-const closeFolder = () => id('folder-modal').classList.remove('open');
+const closeFolder = () => closeModal('folder-modal');
+
+
+/* ------------------------------ modal motion ------------------------------ */
+/* A panel grows out of the card that opened it and shrinks back into it. The
+   dashboard already borrows the home-screen metaphor for dragging; this is the
+   same idea applied to opening, and it is what tells you at a glance which card
+   you are looking at.
+   The geometry is measured here and handed to CSS as custom properties, so the
+   timing, the easing and the look stay in the stylesheet with everything else.
+   Anything that cannot be measured — a card that has been re-rendered away, a
+   reader who asked for less motion — falls back to the plain fade the panels
+   have always had. */
+
+const MODAL_CLOSE_MS = 220;
+/** What opened each panel, so closing can send it back there. */
+const modalOrigins = new WeakMap();
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** The tile of a given type, for the paths that open a panel without a click —
+ *  the side navigation, mostly. */
+const tileOfType = (type) => document.querySelector(`[data-type="${type}"]`);
+
+/** Place a sheet over an element, as a translation and a scale from its centre. */
+function sheetFrom(sheet, origin) {
+  const from = origin.getBoundingClientRect();
+  const to = sheet.getBoundingClientRect();
+  if (!from.width || !to.width) return false;
+  // One scale and not two: a sheet squashed to a card's proportions distorts
+  // its own contents, and at this speed nobody sees the difference anyway.
+  const scale = Math.min(0.9, Math.max(0.15, from.width / to.width));
+  sheet.style.setProperty('--ox', `${(from.left + from.width / 2) - (to.left + to.width / 2)}px`);
+  sheet.style.setProperty('--oy', `${(from.top + from.height / 2) - (to.top + to.height / 2)}px`);
+  sheet.style.setProperty('--os', String(scale));
+  return true;
+}
+
+const clearSheet = (sheet) => {
+  sheet.classList.remove('fly-in', 'fly-out');
+  sheet.style.removeProperty('--ox');
+  sheet.style.removeProperty('--oy');
+  sheet.style.removeProperty('--os');
+};
+
+/**
+ * Open a panel.
+ * @param {string} modalId
+ * @param {Element|null} origin the card it should appear to come from
+ */
+function openModal(modalId, origin = null) {
+  const modal = id(modalId);
+  if (!modal) return;
+  const sheet = modal.querySelector('.sheet');
+  modal.classList.remove('closing');
+  modal.classList.add('open');
+  if (!sheet) return;
+  clearSheet(sheet);
+  if (origin?.isConnected && !reducedMotion() && sheetFrom(sheet, origin)) {
+    modalOrigins.set(modal, origin);
+    sheet.classList.add('fly-in');
+  } else {
+    modalOrigins.delete(modal);
+  }
+}
+
+/**
+ * Close a panel, back into whatever opened it when that is still on screen.
+ * Resolves once the panel is really gone, so a caller can tear down after it.
+ */
+function closeModal(modalId) {
+  const modal = typeof modalId === 'string' ? id(modalId) : modalId;
+  if (!modal?.classList.contains('open')) return Promise.resolve();
+  const sheet = modal.querySelector('.sheet');
+  const origin = modalOrigins.get(modal);
+  modalOrigins.delete(modal);
+
+  const finish = () => {
+    modal.classList.remove('open', 'closing');
+    if (sheet) clearSheet(sheet);
+  };
+
+  if (!sheet || reducedMotion()) {
+    finish();
+    return Promise.resolve();
+  }
+  sheet.classList.remove('fly-in');
+  if (origin?.isConnected) sheetFrom(sheet, origin);
+  sheet.classList.add('fly-out');
+  modal.classList.add('closing');
+  return new Promise((resolve) => {
+    // A timer and not animationend alone: an animation in a hidden tab never
+    // fires, and a panel that cannot close is worse than one that closes
+    // without its animation.
+    const done = () => { finish(); resolve(); };
+    const timer = setTimeout(done, MODAL_CLOSE_MS + 60);
+    sheet.addEventListener('animationend', () => { clearTimeout(timer); done(); }, { once: true });
+  });
+}
+
+/** Every open panel at once — what Escape and a sign-out do. */
+const closeAllModals = () => Promise.all(
+  [...document.querySelectorAll('.modal.open')].map((modal) => closeModal(modal))
+);
 
 /* --------------------------------- tiles --------------------------------- */
 
@@ -289,21 +393,21 @@ function renderTiles() {
   grid.querySelectorAll('[data-type^="weather"]').forEach((article) => {
     article.addEventListener('click', () => {
       if (state.editing) return;
-      openWeatherModal(article.dataset.tile);
+      openWeatherModal(article.dataset.tile, article);
     });
   });
 
   grid.querySelectorAll('[data-type="georide"]').forEach((article) => {
     article.addEventListener('click', (event) => {
       if (state.editing || event.target.closest('.gr-map')) return; // the small map pans on its own
-      openGeorideModal();
+      openGeorideModal(article);
     });
   });
 
   grid.querySelectorAll('[data-type="parcels"]').forEach((article) => {
     article.addEventListener('click', () => {
       if (state.editing) return;
-      openParcelsModal();
+      openParcelsModal(article);
     });
   });
 
@@ -495,7 +599,7 @@ function updateWeatherModal() {
   renderDayCurve();
 }
 
-function openWeatherModal(tileId) {
+function openWeatherModal(tileId, origin = null) {
   if (!state.forecasts[tileId]) return;
   const tile = state.config.tiles.find((item) => item.id === tileId);
   state.modalTile = tileId;
@@ -506,7 +610,7 @@ function openWeatherModal(tileId) {
       ? state.places[tileId] || t('tile.localPosition')
       : tile.settings.name || t('tile.followedCity')
   );
-  id('weather-modal').classList.add('open');
+  openModal('weather-modal', origin ?? tileElement(tileId));
   renderDays();
   updateWeatherModal();
 }
@@ -1107,16 +1211,17 @@ function destroyTripMap() {
 }
 
 function closeGeorideModal() {
-  id('georide-modal').classList.remove('open');
-  destroyTripMap();
+  // The map goes only once the panel has finished leaving: tearing Leaflet
+  // down mid-animation empties the panel while it is still on screen.
+  closeModal('georide-modal').then(destroyTripMap);
 }
 
-async function openGeorideModal() {
+async function openGeorideModal(origin = null) {
   if (!state.georide?.ok) return;
   safe(id('gr-modal-title'), state.config.integrations.georide.trackerName || state.georide.tracker.name);
   state.tripPeriod = state.tripPeriod ?? state.config.integrations.georide.periodDays ?? 7;
   state.selectedTrip = 'all';
-  id('georide-modal').classList.add('open');
+  openModal('georide-modal', origin ?? tileOfType('georide'));
   renderTripPeriods();
   if (state.trips) renderTrips();   // prefetched while the dashboard loaded
   else await loadTrips();
@@ -1505,15 +1610,15 @@ async function scanMailbox(button) {
 
 /* ----------------------- parcel detail view (history) --------------------- */
 
-const closeParcelsModal = () => id('parcels-modal')?.classList.remove('open');
+const closeParcelsModal = () => closeModal('parcels-modal');
 
-function openParcelsModal() {
+function openParcelsModal(origin = null) {
   if (!state.parcels?.ok || !id('parcels-modal')) return;
   const scan = id('pc-scan');
   if (scan) scan.hidden = !state.config.integrations.parcels?.mail?.enabled;
   const importButton = id('pc-import');
   if (importButton) importButton.hidden = !state.parcels?.hasKey;
-  id('parcels-modal').classList.add('open');
+  openModal('parcels-modal', origin ?? tileOfType('parcels'));
   renderParcels();
 }
 
@@ -1854,9 +1959,9 @@ function openDialog({ title, subtitle = '', body }) {
   container.innerHTML = '';
   container.appendChild(body);
   hydrateIcons(container);
-  id('dialog-modal').classList.add('open');
+  openModal('dialog-modal');
 }
-const closeDialog = () => id('dialog-modal').classList.remove('open');
+const closeDialog = () => closeModal('dialog-modal');
 
 
 /* ------------------------------- what's new ------------------------------- */
@@ -1993,7 +2098,7 @@ async function boot() {
   id('folder-modal-close').addEventListener('click', closeFolder);
   id('folder-modal').addEventListener('click', (event) => { if (event.target === id('folder-modal')) closeFolder(); });
   id('weather-modal').addEventListener('click', (event) => {
-    if (event.target === id('weather-modal')) id('weather-modal').classList.remove('open');
+    if (event.target === id('weather-modal')) closeModal('weather-modal');
   });
   id('georide-modal').addEventListener('click', (event) => {
     if (event.target === id('georide-modal')) closeGeorideModal();
@@ -2011,7 +2116,7 @@ async function boot() {
   id('dialog-modal').addEventListener('click', (event) => { if (event.target === id('dialog-modal')) closeDialog(); });
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
-    document.querySelectorAll('.modal.open').forEach((modal) => modal.classList.remove('open'));
+    closeAllModals();
     destroyTripMap();
     toggleAccountMenu(false);
   });

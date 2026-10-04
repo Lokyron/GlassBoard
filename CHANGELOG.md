@@ -32,6 +32,14 @@ Notable changes, newest first. The format follows
   is encrypted with `APP_SECRET`. A test button checks the settings on screen
   rather than the saved ones, and can send a message to an address of your
   choice.
+- **Panels open out of what opened them.** A folder, a weather card, the rides
+  and the parcels grow from the card you clicked and shrink back into it when
+  you close them, instead of appearing in the middle and vanishing. The links
+  inside a folder arrive one after another, left to right. Cards, buttons and
+  menu entries answer a press before the panel has drawn anything. On a phone
+  the bottom sheets keep rising from the bottom, which is their own idiom, and
+  they now go back down rather than disappearing. All of it is off under
+  `prefers-reduced-motion`, in the stylesheet and in the script both.
 - **What changed, after an update.** The first time an account opens the
   dashboard on a build it has not seen, a dialog says what came with it, read
   straight out of this changelog so there is never a second list to keep in

@@ -184,6 +184,15 @@
     animation: sheetUp .38s var(--ease) both;
   }
   @keyframes sheetUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes sheetDown { from { transform: none; opacity: 1; } to { transform: translateY(26px); opacity: 0; } }
+
+  /* A bottom sheet rises from the bottom and goes back down: it does not fly
+     out of a card the way the centred desktop panels do. Overriding the
+     origin-aware animation here rather than skipping it in JavaScript keeps
+     the decision with the layout that owns it — and the class is needed, since
+     .sheet.fly-in outranks a bare .sheet whatever the file order. */
+  .sheet.fly-in { animation: sheetUp .38s var(--ease) both; }
+  .sheet.fly-out { animation: sheetDown .2s var(--ease) both; }
   .m-head, .m-body { padding: 18px 16px; }
   /* A grab handle says "sheet": tap outside or press Escape to dismiss. */
   .m-head { padding-top: 24px; }
