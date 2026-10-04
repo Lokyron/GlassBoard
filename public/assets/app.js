@@ -37,6 +37,7 @@ const state = {
   marker: null,
   modalTile: null,
   selectedDay: 0,
+  me: null,           // the signed-in account: its name, and whether it administers
   curve: null,        // the selected day, folded for the curve and its cursor
   curveNodes: null,   // the cursor's svg nodes, built once per render and moved
   curveIndex: null,   // the hour being read, or null when nothing is
@@ -1948,6 +1949,11 @@ async function boot() {
       if (state.map) state.map.invalidateSize();
     }, 150);
   });
+
+  // Who is signed in, which decides whether the administration tabs exist at
+  // all. A failure here is not fatal: the dashboard is still usable, it simply
+  // offers no administration — and the API would refuse it anyway.
+  state.me = await api('/api/auth/me').catch(() => null);
 
   const payload = await api('/api/config');
   state.config = payload.config;

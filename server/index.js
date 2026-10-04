@@ -9,8 +9,8 @@ import { authRouter } from './routes/auth.js';
 import { configRouter } from './routes/config.js';
 import { integrationsRouter } from './routes/integrations.js';
 import { updateRouter } from './routes/update.js';
+import { adminRouter } from './routes/admin.js';
 import { appearanceRouter } from './routes/appearance.js';
-import { getConfig } from './store.js';
 import { scheduleMaintenance } from './maintenance.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -102,6 +102,14 @@ app.get('/approve', (req, res) => {
   sendPage(res, 'approve.html');
 });
 
+/* Served to anyone: the person holding an invitation has no session yet, by
+   definition. The page shows nothing until the token in its fragment resolves,
+   and the token never reaches this server in the URL. */
+app.get('/invite', (req, res) => {
+  if (needsSetup()) return res.redirect('/setup');
+  sendPage(res, 'invite.html');
+});
+
 app.get('/setup', (req, res) => {
   if (!needsSetup() && req.user?.totp_enabled) return res.redirect('/');
   if (!needsSetup() && !req.user) return res.redirect('/login');
@@ -118,6 +126,7 @@ app.use('/api/config', configRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/appearance', appearanceRouter);
 app.use('/api/update', updateRouter);
+app.use('/api/admin', adminRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, setupRequired: needsSetup() }));
 
@@ -149,8 +158,9 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: 'internal_error' });
 });
 
-// Seed the default configuration on a fresh instance before accepting traffic.
-getConfig();
+/* No configuration is seeded here any more. There is one per account now, and
+   the server cannot seed an account that does not exist yet: getConfig does it
+   the first time an account asks for its dashboard. */
 scheduleMaintenance();
 
 app.listen(PORT, HOST, () => {

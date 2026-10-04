@@ -10,7 +10,9 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { db } from './db.js';
 import { DATA_DIR } from './env.js';
-import { purgeExpiredSessions, purgeExpiredChallenges, purgeExpiredLoginRequests } from './auth.js';
+import {
+  purgeExpiredSessions, purgeExpiredChallenges, purgeExpiredLoginRequests, purgeExpiredInvitations,
+} from './auth.js';
 import { getConfig } from './store.js';
 import { getMeta } from './db.js';
 import * as mailbox from './integrations/mailbox.js';
@@ -70,6 +72,7 @@ export async function runMaintenance({ quiet = true } = {}) {
   purgeExpiredSessions();
   purgeExpiredChallenges();
   purgeExpiredLoginRequests();
+  purgeExpiredInvitations();
   const tiles = await pruneTiles().catch(() => 0);
 
   // Fold the write-ahead log back into the database and refresh the planner's
@@ -81,7 +84,7 @@ export async function runMaintenance({ quiet = true } = {}) {
     // A checkpoint can be refused while a read is in flight; next hour will do.
   }
 
-  const mail = await scanMailbox();
+  const mail = await scanMailboxes();
 
   if (!quiet) console.log(`[glassboard] maintenance: ${cacheRows} cache rows, ${tiles} tiles removed`);
   return { cacheRows, tiles, mail };
@@ -91,26 +94,35 @@ export async function runMaintenance({ quiet = true } = {}) {
  * Look through the mailbox for parcels, at most every `scanHours`.
  * Runs on the housekeeping timer rather than one of its own: the mailbox does
  * not need its own clock, and a failure here must never stop the rest.
+ *
+ * One account at a time, and sequentially: several mailboxes opened at once
+ * would be several IMAP connections from one address, which is exactly what
+ * a provider reads as abuse. One account's failure stops nothing for the
+ * others — the whole point of scanning them in a loop that catches.
  */
-async function scanMailbox() {
-  let settings;
-  try {
-    settings = getConfig().integrations.parcels;
-  } catch {
-    return null;
-  }
-  if (!settings?.enabled || !settings.mail?.enabled || !mailbox.isConfigured()) return null;
+async function scanMailboxes() {
+  const accounts = db.prepare('SELECT id FROM users ORDER BY id').all();
+  const results = [];
+  for (const account of accounts) {
+    let settings;
+    try {
+      settings = getConfig(account.id).integrations.parcels;
+    } catch {
+      continue;
+    }
+    if (!settings?.enabled || !settings.mail?.enabled || !mailbox.isConfigured(account.id)) continue;
 
-  const last = getMeta('mail.last_scan');
-  const due = !last || Date.now() - new Date(last).getTime() >= Math.max(1, settings.mail.scanHours) * 3_600_000;
-  if (!due) return null;
+    const last = getMeta(`mail.${account.id}.last_scan`);
+    const due = !last || Date.now() - new Date(last).getTime() >= Math.max(1, settings.mail.scanHours) * 3_600_000;
+    if (!due) continue;
 
-  try {
-    return await mailbox.scan(settings.mail);
-  } catch (error) {
-    console.warn(`[glassboard] mailbox scan failed: ${error.message}`);
-    return null;
+    try {
+      results.push({ userId: account.id, ...(await mailbox.scan(account.id, settings.mail)) });
+    } catch (error) {
+      console.warn(`[glassboard] mailbox scan failed for user ${account.id}: ${error.message}`);
+    }
   }
+  return results.length > 0 ? results : null;
 }
 
 export function scheduleMaintenance() {

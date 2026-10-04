@@ -7,6 +7,31 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Several accounts on one instance.** The first account ever created is the
+  instance's administrator; the role can be handed to anyone else afterwards,
+  and taken back, as long as one administrator is always left standing.
+  **Settings → Accounts** lists every account with how it was last used, and
+  creates, promotes, signs out and deletes them.
+- **Each account has its own everything.** Its own dashboard, shortcuts, tiles,
+  wallpaper, revision history, parcels and mailbox suggestions, and its own
+  GeoRide session, 17TRACK key and IMAP password. Two people on one instance
+  follow two GeoRide accounts and two 17TRACK allowances, and neither can read
+  the other's, by accident or otherwise. The only thing still shared is the
+  cache of third-party answers, which is keyed by coordinates and holds nothing
+  personal.
+- **Two ways in for a new account.** An administrator either creates one
+  outright, choosing a first password and passing it on; or sends a single-use
+  invitation link, good for 48 hours, where the person chooses their own
+  password so none ever passes through the administrator. Either way the second
+  factor is enrolled by the person themselves, on first sign-in. The link is
+  always shown to the administrator, so an instance with no mail server works
+  exactly as well — it is carried over by hand.
+- **A mail server, in Settings → Mail server**, used to send invitations and
+  nothing else. SMTP with STARTTLS, direct TLS or neither, written against
+  RFC 5321 with no new dependency, like the IMAP reader next door. The password
+  is encrypted with `APP_SECRET`. A test button checks the settings on screen
+  rather than the saved ones, and can send a message to an address of your
+  choice.
 - **Sunrise and sunset.** Both times sit on every weather tile, under the wind
   and the rain, and again in the heading of the detailed forecast. Above the
   polar circle, where Open-Meteo reports neither, nothing is shown rather than
@@ -21,6 +46,19 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- `npm run config:export` and `npm run config:import` take `--user <name|id>`.
+  It is optional while the instance has one account and **required** once it
+  has several: picking the first one silently would mean exporting, or worse
+  overwriting, the wrong person's dashboard.
+- Automatic snapshots in `$DATA_DIR/backups/` carry the account in their name,
+  since several of them now write into one directory.
+- The hourly mailbox scan runs once per account that has one configured, one
+  after another rather than at once: several IMAP connections leaving one
+  address at the same moment is what a provider reads as abuse.
+- An existing instance migrates itself on the first start: its single account
+  becomes the administrator and keeps everything it already had. The tables
+  that needed their key widened are rebuilt, in one transaction, and the
+  rebuild is checked for dangling references before anything else happens.
 - The forecast request now also asks Open-Meteo for the hourly apparent
   temperature, wind speed, weather code and day/night flag, and for the daily
   sunrise and sunset; it no longer asks for the hourly wind gusts, which only

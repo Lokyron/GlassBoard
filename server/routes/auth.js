@@ -28,6 +28,9 @@ import {
   destroyAllSessions,
   listSessions,
   destroyUserSession,
+  resolveInvitation,
+  acceptInvitation,
+  isAdmin,
   createLoginRequest,
   loginRequestState,
   claimApprovedLoginRequest,
@@ -180,6 +183,38 @@ authRouter.post('/login/cancel', (req, res) => {
   res.json({ ok: true });
 });
 
+/* ------------------------------ invitations ------------------------------ */
+/* Public, because the person holding the link has no account yet. Neither
+   endpoint says anything about the instance: an invalid or spent token gets
+   the same answer as one that never existed. */
+
+/** What a token opens, so the page can show who invited whom. */
+authRouter.get('/invite', (req, res) => {
+  const invitation = resolveInvitation(req.query.token);
+  if (!invitation) return res.status(404).json({ error: 'This invitation has expired or has already been used.' });
+  res.json({
+    ok: true,
+    username: invitation.username,
+    // The address is shown back so the person can see the invitation is for
+    // them; it is not editable, and it is not what signs them in.
+    email: invitation.email,
+    role: invitation.role,
+    expiresAt: invitation.expires_at,
+  });
+});
+
+/** Turn a token into an account, and open a session on it: the next screen is
+ *  TOTP enrolment, exactly as for the first account on the instance. */
+authRouter.post('/invite', async (req, res) => {
+  try {
+    const user = await acceptInvitation(req.body?.token, req.body?.username, req.body?.password);
+    openSession(req, res, user);
+    res.json({ ok: true, username: user.username, totpEnrolmentRequired: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 /* ------------------------- sign in by QR code ---------------------------- */
 /* The screen with no credentials shows a code; a device that already holds a
    session scans it and approves. See the login_requests table for why the
@@ -265,6 +300,9 @@ authRouter.post('/logout', (req, res) => {
 authRouter.get('/me', requireAuth, (req, res) => {
   res.json({
     username: req.user.username,
+    email: req.user.email ?? '',
+    role: req.user.role,
+    admin: isAdmin(req.user),
     createdAt: req.user.created_at,
     recoveryCodesLeft: countUnusedRecoveryCodes(req.user.id),
   });

@@ -19,7 +19,7 @@ const coord = (value, limit) => {
 /* -------------------------------- weather -------------------------------- */
 
 integrationsRouter.get('/weather/forecast', async (req, res) => {
-  const weather = getConfig().integrations.weather;
+  const weather = getConfig(req.user.id).integrations.weather;
   if (!weather.enabled) return res.status(404).json({ error: 'The weather integration is disabled.' });
 
   const latitude = coord(req.query.latitude, 90) ?? weather.fallback.latitude;
@@ -33,7 +33,7 @@ integrationsRouter.get('/weather/forecast', async (req, res) => {
 });
 
 integrationsRouter.get('/weather/place', async (req, res) => {
-  const weather = getConfig().integrations.weather;
+  const weather = getConfig(req.user.id).integrations.weather;
   if (!weather.enabled || !weather.reverseGeocoding) return res.json({ ok: true, name: '' });
   const latitude = coord(req.query.latitude, 90);
   const longitude = coord(req.query.longitude, 180);
@@ -44,8 +44,13 @@ integrationsRouter.get('/weather/place', async (req, res) => {
 
 /* -------------------------------- GeoRide -------------------------------- */
 
-integrationsRouter.get('/georide/status', (_req, res) => {
-  res.json({ ok: true, ...georide.credentialStatus() });
+/* Like the configuration routes, everything here takes req.user.id and never
+   an id from the request: an account reaches its own GeoRide session, its own
+   17TRACK quota, its own parcels and its own mailbox, and has no way to name
+   anyone else's. */
+
+integrationsRouter.get('/georide/status', (req, res) => {
+  res.json({ ok: true, ...georide.credentialStatus(req.user.id) });
 });
 
 integrationsRouter.post('/georide/login', async (req, res) => {
@@ -53,39 +58,39 @@ integrationsRouter.post('/georide/login', async (req, res) => {
   const password = String(req.body?.password || '');
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
   try {
-    await georide.login(email, password, { rememberPassword: req.body?.rememberPassword !== false });
-    const trackers = await georide.listTrackers();
+    await georide.login(req.user.id, email, password, { rememberPassword: req.body?.rememberPassword !== false });
+    const trackers = await georide.listTrackers(req.user.id);
     res.json({ ok: true, trackers });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-integrationsRouter.post('/georide/logout', (_req, res) => {
-  georide.forgetCredentials();
+integrationsRouter.post('/georide/logout', (req, res) => {
+  georide.forgetCredentials(req.user.id);
   res.json({ ok: true });
 });
 
-integrationsRouter.get('/georide/trackers', async (_req, res) => {
+integrationsRouter.get('/georide/trackers', async (req, res) => {
   try {
-    res.json({ ok: true, trackers: await georide.listTrackers() });
+    res.json({ ok: true, trackers: await georide.listTrackers(req.user.id) });
   } catch (error) {
     res.status(502).json({ ok: false, error: error.message });
   }
 });
 
-integrationsRouter.get('/georide/summary', async (_req, res) => {
-  const settings = getConfig().integrations.georide;
+integrationsRouter.get('/georide/summary', async (req, res) => {
+  const settings = getConfig(req.user.id).integrations.georide;
   if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The GeoRide integration is disabled.' });
-  res.json(await georide.getSummary(settings));
+  res.json(await georide.getSummary(req.user.id, settings));
 });
 
 integrationsRouter.get('/georide/trips', async (req, res) => {
-  const settings = getConfig().integrations.georide;
+  const settings = getConfig(req.user.id).integrations.georide;
   if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The GeoRide integration is disabled.' });
   const days = Number.parseInt(req.query.days, 10);
   const periodDays = Number.isFinite(days) && days >= 1 && days <= 31 ? days : settings.periodDays;
-  res.json(await georide.getTrips({ ...settings, periodDays }));
+  res.json(await georide.getTrips(req.user.id, { ...settings, periodDays }));
 });
 
 /* -------------------------------- parcels -------------------------------- */
@@ -101,16 +106,16 @@ const parcelError = (res, error) => {
   res.status(status).json({ error: error.message, code: error.code ?? null });
 };
 
-integrationsRouter.get('/parcels', async (_req, res) => {
-  const settings = getConfig().integrations.parcels;
+integrationsRouter.get('/parcels', async (req, res) => {
+  const settings = getConfig(req.user.id).integrations.parcels;
   if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The parcel integration is disabled.' });
-  res.json(await parcels.getParcels(settings));
+  res.json(await parcels.getParcels(req.user.id, settings));
 });
 
 integrationsRouter.post('/parcels', async (req, res) => {
-  const settings = getConfig().integrations.parcels;
+  const settings = getConfig(req.user.id).integrations.parcels;
   try {
-    res.json({ ok: true, parcel: await parcels.addParcel(req.body ?? {}, settings) });
+    res.json({ ok: true, parcel: await parcels.addParcel(req.user.id, req.body ?? {}, settings) });
   } catch (error) {
     parcelError(res, error);
   }
@@ -118,18 +123,18 @@ integrationsRouter.post('/parcels', async (req, res) => {
 
 integrationsRouter.delete('/parcels/:id', async (req, res) => {
   try {
-    await parcels.removeParcel(req.params.id);
+    await parcels.removeParcel(req.user.id, req.params.id);
     res.json({ ok: true });
   } catch (error) {
     parcelError(res, error);
   }
 });
 
-integrationsRouter.post('/parcels/refresh', async (_req, res) => {
-  const settings = getConfig().integrations.parcels;
+integrationsRouter.post('/parcels/refresh', async (req, res) => {
+  const settings = getConfig(req.user.id).integrations.parcels;
   try {
-    await parcels.refresh({ force: true, refreshMinutes: settings.refreshMinutes });
-    res.json(await parcels.getParcels(settings));
+    await parcels.refresh(req.user.id, { force: true, refreshMinutes: settings.refreshMinutes });
+    res.json(await parcels.getParcels(req.user.id, settings));
   } catch (error) {
     parcelError(res, error);
   }
@@ -137,21 +142,24 @@ integrationsRouter.post('/parcels/refresh', async (_req, res) => {
 
 /** Take over what the 17TRACK account already follows. Reads only, so it costs
  *  no quota and can be run as often as wanted. */
-integrationsRouter.post('/parcels/import', async (_req, res) => {
-  const settings = getConfig().integrations.parcels;
+integrationsRouter.post('/parcels/import', async (req, res) => {
+  const settings = getConfig(req.user.id).integrations.parcels;
   try {
-    const result = await parcels.importFromProvider(settings);
-    res.json({ ok: true, ...result, ...(await parcels.getParcels(settings)) });
+    const result = await parcels.importFromProvider(req.user.id, settings);
+    res.json({ ok: true, ...result, ...(await parcels.getParcels(req.user.id, settings)) });
   } catch (error) {
     parcelError(res, error);
   }
 });
 
-integrationsRouter.get('/parcels/status', async (_req, res) => {
-  const payload = { ok: true, hasKey: parcels.isConfigured(), quota: null, error: null, mail: mailbox.status() };
+integrationsRouter.get('/parcels/status', async (req, res) => {
+  const payload = {
+    ok: true, hasKey: parcels.isConfigured(req.user.id), quota: null, error: null,
+    mail: mailbox.status(req.user.id),
+  };
   if (payload.hasKey) {
     try {
-      payload.quota = await parcels.getQuota();
+      payload.quota = await parcels.getQuota(req.user.id);
     } catch (error) {
       payload.error = error.message;
     }
@@ -163,32 +171,32 @@ integrationsRouter.get('/parcels/status', async (_req, res) => {
 integrationsRouter.put('/parcels/key', (req, res) => {
   const key = String(req.body?.apiKey || '').trim();
   if (!key) return res.status(400).json({ error: 'An API key is required.' });
-  parcels.setApiKey(key);
+  parcels.setApiKey(req.user.id, key);
   res.json({ ok: true });
 });
 
-integrationsRouter.delete('/parcels/key', (_req, res) => {
-  parcels.setApiKey(null);
+integrationsRouter.delete('/parcels/key', (req, res) => {
+  parcels.setApiKey(req.user.id, null);
   res.json({ ok: true });
 });
 
 /* --------------------------- parcels from mail --------------------------- */
 
-integrationsRouter.get('/parcels/suggestions', (_req, res) => {
-  res.json({ ok: true, suggestions: mailbox.listSuggestions(), mail: mailbox.status() });
+integrationsRouter.get('/parcels/suggestions', (req, res) => {
+  res.json({ ok: true, suggestions: mailbox.listSuggestions(req.user.id), mail: mailbox.status(req.user.id) });
 });
 
 /** Accepting is the one moment a provider credit may be spent, and it is a click. */
 integrationsRouter.post('/parcels/suggestions/:id/accept', async (req, res) => {
   try {
-    const suggestion = mailbox.getSuggestion(req.params.id);
-    const parcel = await parcels.addParcel({
+    const suggestion = mailbox.getSuggestion(req.user.id, req.params.id);
+    const parcel = await parcels.addParcel(req.user.id, {
       label: suggestion.label,
       trackingNumber: suggestion.tracking_no,
       carrier: null,
-    }, getConfig().integrations.parcels);
+    }, getConfig(req.user.id).integrations.parcels);
     // Only now: a suggestion whose parcel was refused must stay on offer.
-    mailbox.markAccepted(suggestion.id);
+    mailbox.markAccepted(req.user.id, suggestion.id);
     res.json({ ok: true, parcel });
   } catch (error) {
     parcelError(res, error);
@@ -197,27 +205,27 @@ integrationsRouter.post('/parcels/suggestions/:id/accept', async (req, res) => {
 
 integrationsRouter.post('/parcels/suggestions/:id/ignore', (req, res) => {
   try {
-    mailbox.ignoreSuggestion(req.params.id);
+    mailbox.ignoreSuggestion(req.user.id, req.params.id);
     res.json({ ok: true });
   } catch (error) {
     parcelError(res, error);
   }
 });
 
-integrationsRouter.post('/parcels/mail/scan', async (_req, res) => {
-  const settings = getConfig().integrations.parcels;
+integrationsRouter.post('/parcels/mail/scan', async (req, res) => {
+  const settings = getConfig(req.user.id).integrations.parcels;
   try {
-    const result = await mailbox.scan(settings.mail);
-    res.json({ ok: true, ...result, suggestions: mailbox.listSuggestions() });
+    const result = await mailbox.scan(req.user.id, settings.mail);
+    res.json({ ok: true, ...result, suggestions: mailbox.listSuggestions(req.user.id) });
   } catch (error) {
     parcelError(res, error);
   }
 });
 
-integrationsRouter.post('/parcels/mail/test', async (_req, res) => {
-  const settings = getConfig().integrations.parcels;
+integrationsRouter.post('/parcels/mail/test', async (req, res) => {
+  const settings = getConfig(req.user.id).integrations.parcels;
   try {
-    res.json(await mailbox.testConnection(settings.mail));
+    res.json(await mailbox.testConnection(req.user.id, settings.mail));
   } catch (error) {
     parcelError(res, error);
   }
@@ -227,12 +235,12 @@ integrationsRouter.post('/parcels/mail/test', async (_req, res) => {
 integrationsRouter.put('/parcels/mail/password', (req, res) => {
   const password = String(req.body?.password || '').trim();
   if (!password) return res.status(400).json({ error: 'A password is required.' });
-  mailbox.setPassword(password);
+  mailbox.setPassword(req.user.id, password);
   res.json({ ok: true });
 });
 
-integrationsRouter.delete('/parcels/mail/password', (_req, res) => {
-  mailbox.setPassword(null);
+integrationsRouter.delete('/parcels/mail/password', (req, res) => {
+  mailbox.setPassword(req.user.id, null);
   res.json({ ok: true });
 });
 

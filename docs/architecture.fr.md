@@ -27,8 +27,14 @@
 - **Frameworks & libs clés** : Express 5, `@node-rs/argon2` (hash argon2id), `otplib` 13 (TOTP),
   `qrcode` (enrôlement). Front **sans framework ni build** (HTML/CSS/JS vanilla) ; Leaflet vendorisé
   (`public/assets/vendor/`) pour la carte. i18n maison (7 langues : en, fr, es, de, it, pt, nl).
+- **Multi-comptes** : plusieurs comptes par instance, **chacun avec son propre tableau de bord**
+  (configuration, révisions, fond d'écran, colis, suggestions, secrets d'intégration). Le **premier compte
+  créé est l'administrateur** ; le rôle est délégable et repris, le dernier administrateur ne pouvant ni
+  se retrograder ni être supprimé. Deux parcours d'entrée : création directe par l'administrateur, ou
+  **lien d'invitation à usage unique** (48 h), envoyé par mail si un SMTP est configuré.
 - **Base de données & stockage** : SQLite via `node:sqlite`, fichier `$DATA_DIR/glassboard.db`
-  (configuration, compte, sessions, défis de connexion, révisions, cache, secrets chiffrés AES-256-GCM).
+  (configurations, comptes, sessions, défis de connexion, invitations, révisions, cache, secrets chiffrés
+  AES-256-GCM). Fonds d'écran : un fichier `wallpaper-<id>.bin` par compte.
   `$DATA_DIR/backups/` (instantanés avant import), `$DATA_DIR/tiles/` (cache de tuiles OSM plafonné à 128 Mo).
 - **Outils externes & APIs tierces** (tous appelés **côté serveur**, aucun jeton dans le navigateur) :
   - **Open-Meteo** (prévisions, géocodage) ;
@@ -51,11 +57,14 @@ Glassboard/
 │   ├── wallpaper.js        # Fond d'écran (contrôle des magic bytes, 4 Mo max)
 │   ├── maintenance.js      # Tâche horaire : cache, sessions, tuiles, wal_checkpoint, ANALYZE
 │   ├── update.js           # Canaux stable / bêta, fichier de requête lu par le service root
-│   ├── routes/             # auth.js, config.js, integrations.js, appearance.js, update.js
+│   ├── smtp.js             # Client SMTP maison (RFC 5321), réglages d'instance dans `meta`
+│   ├── mail-templates.js   # Le seul message envoyé : l'invitation
+│   ├── html.js             # Échappement HTML côté serveur (pour le mail)
+│   ├── routes/             # auth.js, config.js, integrations.js, appearance.js, update.js, admin.js
 │   └── integrations/       # weather.js, georide.js, parcels.js, mailbox.js, imap.js, mime.js, map-tiles.js
 ├── public/                 # index.html, login.html, setup.html, assets/ (app.js, edit.js, i18n.js,
 │                           #   themes.css, mobile.css, vendor/leaflet), manifest.webmanifest
-├── scripts/                # config-export.mjs, config-import.mjs (CLI)
+├── scripts/                # config-export.mjs, config-import.mjs, account.mjs (CLI)
 ├── docs/                   # configuration-format.md, captures d'écran
 ├── Dockerfile              # node:24-bookworm-slim
 └── docker-compose.yml      # service unique + volume glassboard-data
@@ -118,16 +127,18 @@ Pas de tests, linter ni CI configurés.
 
 ## 7. Endpoints & interfaces
 
-- **Pages** : `/` (tableau de bord, session requise), `/login`, `/setup` (premier lancement).
+- **Pages** : `/` (tableau de bord, session requise), `/login`, `/setup` (premier lancement),
+  `/approve` (approbation QR), `/invite` (acceptation d'une invitation, publique).
 - **API** (JSON, session requise sauf auth et santé) :
 
 | Route | Rôle |
 |---|---|
 | `GET /api/health` | Santé + indicateur `setupRequired` |
-| `/api/auth` | `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
+| `/api/auth` | `GET /invite` et `POST /invite` (publics), `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
 | `/api/integrations` | `GET /weather/forecast` (horaire : température, ressenti, vent, code, jour/nuit ; quotidien : min/max, pluie, code, vent, **lever et coucher**), `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /parcels/suggestions`, `POST /parcels/suggestions/:id/accept\|ignore`, `POST /parcels/mail/scan\|test`, `PUT/DELETE /parcels/mail/password`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start` |
+| `/api/admin` | **administrateur uniquement** : `GET /accounts`, `POST /accounts`, `PATCH /accounts/:id`, `POST /accounts/:id/sign-out`, `DELETE /accounts/:id`, `POST /invitations`, `DELETE /invitations/:id`, `GET/PUT /smtp`, `POST /smtp/test` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
 
 - **Ports** : 3000 (natif), 8080 → 3000 (Docker).
@@ -135,6 +146,26 @@ Pas de tests, linter ni CI configurés.
 ## 8. Dette technique, TODOs & points d'attention
 
 - **Aucun marqueur `TODO`/`FIXME`** dans le code.
+- **Cloisonnement des comptes** : toutes les routes lisent `req.user.id` et **jamais** un identifiant
+  venu de la requête. C'est tout le cloisonnement : aucun paramètre ne désigne le tableau de bord, les
+  colis ou les secrets de quelqu'un d'autre. Une révision appartenant à un autre compte répond `404` et
+  non `403` — la réponse ne dit pas si l'identifiant existe.
+- **Migration multi-comptes** (`migrateToAccounts` dans `db.js`) : SQLite **ne sait pas ajouter une colonne
+  à une clé primaire**, donc `secrets` et `parcel_suggestions` (dont la clé s'élargit au compte) sont
+  **reconstruites** — renommage, création, copie, suppression — dans une transaction unique avec
+  `PRAGMA foreign_keys = OFF`, suivie d'un `PRAGMA foreign_key_check`. Pilotée par la **forme des tables**
+  et non par un numéro de version : la relancer ne fait rien. Les index portant `user_id` sont créés
+  **après** la migration, jamais dans le bloc de schéma initial (sinon `CREATE INDEX` échoue sur une table
+  ancienne qui n'a pas encore la colonne — piège déjà rencontré).
+- **Plus de seed au démarrage** : `getConfig()` était appelé dans `index.js` pour amorcer la configuration
+  par défaut. Avec une configuration par compte, le serveur ne peut pas amorcer un compte qui n'existe pas
+  encore : `getConfig(userId)` s'en charge à la première lecture.
+- **Réglages SMTP dans `meta`, pas dans `secrets`** : ils appartiennent à l'instance et non à un compte,
+  or `secrets` est devenu per-compte. Le mot de passe y est chiffré avec `APP_SECRET` comme ailleurs.
+- **Scan des boîtes mail** : une boucle séquentielle sur les comptes, pas en parallèle — plusieurs
+  connexions IMAP simultanées depuis une même adresse, c'est ce qu'un fournisseur lit comme un abus.
+- **CLI** : `--user` obligatoire dès qu'il y a plusieurs comptes. Piège d'analyse d'arguments : la valeur
+  de `--user` ne commence pas par un tiret, donc elle était prise pour le fichier à importer.
 - **`node:sqlite`** est encore marqué expérimental dans certaines versions de Node : épingler une version
   de Node 24 LTS dans le Dockerfile et sur le CT.
 - **README modifié directement sur GitHub** (captures) : toujours faire `git fetch` avant de repartir du README local.

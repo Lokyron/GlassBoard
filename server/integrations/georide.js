@@ -30,7 +30,11 @@ const round5 = (value) => Math.round(value * 1e5) / 1e5;
 const SECRET_EMAIL = 'georide.email';
 const SECRET_PASSWORD = 'georide.password';
 const SECRET_TOKEN = 'georide.token';
-const META_TOKEN_ISSUED = 'georide.token_issued_at';
+/* The token's issue date and the cached answers are per account, like the
+   credentials they come from: two people on one instance follow two GeoRide
+   accounts, and a shared key would hand one of them the other's rides. */
+const tokenIssuedKey = (userId) => `georide.${Number(userId)}.token_issued`;
+const cachePrefix = (userId) => `georide:${Number(userId)}:`;
 
 export const knotsToKmh = (knots) => (Number(knots) || 0) * KNOTS_TO_KMH;
 
@@ -69,16 +73,16 @@ async function request(path, { method = 'GET', token = null, body = null, timeou
 
 /* ------------------------------ credentials ------------------------------ */
 
-export function isConfigured() {
-  return Boolean(getSecret(SECRET_TOKEN) || (getSecret(SECRET_EMAIL) && getSecret(SECRET_PASSWORD)));
+export function isConfigured(userId) {
+  return Boolean(getSecret(userId, SECRET_TOKEN) || (getSecret(userId, SECRET_EMAIL) && getSecret(userId, SECRET_PASSWORD)));
 }
 
-export function credentialStatus() {
-  const issuedAt = getMeta(META_TOKEN_ISSUED);
+export function credentialStatus(userId) {
+  const issuedAt = getMeta(tokenIssuedKey(userId));
   return {
     configured: isConfigured(),
-    hasStoredPassword: Boolean(getSecret(SECRET_PASSWORD)),
-    email: decrypt(getSecret(SECRET_EMAIL)) || '',
+    hasStoredPassword: Boolean(getSecret(userId, SECRET_PASSWORD)),
+    email: decrypt(getSecret(userId, SECRET_EMAIL)) || '',
     tokenIssuedAt: issuedAt,
     tokenExpiresAt: issuedAt
       ? new Date(new Date(issuedAt).getTime() + TOKEN_LIFETIME_DAYS * 86_400_000).toISOString()
@@ -87,61 +91,59 @@ export function credentialStatus() {
 }
 
 /** Log in and store the token. `rememberPassword` allows silent re-login after expiry. */
-export async function login(email, password, { rememberPassword = true } = {}) {
+export async function login(userId, email, password, { rememberPassword = true } = {}) {
   const data = await request('/user/login', { method: 'POST', body: { email, password } });
   if (!data?.authToken) throw new Error('GeoRide did not return a token.');
-  setSecret(SECRET_TOKEN, encrypt(data.authToken));
-  setSecret(SECRET_EMAIL, encrypt(email));
-  setSecret(SECRET_PASSWORD, rememberPassword ? encrypt(password) : null);
-  setMeta(META_TOKEN_ISSUED, new Date().toISOString());
-  cacheDeletePrefix('georide:');
+  setSecret(userId, SECRET_TOKEN, encrypt(data.authToken));
+  setSecret(userId, SECRET_EMAIL, encrypt(email));
+  setSecret(userId, SECRET_PASSWORD, rememberPassword ? encrypt(password) : null);
+  setMeta(tokenIssuedKey(userId), new Date().toISOString());
+  cacheDeletePrefix(cachePrefix(userId));
   return data.authToken;
 }
 
-export function forgetCredentials() {
-  setSecret(SECRET_TOKEN, null);
-  setSecret(SECRET_EMAIL, null);
-  setSecret(SECRET_PASSWORD, null);
-  setMeta(META_TOKEN_ISSUED, '');
-  cacheDeletePrefix('georide:');
+export function forgetCredentials(userId) {
+  setSecret(userId, SECRET_TOKEN, null);
+  setSecret(userId, SECRET_EMAIL, null);
+  setSecret(userId, SECRET_PASSWORD, null);
+  setMeta(tokenIssuedKey(userId), '');
+  cacheDeletePrefix(cachePrefix(userId));
 }
 
-function storedToken() {
-  return decrypt(getSecret(SECRET_TOKEN));
-}
+const storedToken = (userId) => decrypt(getSecret(userId, SECRET_TOKEN));
 
-async function renewToken(token) {
+async function renewToken(userId, token) {
   const data = await request('/user/new-token', { token });
   if (!data?.authToken) throw new Error('GeoRide did not return a renewed token.');
-  setSecret(SECRET_TOKEN, encrypt(data.authToken));
-  setMeta(META_TOKEN_ISSUED, new Date().toISOString());
+  setSecret(userId, SECRET_TOKEN, encrypt(data.authToken));
+  setMeta(tokenIssuedKey(userId), new Date().toISOString());
   return data.authToken;
 }
 
-async function reLogin() {
-  const email = decrypt(getSecret(SECRET_EMAIL));
-  const password = decrypt(getSecret(SECRET_PASSWORD));
+async function reLogin(userId) {
+  const email = decrypt(getSecret(userId, SECRET_EMAIL));
+  const password = decrypt(getSecret(userId, SECRET_PASSWORD));
   if (!email || !password) {
     const error = new Error('GeoRide session expired. Sign in again from the settings panel.');
     error.code = 'reauth_required';
     throw error;
   }
-  return login(email, password);
+  return login(userId, email, password);
 }
 
 /** Get a usable token, renewing or re-logging in as needed. */
-async function getToken() {
-  let token = storedToken();
-  if (!token) return reLogin();
+async function getToken(userId) {
+  let token = storedToken(userId);
+  if (!token) return reLogin(userId);
 
-  const issuedAt = getMeta(META_TOKEN_ISSUED);
+  const issuedAt = getMeta(tokenIssuedKey(userId));
   if (issuedAt) {
     const ageDays = (Date.now() - new Date(issuedAt).getTime()) / 86_400_000;
     if (ageDays > REFRESH_AFTER_DAYS) {
       try {
-        token = await renewToken(token);
+        token = await renewToken(userId, token);
       } catch {
-        token = await reLogin();
+        token = await reLogin(userId);
       }
     }
   }
@@ -149,13 +151,13 @@ async function getToken() {
 }
 
 /** Call the API, transparently recovering from an expired token. */
-async function authed(path) {
-  let token = await getToken();
+async function authed(userId, path) {
+  let token = await getToken(userId);
   try {
     return await request(path, { token });
   } catch (error) {
     if (error.status !== 401 && error.status !== 403) throw error;
-    token = await reLogin();
+    token = await reLogin(userId);
     return request(path, { token });
   }
 }
@@ -163,8 +165,8 @@ async function authed(path) {
 /* -------------------------------- queries -------------------------------- */
 
 /** The tracker asked for, or the first one on the account. */
-async function pickTracker(trackerId) {
-  const payload = await authed('/user/trackers');
+async function pickTracker(userId, trackerId) {
+  const payload = await authed(userId, '/user/trackers');
   const trackers = Array.isArray(payload) ? payload : payload?.trackers ?? [];
   if (trackers.length === 0) throw new Error('No tracker is attached to this GeoRide account.');
   return (trackerId && trackers.find((t) => Number(t.trackerId) === Number(trackerId))) || trackers[0];
@@ -184,8 +186,8 @@ function thin(points, max) {
   return kept;
 }
 
-export async function listTrackers() {
-  const data = await authed('/user/trackers');
+export async function listTrackers(userId) {
+  const data = await authed(userId, '/user/trackers');
   const trackers = Array.isArray(data) ? data : data?.trackers ?? [];
   return trackers.map((t) => ({
     trackerId: t.trackerId,
@@ -223,23 +225,23 @@ function summariseTrips(trips, periodStart) {
  * inside its own start/end window. The same points give the top speed of a trip,
  * which the trips endpoint does not carry.
  */
-export async function getTrips({ trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
+export async function getTrips(userId, { trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
   if (!isConfigured()) {
     return { ok: false, configured: false, error: 'GeoRide is not configured yet.' };
   }
-  const key = `georide:trips:${trackerId ?? 'auto'}:${periodDays}`;
+  const key = `${cachePrefix(userId)}trips:${trackerId ?? 'auto'}:${periodDays}`;
   const cached = cacheGet(key);
   if (cached) return { ...cached, cached: true };
 
   try {
-    const tracker = await pickTracker(trackerId);
+    const tracker = await pickTracker(userId, trackerId);
     const to = new Date();
     const from = new Date(to.getTime() - periodDays * 86_400_000);
     const range = rangeQuery(from, to);
 
     const [tripsPayload, positionsPayload] = await Promise.all([
-      authed(`/tracker/${tracker.trackerId}/trips?${range}`),
-      authed(`/tracker/${tracker.trackerId}/trips/positions?${range}`),
+      authed(userId, `/tracker/${tracker.trackerId}/trips?${range}`),
+      authed(userId, `/tracker/${tracker.trackerId}/trips/positions?${range}`),
     ]);
 
     const positions = asList(positionsPayload, 'positions')
@@ -323,28 +325,28 @@ export async function getTrips({ trackerId = null, periodDays = 7, refreshMinute
  * Returns `{ ok: false, error }` rather than throwing, so a failing API degrades
  * the tile instead of breaking the dashboard.
  */
-export async function getSummary({ trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
+export async function getSummary(userId, { trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
   if (!isConfigured()) {
     return { ok: false, configured: false, error: 'GeoRide is not configured yet.' };
   }
-  const key = `georide:summary:${trackerId ?? 'auto'}:${periodDays}`;
+  const key = `${cachePrefix(userId)}summary:${trackerId ?? 'auto'}:${periodDays}`;
   const cached = cacheGet(key);
   if (cached) return { ...cached, cached: true };
 
   try {
-    const tracker = await pickTracker(trackerId);
+    const tracker = await pickTracker(userId, trackerId);
     const to = new Date();
     const from = new Date(to.getTime() - periodDays * 86_400_000);
     const range = rangeQuery(from, to);
 
-    const trips = await authed(`/tracker/${tracker.trackerId}/trips?${range}`);
+    const trips = await authed(userId, `/tracker/${tracker.trackerId}/trips?${range}`);
     const stats = summariseTrips(trips, from.toISOString());
 
     // The API exposes no per-trip maximum speed, only averageSpeed, so the real
     // top speed is derived from the individual positions of the period.
     let topSpeedKmh = stats.bestAverageSpeedKmh;
     try {
-      const positionsPayload = await authed(`/tracker/${tracker.trackerId}/trips/positions?${range}`);
+      const positionsPayload = await authed(userId, `/tracker/${tracker.trackerId}/trips/positions?${range}`);
       const positions = asList(positionsPayload, 'positions');
       const maxKnots = positions.reduce((max, p) => Math.max(max, Number(p.speed) || 0), 0);
       if (maxKnots > 0) topSpeedKmh = Math.round(knotsToKmh(maxKnots));

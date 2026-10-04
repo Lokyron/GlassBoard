@@ -5,7 +5,11 @@ import path from 'node:path';
 import { DATA_DIR } from './env.js';
 import { getMeta, setMeta } from './db.js';
 
-const FILE = path.join(DATA_DIR, 'wallpaper.bin');
+/* One image per account, named after it, with its type in the metadata table
+   under the same key. An account that has never uploaded one simply has no
+   file, which is what hasWallpaper reports. */
+const fileFor = (userId) => path.join(DATA_DIR, `wallpaper-${Number(userId)}.bin`);
+const metaKey = (userId, field) => `wallpaper.${Number(userId)}.${field}`;
 export const MAX_BYTES = 4 * 1024 * 1024;
 
 /**
@@ -26,27 +30,27 @@ export function sniffImageType(buffer) {
   return null;
 }
 
-export function hasWallpaper() {
-  return fs.existsSync(FILE) && Boolean(getMeta('wallpaper.mime'));
+export function hasWallpaper(userId) {
+  return fs.existsSync(fileFor(userId)) && Boolean(getMeta(metaKey(userId, 'mime')));
 }
 
-export function wallpaperInfo() {
-  if (!hasWallpaper()) return null;
+export function wallpaperInfo(userId) {
+  if (!hasWallpaper(userId)) return null;
   return {
-    mime: getMeta('wallpaper.mime'),
-    updatedAt: getMeta('wallpaper.updated_at'),
-    bytes: fs.statSync(FILE).size,
+    mime: getMeta(metaKey(userId, 'mime')),
+    updatedAt: getMeta(metaKey(userId, 'updated_at')),
+    bytes: fs.statSync(fileFor(userId)).size,
   };
 }
 
-export const wallpaperFile = () => FILE;
+export const wallpaperFile = (userId) => fileFor(userId);
 
-export function readWallpaper() {
-  return hasWallpaper() ? fs.readFileSync(FILE) : null;
+export function readWallpaper(userId) {
+  return hasWallpaper(userId) ? fs.readFileSync(fileFor(userId)) : null;
 }
 
 /** @returns {{mime: string, bytes: number}} @throws when the payload is not a supported image */
-export function saveWallpaper(buffer) {
+export function saveWallpaper(userId, buffer) {
   if (!buffer?.length) throw new Error('The uploaded file is empty.');
   if (buffer.length > MAX_BYTES) {
     throw new Error(`The image is too large (${Math.round(buffer.length / 1024)} KB, maximum ${MAX_BYTES / 1024 / 1024} MB).`);
@@ -54,14 +58,15 @@ export function saveWallpaper(buffer) {
   const mime = sniffImageType(buffer);
   if (!mime) throw new Error('Unsupported image. Use a PNG, JPEG, WebP or GIF file.');
 
-  fs.writeFileSync(FILE, buffer, { mode: 0o600 });
-  setMeta('wallpaper.mime', mime);
-  setMeta('wallpaper.updated_at', new Date().toISOString());
+  fs.writeFileSync(fileFor(userId), buffer, { mode: 0o600 });
+  setMeta(metaKey(userId, 'mime'), mime);
+  setMeta(metaKey(userId, 'updated_at'), new Date().toISOString());
   return { mime, bytes: buffer.length };
 }
 
-export function deleteWallpaper() {
-  if (fs.existsSync(FILE)) fs.unlinkSync(FILE);
-  setMeta('wallpaper.mime', '');
-  setMeta('wallpaper.updated_at', '');
+export function deleteWallpaper(userId) {
+  const file = fileFor(userId);
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+  setMeta(metaKey(userId, 'mime'), '');
+  setMeta(metaKey(userId, 'updated_at'), '');
 }

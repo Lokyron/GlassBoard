@@ -41,6 +41,7 @@ reaches the browser, and no request goes out to a service you did not enable.
 - [Updating](#updating)
 - [Using Glassboard](#using-glassboard) — [editing](#editing-the-dashboard), [settings](#settings), [themes](#themes-and-wallpaper), [on a phone](#on-a-phone), [installing it as an app](#installing-it-as-an-app), [languages](#languages)
 - [Signing in](#signing-in) — [with your phone](#signing-in-with-your-phone), [open sessions](#open-sessions)
+- [Accounts](#accounts) — [adding someone](#adding-someone), [the administrator](#the-administrator), [sending invitations](#sending-invitations)
 - [Integrations](#integrations)
 - [Backup and restore](#backup-and-restore)
 - [Behind a reverse proxy](#behind-a-reverse-proxy)
@@ -56,6 +57,10 @@ reaches the browser, and no request goes out to a service you did not enable.
   directly on the page. Folders group shortcuts behind a modal.
 - **Server-side configuration**: the same dashboard on every device. Nothing
   lives in browser storage except your light/dark preference.
+- **Several accounts, each with its own dashboard**: shortcuts, tiles,
+  wallpaper, revision history, parcels and integration credentials are all per
+  account, and nobody sees anyone else's. The first account created is the
+  instance's administrator, and can hand that role to anyone else.
 - **Native authentication**: a two-step sign-in (password, then TOTP) with QR
   enrolment, single-use recovery codes, argon2id hashing, signed `HttpOnly`
   session cookies and a temporary lockout after repeated failures. Only the
@@ -166,6 +171,10 @@ the proxy can reach it.
    replaces the six-digit code if you lose your phone.
 4. The dashboard opens with a neutral example configuration. Open the account
    menu (top right), pick **Edit dashboard**, and make it yours.
+
+The first account created is the instance's **administrator**. It is the only
+one that can add other accounts, and it can hand that role to someone else
+later. See [Accounts](#accounts).
 
 ## Updating
 
@@ -374,6 +383,78 @@ was opened, when it was last used, and ends any of them on one click.
 
 ![The list of open sessions](docs/images/sessions.png)
 
+## Accounts
+
+One instance, as many accounts as you like. **Each one has its own dashboard**:
+its own shortcuts, tiles, wallpaper, revision history, parcels and mailbox
+suggestions, and its own GeoRide session, 17TRACK key and mailbox password. Two
+people on one instance follow two GeoRide accounts and two 17TRACK allowances,
+and neither can read the other's — the routes take the account from the session
+cookie and never from the request, so there is no way to name someone else's.
+
+The one thing shared is the cache of answers from third parties, which is keyed
+by coordinates and holds nothing personal.
+
+### The administrator
+
+**The first account ever created is the administrator.** The role can be handed
+to anyone else afterwards, and taken back — with one rule the interface and the
+API both enforce: the last administrator cannot step down or be deleted. An
+instance with no administrator could never be administered again, and nothing
+in the interface could undo it.
+
+An administrator sees two extra tabs in the settings, **Accounts** and **Mail
+server**. Everyone else sees neither, and every route behind them refuses a
+standard account on its own — the hidden tabs are a courtesy, not the control.
+
+![The accounts panel](docs/images/accounts.png)
+
+### Adding someone
+
+Two ways, in **Settings → Accounts**.
+
+**Create the account outright.** You choose a username and a first password and
+pass them on however you like. The person enrols their own second factor the
+first time they sign in; nobody else can, and nobody else should.
+
+**Send an invitation.** A single-use link, good for 48 hours, where the person
+chooses their own password — so none ever passes through you. You can fix the
+username in advance, or leave it to them.
+
+Either way the account starts on the same neutral example dashboard a fresh
+instance does.
+
+An account can be deleted, which takes its dashboard, its stored credentials
+and its parcels with it, through `ON DELETE CASCADE` and one file removal for
+the wallpaper. Its sessions can also be ended without deleting anything, which
+is what to press when someone's laptop goes missing.
+
+### Sending invitations
+
+The invitation link is **always shown to you**, whether or not a mail server is
+set up: an instance with no SMTP works exactly as well, you carry the link over
+yourself. Give an address and configure **Settings → Mail server**, and it is
+also sent.
+
+The mail server is used for invitations and nothing else. STARTTLS on port 587,
+direct TLS on 465, or neither; the password is encrypted with `APP_SECRET` and
+never shown again. The **Test** button checks what is on screen rather than
+what is saved, which is the point of testing, and can send a message to an
+address of your choice.
+
+The SMTP client is written against RFC 5321, here rather than in a dependency,
+for the same reason the IMAP reader is: four runtime dependencies is the budget,
+and one message over a protocol this small does not justify a fifth.
+
+### What an upgrade does to an existing instance
+
+Nothing you have to do. On the first start after the upgrade, the single
+account it already had becomes the administrator and keeps everything: its
+dashboard, its revisions, its credentials, its parcels and its wallpaper. The
+tables whose key had to be widened by the account are rebuilt in one
+transaction, and the result is checked for dangling references before the
+server accepts any traffic.
+
 ## Integrations
 
 ### Weather, Open-Meteo
@@ -566,9 +647,15 @@ From the command line:
 
 ```bash
 npm run config:export -- --out backup.json
+npm run config:export -- --user alice --out backup.json
 npm run config:export -- --out backup.json --include-secrets
-npm run config:import -- backup.json
+npm run config:import -- backup.json --user alice
 ```
+
+`--user` names the account to export or import. It is optional while the
+instance has one account and **required** once it has several: picking the
+first one silently would mean exporting, or worse overwriting, the wrong
+person's dashboard. Without it, the script lists the accounts and stops.
 
 In Docker:
 
@@ -651,6 +738,20 @@ from a `.env` file next to the server. See [.env.example](.env.example).
   exists only inside the QR image. A request lasts two minutes, is spent once,
   and can only be approved by a device that itself signed in with a password and
   a code. Every session is listed in the settings and can be ended from there.
+- Accounts are isolated by the session and nothing else: every route reads the
+  account from the session cookie and never from the request, so there is no
+  parameter anywhere that names a dashboard, a parcel or a credential belonging
+  to someone else. A revision id from another account reads as unknown rather
+  than as forbidden, which says nothing about whether it exists.
+- Administration is a role on the account, checked server-side on every route
+  under `/api/admin`. Hiding the tabs from everyone else is a courtesy; the
+  refusal is the control. The last administrator cannot step down or be
+  deleted.
+- An invitation stores only the hash of its token, like a password. The token
+  itself exists in the link and nowhere else, and travels in the URL fragment,
+  which browsers never put on the wire — so it reaches no access log and no
+  proxy. Single use, 48 hours, and marked spent before the account is created
+  so two people racing the same link cannot both get in.
 - Shortcut URLs are restricted to `http:` and `https:`, in the browser and on
   the server, so an imported file cannot inject a `javascript:` link.
 - Losing `APP_SECRET` means losing the sessions and the stored credentials. The
@@ -668,8 +769,9 @@ glassboard/
 ├── deploy/            updater script and systemd units
 ├── docs/              format documentation
 └── $DATA_DIR/         YOUR data, never in git
-    ├── glassboard.db  configuration, account, encrypted credentials
+    ├── glassboard.db  configurations, accounts, encrypted credentials
     ├── backups/       automatic snapshots taken before imports
+    ├── wallpaper-<n>.bin  one per account that uploaded one
     └── tiles/         cached map tiles
 ```
 

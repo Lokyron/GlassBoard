@@ -4,6 +4,7 @@ import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 import { generateSecret, generate as totpGenerate, generateURI, verify as totpVerify } from 'otplib';
 import { db, now, getMeta, setMeta } from './db.js';
 import { encrypt, decrypt, sign, unsign, randomId, sha256 } from './crypto.js';
+import { deleteWallpaper } from './wallpaper.js';
 import {
   SESSION_TTL_HOURS,
   LOGIN_MAX_ATTEMPTS,
@@ -45,17 +46,184 @@ export const findUserById = (id) => db.prepare('SELECT * FROM users WHERE id = ?
 const hashPassword = (password) =>
   argonHash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
 
-export async function createUser(username, password) {
+/** The first account an instance ever gets is its administrator. After that,
+ *  an account is whatever role it was created with — which only an existing
+ *  administrator can choose. */
+export async function createUser(username, password, { role = null, email = '' } = {}) {
   const name = String(username || '').trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,40}$/.test(name)) {
     throw new Error('Username must be 3-40 characters (letters, digits, dot, dash, underscore).');
   }
+  if (findUserByName(name)) throw new Error('That username is already taken.');
   assertPasswordStrength(password);
+  const effectiveRole = role ?? (userCount() === 0 ? 'admin' : 'user');
+  if (effectiveRole !== 'admin' && effectiveRole !== 'user') throw new Error('Unknown role.');
   const passwordHash = await hashPassword(password);
   const info = db
-    .prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)')
-    .run(name, passwordHash, now());
+    .prepare('INSERT INTO users (username, email, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(name, normaliseEmail(email), effectiveRole, passwordHash, now());
   return findUserById(Number(info.lastInsertRowid));
+}
+
+/* ------------------------------ administration ---------------------------- */
+
+export const isAdmin = (user) => user?.role === 'admin';
+export const adminCount = () => db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
+
+export const normaliseEmail = (value) => {
+  const email = String(value || '').trim().toLowerCase();
+  if (!email) return '';
+  // Deliberately loose. The only thing worth refusing here is something that
+  // cannot be an address at all; deciding whether a real mailbox is behind it
+  // is the job of the message that gets sent to it.
+  if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email) || email.length > 200) {
+    throw new Error('That does not look like an email address.');
+  }
+  return email;
+};
+
+/** Every account, with enough about each one to manage it. */
+export function listAccounts() {
+  return db
+    .prepare(`SELECT u.id, u.username, u.email, u.role, u.totp_enabled, u.created_at,
+                     (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?) AS sessions,
+                     (SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen_at
+                FROM users u ORDER BY u.id`)
+    .all(now())
+    .map((row) => ({
+      id: row.id,
+      username: row.username,
+      email: row.email,
+      role: row.role,
+      enrolled: row.totp_enabled === 1,
+      createdAt: row.created_at,
+      openSessions: row.sessions,
+      lastSeenAt: row.last_seen_at,
+    }));
+}
+
+/** Hand the administrator role over, or take it back.
+ *  An instance without an administrator can never be administered again, and
+ *  nothing in the interface could undo it, so the last one cannot step down. */
+export function setRole(userId, role) {
+  if (role !== 'admin' && role !== 'user') throw new Error('Unknown role.');
+  const user = findUserById(userId);
+  if (!user) throw new Error('Unknown account.');
+  if (user.role === role) return user;
+  if (user.role === 'admin' && adminCount() <= 1) {
+    throw new Error('This is the only administrator left. Make someone else one first.');
+  }
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+  return findUserById(userId);
+}
+
+export function setEmail(userId, email) {
+  db.prepare('UPDATE users SET email = ? WHERE id = ?').run(normaliseEmail(email), userId);
+  return findUserById(userId);
+}
+
+/** Delete an account and everything it owns. The dashboard, the revisions, the
+ *  encrypted credentials, the parcels and the suggestions go with it through
+ *  ON DELETE CASCADE; the wallpaper is a file, so it is removed by hand. */
+export function deleteUser(userId) {
+  const user = findUserById(userId);
+  if (!user) throw new Error('Unknown account.');
+  if (user.role === 'admin' && adminCount() <= 1) {
+    throw new Error('This is the only administrator left. Make someone else one before deleting this account.');
+  }
+  deleteWallpaper(userId);
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  return true;
+}
+
+/* ------------------------------- invitations ------------------------------ */
+
+/* An account that does not exist yet. Only the hash of the token is kept, so
+   a copy of the table lets nobody in; the token itself is in the link and
+   nowhere else. Single use, and it expires. */
+export const INVITE_TTL_HOURS = 48;
+
+export function createInvitation({ username = '', email = '', role = 'user', invitedBy = null } = {}) {
+  if (role !== 'admin' && role !== 'user') throw new Error('Unknown role.');
+  const name = String(username || '').trim().toLowerCase();
+  if (name) {
+    if (!/^[a-z0-9._-]{3,40}$/.test(name)) {
+      throw new Error('Username must be 3-40 characters (letters, digits, dot, dash, underscore).');
+    }
+    if (findUserByName(name)) throw new Error('That username is already taken.');
+  }
+  const address = normaliseEmail(email);
+  const token = randomId(32);
+  const id = randomId(12);
+  db.prepare(
+    `INSERT INTO invitations (id, token_hash, username, email, role, invited_by, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id, sha256(token), name, address, role, invitedBy, now(),
+    new Date(Date.now() + INVITE_TTL_HOURS * 3_600_000).toISOString()
+  );
+  // The token is returned exactly once, to be put in a link. It is not stored
+  // anywhere it could be read back.
+  return { id, token, expiresAt: new Date(Date.now() + INVITE_TTL_HOURS * 3_600_000).toISOString() };
+}
+
+/** The invitation a token opens, if it is still open at all. */
+export function resolveInvitation(token) {
+  const row = db.prepare('SELECT * FROM invitations WHERE token_hash = ?').get(sha256(String(token || '')));
+  if (!row) return null;
+  if (row.accepted_at) return null;
+  if (new Date(row.expires_at).getTime() < Date.now()) return null;
+  return row;
+}
+
+export function listInvitations() {
+  return db
+    .prepare(`SELECT i.id, i.username, i.email, i.role, i.created_at, i.expires_at, i.accepted_at, i.sent_to,
+                     u.username AS invited_by
+                FROM invitations i LEFT JOIN users u ON u.id = i.invited_by
+               WHERE i.accepted_at IS NULL AND i.expires_at > ?
+               ORDER BY i.created_at DESC`)
+    .all(now())
+    .map((row) => ({
+      id: row.id,
+      username: row.username,
+      email: row.email,
+      role: row.role,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      invitedBy: row.invited_by,
+      sentTo: row.sent_to,
+    }));
+}
+
+export const markInvitationSent = (id, address) =>
+  db.prepare('UPDATE invitations SET sent_to = ? WHERE id = ?').run(String(address || ''), id);
+
+export const revokeInvitation = (id) => db.prepare('DELETE FROM invitations WHERE id = ?').run(id).changes > 0;
+
+/** Turn an invitation into an account. Single use: the row is marked before
+ *  anything else, so two people racing the same link cannot both get in. */
+export async function acceptInvitation(token, username, password) {
+  const invitation = resolveInvitation(token);
+  if (!invitation) throw new Error('This invitation has expired or has already been used.');
+  const name = invitation.username || username;
+  const marked = db
+    .prepare('UPDATE invitations SET accepted_at = ? WHERE id = ? AND accepted_at IS NULL')
+    .run(now(), invitation.id);
+  if (marked.changes !== 1) throw new Error('This invitation has already been used.');
+  try {
+    return await createUser(name, password, { role: invitation.role, email: invitation.email });
+  } catch (error) {
+    // The account was not created, so the invitation has not been spent.
+    db.prepare('UPDATE invitations SET accepted_at = NULL WHERE id = ?').run(invitation.id);
+    throw error;
+  }
+}
+
+export function purgeExpiredInvitations() {
+  db.prepare('DELETE FROM invitations WHERE expires_at < ? OR accepted_at IS NOT NULL').run(
+    new Date(Date.now() - 7 * 86_400_000).toISOString()
+  );
 }
 
 export function assertPasswordStrength(password) {
@@ -413,6 +581,12 @@ export function requireAuth(req, res, next) {
   if (needsSetup()) return res.status(409).json({ error: 'setup_required' });
   if (!req.user) return res.status(401).json({ error: 'unauthenticated' });
   if (!req.user.totp_enabled) return res.status(403).json({ error: 'totp_enrolment_required' });
+  next();
+}
+
+/** Guards what only an administrator may do. Always after requireAuth. */
+export function requireAdmin(req, res, next) {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'administrator_required' });
   next();
 }
 

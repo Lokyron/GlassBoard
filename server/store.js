@@ -13,12 +13,19 @@ const KEEP_REVISIONS = 20;
 export const EXPORT_FORMAT_VERSION = 1;
 export const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
-/** Current configuration. Seeds the neutral default on a fresh instance. */
-export function getConfig() {
-  const row = db.prepare('SELECT json FROM config_revisions ORDER BY id DESC LIMIT 1').get();
+/** An account's configuration. Seeds the neutral default the first time it is
+ *  asked for, which is what gives a brand-new account a dashboard to land on.
+ *  Seeding happens here and not at boot: before accounts, there was one
+ *  configuration and the server could seed it on start-up; now there is one
+ *  per account, and the server has no way to know about an account that has
+ *  not been created yet. */
+export function getConfig(userId) {
+  const row = db
+    .prepare('SELECT json FROM config_revisions WHERE user_id = ? ORDER BY id DESC LIMIT 1')
+    .get(userId);
   if (!row) {
     const seeded = defaultConfig();
-    saveConfig(seeded, 'initial default configuration');
+    saveConfig(userId, seeded, 'initial default configuration');
     return seeded;
   }
   try {
@@ -35,30 +42,40 @@ export function getConfig() {
   }
 }
 
-export function saveConfig(config, note = null) {
+export function saveConfig(userId, config, note = null) {
   const { ok, errors, value } = validateConfig(config);
   if (!ok) {
     const error = new Error('Invalid configuration');
     error.details = errors;
     throw error;
   }
-  db.prepare('INSERT INTO config_revisions (json, note, created_at) VALUES (?, ?, ?)').run(
+  db.prepare('INSERT INTO config_revisions (user_id, json, note, created_at) VALUES (?, ?, ?, ?)').run(
+    userId,
     JSON.stringify(value),
     note,
     now()
   );
+  // The cap is per account, so a busy dashboard cannot push someone else's
+  // history out of the table.
   db.prepare(
-    `DELETE FROM config_revisions WHERE id NOT IN (
-       SELECT id FROM config_revisions ORDER BY id DESC LIMIT ?
+    `DELETE FROM config_revisions WHERE user_id = ? AND id NOT IN (
+       SELECT id FROM config_revisions WHERE user_id = ? ORDER BY id DESC LIMIT ?
      )`
-  ).run(KEEP_REVISIONS);
+  ).run(userId, userId, KEEP_REVISIONS);
   return value;
 }
 
-export function listRevisions() {
+export function listRevisions(userId) {
   return db
-    .prepare('SELECT id, note, created_at FROM config_revisions ORDER BY id DESC')
-    .all();
+    .prepare('SELECT id, note, created_at FROM config_revisions WHERE user_id = ? ORDER BY id DESC')
+    .all(userId);
+}
+
+/** A revision, but only if it belongs to the account asking for it. */
+export function getRevision(userId, id) {
+  return db
+    .prepare('SELECT json FROM config_revisions WHERE user_id = ? AND id = ?')
+    .get(userId, Number(id)) ?? null;
 }
 
 /* ---------------------------- export / import ---------------------------- */
@@ -72,14 +89,14 @@ const EXPORTABLE_SECRETS = {
   'mail.password': 'Mailbox app password',
 };
 
-export function buildExport({ includeSecrets = false, includeWallpaper = true } = {}) {
+export function buildExport(userId, { includeSecrets = false, includeWallpaper = true } = {}) {
   const payload = {
     app: 'glassboard',
     formatVersion: EXPORT_FORMAT_VERSION,
     configVersion: CONFIG_VERSION,
     exportedAt: now(),
     containsSecrets: false,
-    config: getConfig(),
+    config: getConfig(userId),
     secrets: null,
     wallpaper: null,
   };
@@ -87,9 +104,9 @@ export function buildExport({ includeSecrets = false, includeWallpaper = true } 
   // The background image travels with the configuration, so restoring on a
   // blank instance gives back the same dashboard rather than a close one.
   if (includeWallpaper) {
-    const info = wallpaperInfo();
+    const info = wallpaperInfo(userId);
     if (info && info.bytes <= MAX_BYTES) {
-      payload.wallpaper = { mime: info.mime, updatedAt: info.updatedAt, data: readWallpaper().toString('base64') };
+      payload.wallpaper = { mime: info.mime, updatedAt: info.updatedAt, data: readWallpaper(userId).toString('base64') };
     } else if (info) {
       payload.wallpaperOmitted = { reason: 'too large to embed', bytes: info.bytes };
     }
@@ -97,9 +114,9 @@ export function buildExport({ includeSecrets = false, includeWallpaper = true } 
 
   if (includeSecrets) {
     const secrets = {};
-    for (const name of listSecretNames()) {
+    for (const name of listSecretNames(userId)) {
       if (!(name in EXPORTABLE_SECRETS)) continue;
-      const plain = decrypt(getSecret(name));
+      const plain = decrypt(getSecret(userId, name));
       if (plain !== null) secrets[name] = plain;
     }
     if (Object.keys(secrets).length > 0) {
@@ -114,11 +131,13 @@ export function buildExport({ includeSecrets = false, includeWallpaper = true } 
   return payload;
 }
 
-export function writeBackup(reason) {
+export function writeBackup(userId, reason) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const file = path.join(BACKUP_DIR, `config-${stamp}-${reason}.json`);
-  fs.writeFileSync(file, JSON.stringify(buildExport({ includeSecrets: false }), null, 2), { mode: 0o600 });
+  // The account is in the name: several of them now write into one directory,
+  // and a snapshot nobody can attribute is a snapshot nobody dares restore.
+  const file = path.join(BACKUP_DIR, `config-${stamp}-user${userId}-${reason}.json`);
+  fs.writeFileSync(file, JSON.stringify(buildExport(userId, { includeSecrets: false }), null, 2), { mode: 0o600 });
   return file;
 }
 
@@ -127,7 +146,7 @@ export function writeBackup(reason) {
  * The existing configuration is snapshotted first and nothing is written until
  * the payload has fully validated, so a bad file can never corrupt an instance.
  */
-export function importExport(payload, { includeSecrets = false } = {}) {
+export function importExport(userId, payload, { includeSecrets = false } = {}) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('The file is not a JSON object.');
   }
@@ -152,12 +171,13 @@ export function importExport(payload, { includeSecrets = false } = {}) {
     throw error;
   }
 
-  const backup = writeBackup('before-import');
+  const backup = writeBackup(userId, 'before-import');
   const restored = { config: false, secrets: [], wallpaper: false };
 
   db.exec('BEGIN');
   try {
-    db.prepare('INSERT INTO config_revisions (json, note, created_at) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT INTO config_revisions (user_id, json, note, created_at) VALUES (?, ?, ?, ?)').run(
+      userId,
       JSON.stringify(value),
       `imported from ${payload.exportedAt || 'unknown date'}`,
       now()
@@ -171,7 +191,7 @@ export function importExport(payload, { includeSecrets = false } = {}) {
 
   if (payload.wallpaper?.data && typeof payload.wallpaper.data === 'string') {
     try {
-      saveWallpaper(Buffer.from(payload.wallpaper.data, 'base64'));
+      saveWallpaper(userId, Buffer.from(payload.wallpaper.data, 'base64'));
       restored.wallpaper = true;
     } catch (error) {
       // A bad image must not undo an otherwise valid import.
@@ -182,7 +202,7 @@ export function importExport(payload, { includeSecrets = false } = {}) {
   if (includeSecrets && payload.secrets && typeof payload.secrets === 'object') {
     for (const [name, plain] of Object.entries(payload.secrets)) {
       if (!(name in EXPORTABLE_SECRETS) || typeof plain !== 'string') continue;
-      setSecret(name, encrypt(plain));
+      setSecret(userId, name, encrypt(plain));
       restored.secrets.push(name);
     }
   }

@@ -21,22 +21,24 @@ import {
 import { encrypt, decrypt } from '../crypto.js';
 
 const SECRET_PASSWORD = 'mail.password';
-const META_LAST_SCAN = 'mail.last_scan';
-const META_LAST_UID = 'mail.last_uid';
+/* Per account, like the password they go with: each person scans their own
+   mailbox, and one person's last scan says nothing about another's. */
+const lastScanKey = (userId) => `mail.${Number(userId)}.last_scan`;
+const lastUidKey = (userId) => `mail.${Number(userId)}.last_uid`;
 
 /* ------------------------------ credentials ------------------------------ */
 
-export const isConfigured = () => Boolean(decrypt(getSecret(SECRET_PASSWORD)));
+export const isConfigured = (userId) => Boolean(decrypt(getSecret(userId, SECRET_PASSWORD)));
 
-export function setPassword(password) {
-  setSecret(SECRET_PASSWORD, password ? encrypt(String(password).trim()) : null);
+export function setPassword(userId, password) {
+  setSecret(userId, SECRET_PASSWORD, password ? encrypt(String(password).trim()) : null);
 }
 
-const credentials = (settings) => ({
+const credentials = (userId, settings) => ({
   host: settings.host,
   port: settings.port,
   user: settings.user,
-  password: decrypt(getSecret(SECRET_PASSWORD)),
+  password: decrypt(getSecret(userId, SECRET_PASSWORD)),
   mailbox: settings.mailbox || 'INBOX',
 });
 
@@ -166,13 +168,13 @@ const matchesSender = (address, allowed) => {
  * are about. Never throws for a mail it cannot parse: one bad message must not
  * cost the whole scan.
  */
-export async function scan(settings) {
+export async function scan(userId, settings) {
   if (!settings.enabled) {
     const error = new Error('The mailbox scan is turned off.');
     error.code = 'disabled';
     throw error;
   }
-  if (!isConfigured()) {
+  if (!isConfigured(userId)) {
     const error = new Error('No mailbox password is stored yet.');
     error.code = 'not_configured';
     throw error;
@@ -180,14 +182,14 @@ export async function scan(settings) {
 
   const senders = String(settings.senders || '').split(',').map((s) => s.trim()).filter(Boolean);
   const since = new Date(Date.now() - Math.max(1, settings.sinceDays) * 86_400_000);
-  const known = new Set(listParcelRows().map((row) => row.tracking_no.toUpperCase()).filter(Boolean));
-  const seen = new Set(listSuggestionRows().map((row) => row.tracking_no.toUpperCase()));
+  const known = new Set(listParcelRows(userId).map((row) => row.tracking_no.toUpperCase()).filter(Boolean));
+  const seen = new Set(listSuggestionRows(userId).map((row) => row.tracking_no.toUpperCase()));
 
   let read = 0;
   let proposed = 0;
   let advanced = 0;
 
-  await withMailbox(credentials(settings), async (connection) => {
+  await withMailbox(credentials(userId, settings), async (connection) => {
     const uids = await connection.search(since);
     // Newest first, and capped: a mailbox opened after a long holiday must not
     // turn one scan into a thousand-message download.
@@ -212,12 +214,13 @@ export async function scan(settings) {
           for (const { number, carrier } of candidates) {
             // A parcel already followed gets the news; it is not proposed again.
             if (known.has(number)) {
-              if (state && advanceParcel(number, state, subject)) advanced += 1;
+              if (state && advanceParcel(userId, number, state, subject)) advanced += 1;
               continue;
             }
             if (seen.has(number)) continue;
             insertSuggestionRow({
               id: `sug-${Math.random().toString(36).slice(2, 10)}`,
+              user_id: userId,
               tracking_no: number,
               carrier_name: carrier ?? '',
               label: labelFromSubject(subject),
@@ -234,11 +237,11 @@ export async function scan(settings) {
         }
       }
     }
-    if (wanted.length > 0) setMeta(META_LAST_UID, String(Math.max(...wanted)));
+    if (wanted.length > 0) setMeta(lastUidKey(userId), String(Math.max(...wanted)));
   });
 
-  setMeta(META_LAST_SCAN, now());
-  return { read, proposed, advanced, at: getMeta(META_LAST_SCAN) };
+  setMeta(lastScanKey(userId), now());
+  return { read, proposed, advanced, at: getMeta(lastScanKey(userId)) };
 }
 
 /**
@@ -248,8 +251,8 @@ export async function scan(settings) {
  */
 const ORDER = { manual: 0, pending: 1, transit: 2, delivery: 3, pickup: 3, delivered: 4, problem: 4 };
 
-function advanceParcel(number, state, subject) {
-  const row = findParcelByNumber(number);
+function advanceParcel(userId, number, state, subject) {
+  const row = findParcelByNumber(userId, number);
   if (!row || row.registered) return false; // the provider is the better source
   let info = null;
   try {
@@ -261,7 +264,7 @@ function advanceParcel(number, state, subject) {
   if ((ORDER[state] ?? 0) <= (ORDER[current] ?? 0)) return false;
 
   const event = { at: Date.now(), location: '', description: subject.slice(0, 200), status: state };
-  updateParcelInfo(row.id, {
+  updateParcelInfo(userId, row.id, {
     status: state,
     info: {
       status: state,
@@ -282,8 +285,8 @@ function advanceParcel(number, state, subject) {
 
 /* ------------------------------- suggestions ------------------------------ */
 
-export function listSuggestions() {
-  return listSuggestionRows()
+export function listSuggestions(userId) {
+  return listSuggestionRows(userId)
     .filter((row) => row.state === 'new')
     .map((row) => ({
       id: row.id,
@@ -299,8 +302,8 @@ export function listSuggestions() {
 }
 
 /** Read a suggestion without consuming it. */
-export function getSuggestion(id) {
-  const row = getSuggestionRow(id);
+export function getSuggestion(userId, id) {
+  const row = getSuggestionRow(userId, id);
   if (!row) {
     const error = new Error('Unknown suggestion.');
     error.code = 'not_found';
@@ -314,31 +317,31 @@ export function getSuggestion(id) {
  * it any earlier loses the suggestion when the provider refuses the number, and
  * the user would never be offered it again.
  */
-export function markAccepted(id) {
-  setSuggestionState(id, 'accepted');
+export function markAccepted(userId, id) {
+  setSuggestionState(userId, id, 'accepted');
 }
 
-export function ignoreSuggestion(id) {
-  if (!getSuggestionRow(id)) {
+export function ignoreSuggestion(userId, id) {
+  if (!getSuggestionRow(userId, id)) {
     const error = new Error('Unknown suggestion.');
     error.code = 'not_found';
     throw error;
   }
-  setSuggestionState(id, 'ignored');
+  setSuggestionState(userId, id, 'ignored');
   return true;
 }
 
-export function status() {
+export function status(userId) {
   return {
-    configured: isConfigured(),
-    lastScan: getMeta(META_LAST_SCAN),
-    pending: listSuggestions().length,
+    configured: isConfigured(userId),
+    lastScan: getMeta(lastScanKey(userId)),
+    pending: listSuggestions(userId).length,
   };
 }
 
 /** Sign in and hang up, to tell the user whether the credentials work at all. */
-export async function testConnection(settings) {
-  const found = await withMailbox(credentials(settings), (connection) =>
+export async function testConnection(userId, settings) {
+  const found = await withMailbox(credentials(userId, settings), (connection) =>
     connection.search(new Date(Date.now() - 86_400_000)));
   return { ok: true, recent: found.length };
 }

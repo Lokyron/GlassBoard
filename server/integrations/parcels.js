@@ -28,7 +28,11 @@ const BASE_URL = 'https://api.17track.net/track/v2.4';
 const SECRET_KEY = 'parcels.17track_key';
 const MAX_PER_CALL = 40;      // documented limit of register and gettrackinfo
 const MAX_IMPORT_PAGES = 20;  // a stop, so a surprising answer cannot loop for ever
-const CACHE_KEY = 'parcels:list';
+/* The quota, the credentials and the list all belong to one account: two
+   people on one instance hold two 17TRACK keys and two allowances, and a
+   shared cache key would let one of them refresh — or exhaust — the other's. */
+const cachePrefix = (userId) => `parcels:${Number(userId)}:`;
+const listCacheKey = (userId) => `${cachePrefix(userId)}list`;
 /* A number registered moments ago has nothing to say yet: the provider answers
    "within seconds after the tracking number is registered (sometime it may go
    over 5 minutes)". Caching that silence for the whole refresh window is what
@@ -43,15 +47,15 @@ const SETTLING_WINDOW_MS = 30 * 60_000;
 /** A key that cannot be decrypted is no key: that happens when APP_SECRET
  *  changed under a restored database, and saying "configured" would only turn
  *  every call into a confusing failure. */
-export function isConfigured() {
-  return Boolean(apiKey());
+export function isConfigured(userId) {
+  return Boolean(apiKey(userId));
 }
 
-const apiKey = () => decrypt(getSecret(SECRET_KEY));
+const apiKey = (userId) => decrypt(getSecret(userId, SECRET_KEY));
 
-export function setApiKey(key) {
-  setSecret(SECRET_KEY, key ? encrypt(String(key).trim()) : null);
-  cacheDeletePrefix('parcels:');
+export function setApiKey(userId, key) {
+  setSecret(userId, SECRET_KEY, key ? encrypt(String(key).trim()) : null);
+  cacheDeletePrefix(cachePrefix(userId));
 }
 
 /* -------------------------------- transport ------------------------------ */
@@ -60,8 +64,8 @@ export function setApiKey(key) {
  * One call to 17TRACK. The envelope carries a `code` of 0 on success and a
  * per-number `rejected` list, so a partial failure is normal and not an error.
  */
-async function call(path, body, { timeoutMs = 20_000 } = {}) {
-  const key = apiKey();
+async function call(userId, path, body, { timeoutMs = 20_000 } = {}) {
+  const key = apiKey(userId);
   if (!key) {
     const error = new Error('No 17TRACK API key is stored yet.');
     error.code = 'not_configured';
@@ -231,6 +235,7 @@ function present(row) {
 const AMAZON_OWN_NETWORK = /^TBA\d/i;
 
 export async function addParcel(
+  userId,
   { label = '', trackingNumber = '', carrier = null, url = '' } = {},
   { refreshMinutes = 180 } = {}
 ) {
@@ -247,7 +252,7 @@ export async function addParcel(
     error.code = 'empty';
     throw error;
   }
-  if (number && findParcelByNumber(number)) {
+  if (number && findParcelByNumber(userId, number)) {
     const error = new Error('This parcel is already being followed.');
     error.code = 'duplicate';
     throw error;
@@ -255,6 +260,7 @@ export async function addParcel(
 
   const row = {
     id: shortId(),
+    user_id: userId,
     label: String(label || '').trim().slice(0, 80),
     tracking_no: number,
     carrier: Number.isFinite(Number(carrier)) && Number(carrier) > 0 ? Number(carrier) : null,
@@ -268,7 +274,7 @@ export async function addParcel(
   };
 
   if (provider === '17track') {
-    const payload = await call('/register', [{
+    const payload = await call(userId, '/register', [{
       number,
       ...(row.carrier ? { carrier: row.carrier } : { auto_detection: true }),
     }]);
@@ -287,20 +293,20 @@ export async function addParcel(
   }
 
   insertParcelRow(row);
-  cacheDeletePrefix('parcels:');
+  cacheDeletePrefix(cachePrefix(userId));
   // The parcel exists from here on, and the credit is spent either way. A first
   // read that fails or finds nothing must not make the whole call look like a
   // failure: the next one is a minute away.
   if (row.registered) {
     try {
-      await refresh({ force: true, refreshMinutes });
+      await refresh(userId, { force: true, refreshMinutes });
     } catch { /* still settling upstream, or the API blinked */ }
   }
-  return present(getParcelRow(row.id));
+  return present(getParcelRow(userId, row.id));
 }
 
-export async function removeParcel(id) {
-  const row = getParcelRow(id);
+export async function removeParcel(userId, id) {
+  const row = getParcelRow(userId, id);
   if (!row) {
     const error = new Error('Unknown parcel.');
     error.code = 'not_found';
@@ -310,11 +316,11 @@ export async function removeParcel(id) {
   // parcel on the dashboard: the user asked for it to go.
   if (row.registered && row.tracking_no) {
     try {
-      await call('/deletetrack', [{ number: row.tracking_no, ...(row.carrier ? { carrier: row.carrier } : {}) }]);
+      await call(userId, '/deletetrack', [{ number: row.tracking_no, ...(row.carrier ? { carrier: row.carrier } : {}) }]);
     } catch { /* already gone upstream, or the API is down */ }
   }
-  deleteParcelRow(id);
-  cacheDeletePrefix('parcels:');
+  deleteParcelRow(userId, id);
+  cacheDeletePrefix(cachePrefix(userId));
   return true;
 }
 
@@ -323,15 +329,15 @@ export async function removeParcel(id) {
  * Free of quota, so the only thing worth throttling is politeness towards the
  * API: the answer is cached for `refreshMinutes`.
  */
-export async function refresh({ force = false, refreshMinutes = 180 } = {}) {
-  const rows = listParcelRows().filter((row) => row.registered && row.tracking_no);
+export async function refresh(userId, { force = false, refreshMinutes = 180 } = {}) {
+  const rows = listParcelRows(userId).filter((row) => row.registered && row.tracking_no);
   if (rows.length === 0) return { checked: 0 };
-  if (!force && cacheGet(CACHE_KEY)) return { checked: 0, cached: true };
+  if (!force && cacheGet(listCacheKey(userId))) return { checked: 0, cached: true };
 
   const byNumber = new Map(rows.map((row) => [row.tracking_no.toLowerCase(), row]));
   let checked = 0;
   for (const batch of chunk(rows, MAX_PER_CALL)) {
-    const payload = await call('/gettrackinfo', batch.map((row) => ({
+    const payload = await call(userId, '/gettrackinfo', batch.map((row) => ({
       number: row.tracking_no,
       ...(row.carrier ? { carrier: row.carrier } : {}),
     })));
@@ -339,7 +345,7 @@ export async function refresh({ force = false, refreshMinutes = 180 } = {}) {
       const row = byNumber.get(String(entry.number || '').toLowerCase());
       if (!row) continue;
       const info = normalise(entry);
-      updateParcelInfo(row.id, {
+      updateParcelInfo(userId, row.id, {
         status: info.status,
         info,
         carrier: info.carrier.id,
@@ -349,15 +355,15 @@ export async function refresh({ force = false, refreshMinutes = 180 } = {}) {
     }
   }
   // The cache entry is a timestamp, not the payload: the rows are the truth.
-  const ttl = stillSettling() ? SETTLING_TTL_SECONDS : Math.max(300, refreshMinutes * 60);
-  cacheSet(CACHE_KEY, { at: now() }, ttl);
+  const ttl = stillSettling(userId) ? SETTLING_TTL_SECONDS : Math.max(300, refreshMinutes * 60);
+  cacheSet(listCacheKey(userId), { at: now() }, ttl);
   return { checked, settling: ttl === SETTLING_TTL_SECONDS };
 }
 
 /** True while a parcel added recently has yet to hear anything back. */
-function stillSettling() {
+function stillSettling(userId) {
   const limit = Date.now() - SETTLING_WINDOW_MS;
-  return listParcelRows().some((row) => {
+  return listParcelRows(userId).some((row) => {
     if (!row.registered || !row.tracking_no) return false;
     const known = row.status && row.status !== 'NotFound';
     return !known && new Date(row.created_at).getTime() >= limit;
@@ -369,9 +375,9 @@ function stillSettling() {
  * Never throws: a provider outage shows the last known statuses instead of
  * breaking the dashboard.
  */
-export async function getParcels({ refreshMinutes = 180, hideDeliveredAfterDays = 3 } = {}) {
+export async function getParcels(userId, { refreshMinutes = 180, hideDeliveredAfterDays = 3 } = {}) {
   let error = null;
-  if (isConfigured()) {
+  if (isConfigured(userId)) {
     try {
       await refresh({ refreshMinutes });
     } catch (failure) {
@@ -380,7 +386,7 @@ export async function getParcels({ refreshMinutes = 180, hideDeliveredAfterDays 
   }
 
   const cutoff = Date.now() - Math.max(0, hideDeliveredAfterDays) * 86_400_000;
-  const all = listParcelRows().map(present);
+  const all = listParcelRows(userId).map(present);
   // A parcel delivered a while ago is done with: it leaves the list on its own,
   // which is what keeps the tile readable without any housekeeping.
   const parcels = all.filter((parcel) => {
@@ -398,8 +404,8 @@ export async function getParcels({ refreshMinutes = 180, hideDeliveredAfterDays 
 
   return {
     ok: true,
-    configured: isConfigured() || all.some((parcel) => parcel.provider === 'manual'),
-    hasKey: isConfigured(),
+    configured: isConfigured(userId) || all.some((parcel) => parcel.provider === 'manual'),
+    hasKey: isConfigured(userId),
     parcels,
     hidden: all.length - parcels.length,
     counts,
@@ -420,11 +426,11 @@ export async function getParcels({ refreshMinutes = 180, hideDeliveredAfterDays 
  * here. That is the whole point of the operation, and the reason it may be run
  * as often as wanted.
  */
-export async function importFromProvider({ refreshMinutes = 180 } = {}) {
+export async function importFromProvider(userId, { refreshMinutes = 180 } = {}) {
   const items = [];
   let pageSize = null;
   for (let page = 1; page <= MAX_IMPORT_PAGES; page += 1) {
-    const payload = await call('/gettracklist', { page_no: page });
+    const payload = await call(userId, '/gettracklist', { page_no: page });
     const accepted = payload?.data?.accepted ?? [];
     items.push(...accepted);
     if (accepted.length === 0) break;
@@ -439,13 +445,14 @@ export async function importFromProvider({ refreshMinutes = 180 } = {}) {
   for (const item of items) {
     const number = String(item?.number || '').trim();
     if (!number || !TRACKING_NUMBER.test(number)) continue;
-    if (findParcelByNumber(number)) {
+    if (findParcelByNumber(userId, number)) {
       known += 1;
       continue;
     }
     const registeredAt = item.register_time ? new Date(item.register_time) : null;
     insertParcelRow({
       id: shortId(),
+      user_id: userId,
       // Whatever the account was told about the parcel, in order of usefulness;
       // the tile falls back to the number itself when there is nothing.
       label: String(item.remark || item.order_no || item.tag || '').trim().slice(0, 80),
@@ -462,19 +469,19 @@ export async function importFromProvider({ refreshMinutes = 180 } = {}) {
     imported += 1;
   }
 
-  cacheDeletePrefix('parcels:');
+  cacheDeletePrefix(cachePrefix(userId));
   if (imported > 0) {
     // Free as well, and it is what turns the new rows into something to look at.
     try {
-      await refresh({ force: true, refreshMinutes });
+      await refresh(userId, { force: true, refreshMinutes });
     } catch { /* the statuses will come on the next read */ }
   }
   return { imported, known, seen: items.length };
 }
 
 /** What is left of the provider's allowance, for the settings panel. */
-export async function getQuota() {
-  const payload = await call('/getquota', []);
+export async function getQuota(userId) {
+  const payload = await call(userId, '/getquota', []);
   const data = payload?.data ?? {};
   return {
     total: Number(data.quota_total) || 0,

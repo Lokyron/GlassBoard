@@ -449,12 +449,69 @@ function renderRecoveryCodes(codes) {
   id('go-dashboard').addEventListener('click', () => { window.location.href = '/'; });
 }
 
+/* -------------------------------- invitation ------------------------------ */
+/* The token lives in the fragment, exactly as the QR code's secret does: a
+   fragment is never sent to the server, so the token reaches no access log and
+   no proxy. The page asks the API about it explicitly, once. */
+
+async function renderInvite() {
+  const token = window.location.hash.slice(1);
+  if (!token) {
+    return renderApprovalNotice('invite.missingTitle', 'invite.missingBody', { icon: 'warning' });
+  }
+
+  let invitation;
+  try {
+    invitation = await api(`/api/auth/invite?token=${encodeURIComponent(token)}`);
+  } catch {
+    return renderApprovalNotice('invite.deadTitle', 'invite.deadBody', { icon: 'warning' });
+  }
+
+  // A username chosen by whoever sent the invitation is shown but not editable:
+  // changing it would quietly make the account somebody else.
+  const fixedName = Boolean(invitation.username);
+  card().innerHTML = `${header(t('invite.title'), t('invite.subtitle'), 'sparkle', t('auth.chipWelcome'))}
+    <div class="auth-err" id="auth-error" hidden></div>
+    <form class="dlg" id="invite-form">
+      <label class="fld"><span class="fld-l">${t('auth.username')}</span>
+        <input class="inp" name="username" autocomplete="username" required
+          value="${esc(invitation.username)}"${fixedName ? ' readonly' : ' autofocus'}>
+        ${fixedName ? `<span class="fld-h">${t('invite.usernameFixed')}</span>` : ''}</label>
+      <label class="fld"><span class="fld-l">${t('auth.password')}</span>
+        <input class="inp" name="password" type="password" autocomplete="new-password" required
+          ${fixedName ? 'autofocus' : ''}>
+        <span class="fld-h">${t('auth.passwordHint')}</span></label>
+      ${invitation.role === 'admin' ? `<p class="fld-h">${t('invite.asAdmin')}</p>` : ''}
+      <button class="btn primary" type="submit">${t('auth.createAccount')}</button>
+    </form>`;
+
+  id('invite-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    showError('');
+    const data = Object.fromEntries(new FormData(event.target));
+    const button = event.target.querySelector('button');
+    button.disabled = true;
+    try {
+      await api('/api/auth/invite', { method: 'POST', body: { ...data, token } });
+      // The token is spent; drop it from the address bar before anything else
+      // so a reload, or a shoulder, cannot pick it back up.
+      history.replaceState(null, '', '/invite');
+      renderTotpEnrolment();
+    } catch (error) {
+      showError(error.message);
+      button.disabled = false;
+    }
+  });
+  return undefined;
+}
+
 /* ---------------------------------- boot ---------------------------------- */
 
 const TAGLINES = {
   login: 'hello.taglineSignIn',
   approve: 'hello.taglineApprove',
   setup: 'hello.taglineSetup',
+  invite: 'hello.taglineInvite',
 };
 
 async function startAuthPage(page) {
@@ -462,6 +519,7 @@ async function startAuthPage(page) {
   startAside(TAGLINES[page] || TAGLINES.login);
   if (page === 'login') return renderLogin();
   if (page === 'approve') return renderApprove();
+  if (page === 'invite') return renderInvite();
 
   const state = await api('/api/auth/state');
   if (state.setupRequired) return renderCreateAccount();

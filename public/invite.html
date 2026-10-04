@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Glassboard</title>
+<meta name="theme-color" content="#07080c" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Dashboard" />
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/assets/base.css" />
+<link rel="stylesheet" href="/assets/app-extra.css" />
+<link rel="stylesheet" href="/assets/themes.css" />
+</head>
+<body data-page="invite">
+<div id="wall"></div><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+<main class="auth-wrap">
+  <section class="auth-card glass rise">
+    <aside class="auth-aside">
+      <div class="auth-mark brand"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="house"></svg></div>
+      <div class="auth-hello">
+        <h1 id="auth-greeting">&nbsp;</h1>
+        <p id="auth-tagline">&nbsp;</p>
+      </div>
+      <div class="auth-now"><span class="t" id="auth-clock">--:--</span><span class="d" id="auth-date">&nbsp;</span></div>
+    </aside>
+    <div class="auth-main" id="card"></div>
+  </section>
+</main>
+<div id="toast" class="glass" hidden></div>
+<script src="/assets/icons.js"></script>
+<script src="/assets/icons-extra.js"></script>
+<script src="/assets/i18n.js"></script>
+<script src="/assets/pwa.js"></script>
+<script src="/assets/auth.js"></script>
+</body>
+</html>

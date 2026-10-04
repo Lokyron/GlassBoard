@@ -846,6 +846,326 @@ async function startUpdate(draw) {
   setTimeout(poll, 2000);
 }
 
+
+/* ------------------------------- accounts --------------------------------- */
+/* Administrators only. The tab is not even built for anyone else, and the API
+   refuses every route here regardless — the hidden tab is a convenience, not
+   the control. */
+
+const ROLE_LABEL = (role) => (role === 'admin' ? t('adm.roleAdmin') : t('adm.roleUser'));
+
+/** "2 hours ago", or the date once that stops being useful. */
+function sinceLabel(iso) {
+  if (!iso) return t('adm.never');
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 2) return t('adm.justNow');
+  if (minutes < 60) return t('adm.minutesAgo', { n: minutes });
+  if (minutes < 1440) return t('adm.hoursAgo', { n: Math.round(minutes / 60) });
+  if (minutes < 20160) return t('adm.daysAgo', { n: Math.round(minutes / 1440) });
+  return new Date(iso).toLocaleDateString(state.config.site.locale, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** "in 47 hours". The other direction, for a date that has not arrived yet:
+ *  an invitation's expiry read through sinceLabel came out as "just now",
+ *  because the difference it measures is negative for anything in the future. */
+function untilLabel(iso) {
+  const minutes = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  if (!Number.isFinite(minutes) || minutes <= 0) return t('adm.expired');
+  if (minutes < 60) return t('adm.inMinutes', { n: minutes });
+  if (minutes < 2880) return t('adm.inHours', { n: Math.round(minutes / 60) });
+  return t('adm.inDays', { n: Math.round(minutes / 1440) });
+}
+
+function accountsPane() {
+  const pane = el('div', { class: 'pane' });
+  const list = el('div', { class: 'adm-list' });
+  const invites = el('div', { class: 'adm-list' });
+  const invitesTitle = el('div', { class: 'fld-l', text: t('adm.pending'), hidden: true });
+  let data = null;
+
+  const reload = async () => {
+    try {
+      data = await api('/api/admin/accounts');
+      renderAccounts();
+      renderInvitations();
+    } catch (error) {
+      list.innerHTML = '';
+      list.appendChild(el('p', { class: 'fld-h', text: error.message }));
+    }
+  };
+
+  const act = async (label, run) => {
+    try {
+      await run();
+      toast(label);
+      await reload();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  };
+
+  function renderAccounts() {
+    list.innerHTML = '';
+    for (const account of data.accounts) {
+      const isMe = account.id === data.me;
+      const row = el('div', { class: `adm-row${isMe ? ' me' : ''}` });
+
+      const who = el('div', { class: 'adm-who' }, [
+        el('div', { class: 'adm-name' }, [
+          el('span', { text: account.username }),
+          account.role === 'admin' ? el('span', { class: 'adm-badge', text: t('adm.roleAdmin') }) : null,
+          isMe ? el('span', { class: 'adm-badge you', text: t('adm.you') }) : null,
+        ]),
+        el('div', { class: 'adm-meta', text: [
+          account.email || t('adm.noEmail'),
+          account.enrolled ? t('adm.seen', { when: sinceLabel(account.lastSeenAt) }) : t('adm.neverSignedIn'),
+          account.openSessions > 0 ? t('adm.openSessions', { n: account.openSessions }) : '',
+        ].filter(Boolean).join(' · ') }),
+      ]);
+
+      const actions = el('div', { class: 'adm-actions' });
+      const roleSelect = el('select', {
+        class: 'inp small',
+        onchange: (event) => act(t('msg.saved'), () =>
+          api(`/api/admin/accounts/${account.id}`, { method: 'PATCH', body: { role: event.target.value } })),
+      }, [
+        el('option', { value: 'user', text: t('adm.roleUser') }),
+        el('option', { value: 'admin', text: t('adm.roleAdmin') }),
+      ]);
+      roleSelect.value = account.role;
+      actions.appendChild(roleSelect);
+
+      if (account.openSessions > 0) {
+        actions.appendChild(el('button', {
+          class: 'btn ghost small', type: 'button', text: t('adm.signOut'),
+          onclick: () => act(t('adm.signedOut'), () =>
+            api(`/api/admin/accounts/${account.id}/sign-out`, { method: 'POST', body: {} })),
+        }));
+      }
+      if (!isMe) {
+        actions.appendChild(el('button', {
+          class: 'btn danger small', type: 'button', text: t('adm.delete'),
+          // Deleting takes the dashboard, the credentials and the parcels with
+          // it, so it asks — once, plainly, naming what goes.
+          onclick: () => {
+            if (!window.confirm(t('adm.deleteConfirm', { name: account.username }))) return;
+            act(t('adm.deleted'), () => api(`/api/admin/accounts/${account.id}`, { method: 'DELETE' }));
+          },
+        }));
+      }
+
+      row.append(who, actions);
+      list.appendChild(row);
+    }
+  }
+
+  function renderInvitations() {
+    invites.innerHTML = '';
+    invitesTitle.hidden = data.invitations.length === 0;
+    for (const invitation of data.invitations) {
+      invites.appendChild(el('div', { class: 'adm-row' }, [
+        el('div', { class: 'adm-who' }, [
+          el('div', { class: 'adm-name' }, [
+            el('span', { text: invitation.username || invitation.email || t('adm.anyone') }),
+            invitation.role === 'admin' ? el('span', { class: 'adm-badge', text: t('adm.roleAdmin') }) : null,
+          ]),
+          el('div', { class: 'adm-meta', text: [
+            invitation.sentTo ? t('adm.sentTo', { email: invitation.sentTo }) : t('adm.linkOnly'),
+            t('adm.expires', { when: untilLabel(invitation.expiresAt) }),
+          ].join(' · ') }),
+        ]),
+        el('div', { class: 'adm-actions' }, [
+          el('button', {
+            class: 'btn ghost small', type: 'button', text: t('adm.revoke'),
+            onclick: () => act(t('adm.revoked'), () =>
+              api(`/api/admin/invitations/${invitation.id}`, { method: 'DELETE' })),
+          }),
+        ]),
+      ]));
+    }
+  }
+
+  pane.appendChild(el('p', { class: 'fld-h', text: t('adm.intro') }));
+  pane.appendChild(list);
+
+  /* ---- create an account outright ---- */
+  pane.appendChild(el('div', { class: 'divider' }));
+  pane.appendChild(el('div', { class: 'fld-l', text: t('adm.addTitle') }));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('adm.addHint') }));
+  const newName = textInput('', { placeholder: t('auth.username'), autocomplete: 'off' });
+  const newPassword = textInput('', { type: 'password', placeholder: t('auth.password'), autocomplete: 'new-password' });
+  const newRole = el('select', { class: 'inp' }, [
+    el('option', { value: 'user', text: t('adm.roleUser') }),
+    el('option', { value: 'admin', text: t('adm.roleAdmin') }),
+  ]);
+  pane.appendChild(el('div', { class: 'adm-form' }, [newName, newPassword, newRole,
+    el('button', {
+      class: 'btn primary', type: 'button', text: t('adm.add'),
+      onclick: () => act(t('adm.added'), async () => {
+        await api('/api/admin/accounts', { method: 'POST', body: {
+          username: newName.value, password: newPassword.value, role: newRole.value,
+        } });
+        newName.value = '';
+        newPassword.value = '';
+      }),
+    })]));
+
+  /* ---- or invite ---- */
+  pane.appendChild(el('div', { class: 'divider' }));
+  pane.appendChild(el('div', { class: 'fld-l', text: t('adm.inviteTitle') }));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('adm.inviteHint') }));
+  const inviteName = textInput('', { placeholder: t('adm.inviteNamePlaceholder'), autocomplete: 'off' });
+  const inviteEmail = textInput('', { type: 'email', placeholder: t('adm.inviteEmailPlaceholder'), autocomplete: 'off' });
+  const inviteRole = el('select', { class: 'inp' }, [
+    el('option', { value: 'user', text: t('adm.roleUser') }),
+    el('option', { value: 'admin', text: t('adm.roleAdmin') }),
+  ]);
+  // The link is shown whatever happened to the mail, because it is the thing
+  // that actually works: an instance with no mail server is a normal instance.
+  const linkBox = el('div', { class: 'adm-link', hidden: true });
+  pane.appendChild(el('div', { class: 'adm-form' }, [inviteName, inviteEmail, inviteRole,
+    el('button', {
+      class: 'btn primary', type: 'button', text: t('adm.invite'),
+      onclick: async () => {
+        try {
+          const result = await api('/api/admin/invitations', { method: 'POST', body: {
+            username: inviteName.value, email: inviteEmail.value, role: inviteRole.value,
+          } });
+          inviteName.value = '';
+          inviteEmail.value = '';
+          linkBox.hidden = false;
+          linkBox.innerHTML = '';
+          linkBox.append(
+            el('div', { class: 'fld-l', text: result.sent ? t('adm.inviteSent') : t('adm.inviteReady') }),
+            el('code', { text: result.link }),
+            el('button', {
+              class: 'btn ghost small', type: 'button', text: t('adm.copyLink'),
+              onclick: async () => {
+                try {
+                  await navigator.clipboard.writeText(result.link);
+                  toast(t('msg.copied'));
+                } catch {
+                  toast(t('msg.copyFailed'), 'error');
+                }
+              },
+            }),
+            result.mailError ? el('p', { class: 'fld-h', text: t('adm.inviteMailFailed', { error: result.mailError }) }) : null
+          );
+          data = { ...data, invitations: result.invitations };
+          renderInvitations();
+        } catch (error) {
+          toast(error.message, 'error');
+        }
+      },
+    })]));
+  pane.appendChild(linkBox);
+  pane.appendChild(invitesTitle);
+  pane.appendChild(invites);
+
+  reload();
+  return pane;
+}
+
+/* ---------------------------------- SMTP ---------------------------------- */
+
+function smtpPane() {
+  const pane = el('div', { class: 'pane' });
+  pane.appendChild(el('p', { class: 'fld-h', text: t('smtp.intro') }));
+
+  const host = textInput('', { placeholder: 'smtp.example.org', autocomplete: 'off' });
+  const port = textInput('', { type: 'number', min: 1, max: 65535 });
+  const security = el('select', { class: 'inp' }, [
+    el('option', { value: 'starttls', text: t('smtp.starttls') }),
+    el('option', { value: 'tls', text: t('smtp.tls') }),
+    el('option', { value: 'none', text: t('smtp.none') }),
+  ]);
+  const user = textInput('', { autocomplete: 'off' });
+  const password = textInput('', { type: 'password', autocomplete: 'new-password' });
+  const from = textInput('', { type: 'email', placeholder: 'glassboard@example.org', autocomplete: 'off' });
+  const fromName = textInput('', { autocomplete: 'off' });
+  const status = el('div', { class: 'status', text: '…' });
+
+  pane.appendChild(status);
+  pane.appendChild(field(t('smtp.host'), host));
+  pane.appendChild(field(t('smtp.port'), port));
+  pane.appendChild(field(t('smtp.security'), security, t('smtp.securityHint')));
+  pane.appendChild(field(t('smtp.user'), user));
+  pane.appendChild(field(t('smtp.password'), password, t('smtp.passwordHint')));
+  pane.appendChild(field(t('smtp.from'), from, t('smtp.fromHint')));
+  pane.appendChild(field(t('smtp.fromName'), fromName));
+
+  const testTo = textInput('', { type: 'email', placeholder: t('smtp.testToPlaceholder'), autocomplete: 'off' });
+  pane.appendChild(el('div', { class: 'divider' }));
+  pane.appendChild(field(t('smtp.testTo'), testTo, t('smtp.testHint')));
+
+  /** What is on screen, so a test says whether these settings work — not
+   *  whether the saved ones do. An untouched password field means "keep the
+   *  stored one", which is why it is only sent when it has something in it. */
+  const onScreen = () => ({
+    host: host.value.trim(),
+    port: Number(port.value) || 587,
+    security: security.value,
+    user: user.value.trim(),
+    from: from.value.trim(),
+    fromName: fromName.value.trim(),
+    ...(password.value ? { password: password.value } : {}),
+  });
+
+  const row = el('div', { class: 'row' }, [
+    el('button', {
+      class: 'btn ghost', type: 'button', text: t('smtp.test'),
+      onclick: async (event) => {
+        const button = event.currentTarget;
+        const label = button.textContent;
+        button.disabled = true;
+        button.textContent = t('smtp.testing');
+        try {
+          const result = await api('/api/admin/smtp/test', {
+            method: 'POST', body: { ...onScreen(), ...(testTo.value.trim() ? { to: testTo.value.trim() } : {}) },
+          });
+          toast(result.sent ? t('smtp.testSent') : t('smtp.testOk'));
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          button.disabled = false;
+          button.textContent = label;
+        }
+      },
+    }),
+    el('button', {
+      class: 'btn primary', type: 'button', text: t('set.save'),
+      onclick: async () => {
+        try {
+          await api('/api/admin/smtp', { method: 'PUT', body: onScreen() });
+          password.value = '';
+          toast(t('msg.saved'));
+          load();
+        } catch (error) {
+          toast(error.message, 'error');
+        }
+      },
+    }),
+  ]);
+  pane.appendChild(row);
+
+  async function load() {
+    try {
+      const { smtp } = await api('/api/admin/smtp');
+      host.value = smtp.host;
+      port.value = smtp.port;
+      security.value = smtp.security;
+      user.value = smtp.user;
+      from.value = smtp.from;
+      fromName.value = smtp.fromName;
+      status.textContent = smtp.hasPassword ? t('smtp.hasPassword') : t('smtp.noPassword');
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+  load();
+  return pane;
+}
+
 /* -------------------------------- settings ------------------------------- */
 
 async function openSettings(section = 'general') {
@@ -869,6 +1189,16 @@ async function openSettings(section = 'general') {
     georide: t('set.georide'), parcels: t('set.parcels'), account: t('set.account'), data: t('set.data'),
     about: t('set.about'),
   };
+
+  /* The two administration tabs exist only for an administrator. Hiding them
+     is a courtesy to everyone else, not the control: every route behind them
+     refuses a standard account on its own. */
+  if (state.me?.admin) {
+    sections.accounts = () => accountsPane();
+    sections.smtp = () => smtpPane();
+    labels.accounts = t('adm.tab');
+    labels.smtp = t('smtp.tab');
+  }
 
   const show = (name) => {
     panes.innerHTML = '';
