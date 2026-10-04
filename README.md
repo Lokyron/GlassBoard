@@ -194,6 +194,14 @@ git pull && npm ci --omit=dev && systemctl restart glassboard
 An installed app picks the new version up on its own: the service worker and the
 manifest are always served fresh.
 
+The first time you open the dashboard on a version you have not seen, a dialog
+says what changed. It is read straight out of [CHANGELOG.md](CHANGELOG.md), so
+there is never a second list of changes to keep in step with the first, and it
+is acknowledged per account — your dismissing it does not dismiss it for anyone
+else. **Settings → About** has a **What's new** button to open it again. The
+notes are in English, like this file; the dialog around them follows your
+language and says so.
+
 ### From inside Glassboard
 
 Glassboard can also update itself, from **Settings → About**: it shows the

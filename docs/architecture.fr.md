@@ -58,6 +58,7 @@ Glassboard/
 │   ├── maintenance.js      # Tâche horaire : cache, sessions, tuiles, wal_checkpoint, ANALYZE
 │   ├── update.js           # Canaux stable / bêta, fichier de requête lu par le service root
 │   ├── smtp.js             # Client SMTP maison (RFC 5321), réglages d'instance dans `meta`
+│   ├── release-notes.js    # Analyse de CHANGELOG.md pour la fenêtre « Nouveautés »
 │   ├── mail-templates.js   # Le seul message envoyé : l'invitation
 │   ├── html.js             # Échappement HTML côté serveur (pour le mail)
 │   ├── routes/             # auth.js, config.js, integrations.js, appearance.js, update.js, admin.js
@@ -137,7 +138,7 @@ Pas de tests, linter ni CI configurés.
 | `/api/auth` | `GET /invite` et `POST /invite` (publics), `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
 | `/api/integrations` | `GET /weather/forecast` (horaire : température, ressenti, vent, code, jour/nuit ; quotidien : min/max, pluie, code, vent, **lever et coucher**), `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /parcels/suggestions`, `POST /parcels/suggestions/:id/accept\|ignore`, `POST /parcels/mail/scan\|test`, `PUT/DELETE /parcels/mail/password`, `GET /map/tile/:z/:x/:y.png` |
-| `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start` |
+| `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start`, `GET /news`, `POST /news/seen` |
 | `/api/admin` | **administrateur uniquement** : `GET /accounts`, `POST /accounts`, `PATCH /accounts/:id`, `POST /accounts/:id/sign-out`, `DELETE /accounts/:id`, `POST /invitations`, `DELETE /invitations/:id`, `GET/PUT /smtp`, `POST /smtp/test` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
 
@@ -146,6 +147,12 @@ Pas de tests, linter ni CI configurés.
 ## 8. Dette technique, TODOs & points d'attention
 
 - **Aucun marqueur `TODO`/`FIXME`** dans le code.
+- **Fenêtre « Nouveautés »** : le contenu vient de `CHANGELOG.md`, analysé au vol (`release-notes.js`),
+  **jamais d'un second fichier** — deux listes des mêmes changements divergent, et c'est toujours celle que
+  personne ne lit qui se périme. L'accusé de lecture est **par compte et côté serveur** (`meta`,
+  `news.<id>.build`), indexé sur le **commit** et non sur la version : sur le canal bêta la version du
+  `package.json` ne bouge pas d'un build à l'autre. Les notes restent **en anglais** (comme le README) ;
+  seule l'interface autour est traduite, et elle le dit.
 - **Cloisonnement des comptes** : toutes les routes lisent `req.user.id` et **jamais** un identifiant
   venu de la requête. C'est tout le cloisonnement : aucun paramètre ne désigne le tableau de bord, les
   colis ou les secrets de quelqu'un d'autre. Une révision appartenant à un autre compte répond `404` et

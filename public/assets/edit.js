@@ -775,8 +775,15 @@ function aboutPane() {
       body.appendChild(el('p', { class: 'fld-h', text: t('upd.upToDate') }));
     }
 
+    // Reachable on purpose, not only when it appears by itself after an
+    // update: the one thing worse than a dialog nobody asked for is one you
+    // cannot get back once you have dismissed it. It has nothing to do with
+    // whether this instance updates itself, so it sits above that question.
+    const news = el('button', { class: 'btn ghost', type: 'button', text: t('news.open'), onclick: openNewsHistory });
+
     if (!payload?.enabled) {
       body.appendChild(el('p', { class: 'fld-h', text: t('upd.disabled') }));
+      body.appendChild(news);
       return;
     }
     const button = el('button', {
@@ -795,6 +802,7 @@ function aboutPane() {
     });
     body.appendChild(button);
     body.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('upd.check'), onclick: () => loadAbout(draw, true) }));
+    body.appendChild(news);
   };
 
   loadAbout(draw, false);

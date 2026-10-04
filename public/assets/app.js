@@ -38,6 +38,7 @@ const state = {
   modalTile: null,
   selectedDay: 0,
   me: null,           // the signed-in account: its name, and whether it administers
+  news: null,         // the changelog sections this account has not been shown
   curve: null,        // the selected day, folded for the curve and its cursor
   curveNodes: null,   // the cursor's svg nodes, built once per render and moved
   curveIndex: null,   // the hour being read, or null when nothing is
@@ -1852,6 +1853,89 @@ function openDialog({ title, subtitle = '', body }) {
 }
 const closeDialog = () => id('dialog-modal').classList.remove('open');
 
+
+/* ------------------------------- what's new ------------------------------- */
+/* After an update, the page comes back on a new build and this says what
+   changed. Once per account per build: the acknowledgement is stored server
+   side, so it is not something a cleared browser brings back. */
+
+const NEWS_KINDS = { added: 'news.added', changed: 'news.changed', fixed: 'news.fixed', removed: 'news.removed' };
+
+/** One changelog section, as a block of the dialog. */
+function newsSection(section) {
+  const groups = section.groups.map((group) =>
+    el('div', { class: 'news-group' }, [
+      el('div', { class: 'news-kind', text: NEWS_KINDS[group.kind] ? t(NEWS_KINDS[group.kind]) : group.kind }),
+      el('ul', { class: 'news-items' }, group.items.map((item) =>
+        el('li', {}, [
+          // Entries without a headline — the Changed and Fixed lists mostly —
+          // are a single paragraph, and look right that way.
+          item.lead ? el('strong', { class: 'news-lead', text: item.lead }) : null,
+          item.text ? el('span', { text: item.text }) : null,
+        ]))),
+    ])
+  );
+  return el('section', { class: 'news-section' }, [
+    el('div', { class: 'news-head' }, [
+      el('h4', { text: section.released ? section.version : t('news.unreleased') }),
+      section.date ? el('span', { class: 'news-date', text: section.date }) : null,
+    ]),
+    section.summary ? el('p', { class: 'news-summary', text: section.summary }) : null,
+    ...groups,
+  ]);
+}
+
+function newsBody(sections, { acknowledge = true } = {}) {
+  const body = el('div', { class: 'dlg news' });
+  // The notes are English while the interface is not, so the dialog says so
+  // rather than leaving the reader to wonder whether something is broken.
+  body.appendChild(el('p', { class: 'fld-h', text: t('news.inEnglish') }));
+  sections.forEach((section) => body.appendChild(newsSection(section)));
+  body.appendChild(el('div', { class: 'dlg-foot' }, [
+    el('button', {
+      class: 'btn primary', type: 'button', text: t('news.gotIt'),
+      onclick: async () => {
+        if (acknowledge) await api('/api/update/news/seen', { method: 'POST', body: {} }).catch(() => {});
+        closeDialog();
+      },
+    }),
+  ]));
+  return body;
+}
+
+/** Ask once at start-up, and open the dialog only when there is something
+ *  unread. A failure here is silent: a dashboard that cannot reach its own
+ *  changelog is still a working dashboard. */
+async function checkForNews() {
+  try {
+    const news = await api('/api/update/news');
+    state.news = news;
+    if (!news.unread || news.sections.length === 0) return;
+    openDialog({
+      title: t('news.title'),
+      subtitle: news.installed?.version ? t('news.subtitle', { version: news.installed.version }) : '',
+      body: newsBody(news.sections),
+    });
+  } catch {
+    /* no changelog, or no network to our own server: nothing to show */
+  }
+}
+
+/** The same thing, asked for deliberately from the settings. Shows the recent
+ *  history rather than only the unread part, and acknowledges nothing: reading
+ *  it on purpose is not the same as being told. */
+async function openNewsHistory() {
+  try {
+    const news = state.news ?? await api('/api/update/news');
+    const sections = news.all?.length ? news.all : news.sections;
+    if (!sections?.length) return toast(t('news.none'));
+    openDialog({ title: t('news.title'), subtitle: '', body: newsBody(sections, { acknowledge: false }) });
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+  return undefined;
+}
+
 /* ------------------------------ account menu ------------------------------ */
 
 function toggleAccountMenu(force) {
@@ -1965,6 +2049,9 @@ async function boot() {
   renderAll();
   refreshData();
   startTimers();
+  // Last, and deliberately not awaited: the dialog is the least urgent thing
+  // on the page and must never hold the dashboard up.
+  checkForNews();
 }
 
 /* --------------------------------- timers -------------------------------- */

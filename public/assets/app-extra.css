@@ -510,3 +510,24 @@ a.btn{text-decoration:none}
 .adm-link code{font-size:.78rem;word-break:break-all;line-height:1.5;
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .adm-link .btn{justify-self:start}
+
+/* -------------------------------- what's new ------------------------------ */
+/* The dialog shown once after an update. Reads like a changelog, because that
+   is what it is: one block per version, grouped by what the change was. */
+.news{gap:4px}
+.news-section{padding-top:16px;margin-top:4px;border-top:1px solid var(--border)}
+.news-section:first-of-type{padding-top:8px;border-top:none}
+.news-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.news-head h4{margin:0;font-size:1.06rem;font-weight:720}
+.news-date{color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums}
+.news-summary{margin:4px 0 0;color:var(--muted);font-size:.9rem;line-height:1.5}
+.news-group{margin-top:14px}
+.news-kind{font-size:.68rem;text-transform:uppercase;letter-spacing:.13em;color:var(--primary);
+  font-weight:700;margin-bottom:6px}
+.news-items{margin:0;padding-left:18px;display:grid;gap:8px}
+.news-items li{font-size:.9rem;line-height:1.55}
+/* The headline on its own line, so a list of changes can be read by scanning
+   the leads and stopping only at the one that matters. */
+.news-lead{display:block;font-weight:700;color:var(--text)}
+.news-lead + span{color:var(--muted)}
+.news-items li::marker{color:var(--muted)}

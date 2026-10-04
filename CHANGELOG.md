@@ -32,6 +32,13 @@ Notable changes, newest first. The format follows
   is encrypted with `APP_SECRET`. A test button checks the settings on screen
   rather than the saved ones, and can send a message to an address of your
   choice.
+- **What changed, after an update.** The first time an account opens the
+  dashboard on a build it has not seen, a dialog says what came with it, read
+  straight out of this changelog so there is never a second list to keep in
+  step. It is acknowledged per account and server-side, so a cleared browser
+  does not bring it back, and it is reachable on purpose from **Settings →
+  About** once dismissed. The notes themselves are in English, like this file
+  and the README: the dialog around them is translated and says so.
 - **Sunrise and sunset.** Both times sit on every weather tile, under the wind
   and the rain, and again in the heading of the detailed forecast. Above the
   polar circle, where Open-Meteo reports neither, nothing is shown rather than
