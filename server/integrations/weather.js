@@ -9,11 +9,24 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/reverse';
 
 const FORECAST_PARAMS = new URLSearchParams({
   current: 'temperature_2m,weather_code,wind_speed_10m',
-  hourly: 'temperature_2m,precipitation_probability,wind_gusts_10m',
-  daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,wind_speed_10m_max',
+  // Exactly what the day curve draws or reads out, and nothing else: every
+  // field here is paid for on the wire and in the cache. is_day earns its
+  // place by keeping the reading from showing a sun at three in the morning.
+  hourly:
+    'temperature_2m,apparent_temperature,precipitation_probability,' +
+    'wind_speed_10m,weather_code,is_day',
+  daily:
+    'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,' +
+    'wind_speed_10m_max,sunrise,sunset',
   forecast_days: '7',
   timezone: 'auto',
 });
+
+// Bumped whenever FORECAST_PARAMS changes. Without it, an instance that has
+// just been updated keeps serving the cached payload of the previous version
+// for up to refreshMinutes — a payload with none of the new fields in it, so
+// the curve and the sun times would render empty for no visible reason.
+const FORECAST_SHAPE = 2;
 
 export const userAgent = () =>
   `Glassboard/1.0 (self-hosted dashboard${OSM_CONTACT ? `; ${OSM_CONTACT}` : ''})`;
@@ -40,7 +53,7 @@ export async function getForecast(latitude, longitude, ttlSeconds = 900) {
   const lat = round(latitude);
   const lon = round(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('invalid coordinates');
-  const key = `weather:forecast:${lat},${lon}`;
+  const key = `weather:forecast:v${FORECAST_SHAPE}:${lat},${lon}`;
 
   const fresh = cacheGet(key);
   if (fresh) return { ...fresh, cached: true };

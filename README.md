@@ -384,10 +384,24 @@ City names are resolved through OpenStreetMap Nominatim, server-side and
 cached, so your visitors' IP addresses never reach it. Disable the whole
 integration in **Settings → Weather** and both tiles disappear cleanly.
 
-Clicking a weather tile opens the detailed forecast: seven days, with
-temperature, rain and wind over the hours of the day you pick.
+Each tile carries the day's sunrise and sunset under the wind and the rain.
+
+Clicking one opens the detailed forecast: seven days to pick from, and for the
+day you pick, one drawing of the whole day. The sun's course arcs over a
+horizon, dotted ahead and solid for the part already run, with the sun itself
+sitting where it is right now; the night stretches carry the moon and a few
+stars. Below the horizon, the temperature runs as a line, the hours already
+gone dimmed, with the day's lowest and highest marked where they happen, and
+the chance of rain as bars along the bottom.
+
+Move the pointer across it and the heading turns into a reading of the hour
+under the cursor: the time, the sky, the temperature, what it feels like, the
+chance of rain and the wind. It answers to a finger and to the keyboard too —
+tab to it and the arrow keys walk the hours, Escape drops the reading.
 
 ![The detailed forecast](docs/images/forecast.png)
+
+<sub>The screenshot above predates this drawing and will be retaken.</sub>
 
 ### GeoRide, motorcycle tracker
 

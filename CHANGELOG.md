@@ -3,6 +3,40 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Added
+
+- **Sunrise and sunset.** Both times sit on every weather tile, under the wind
+  and the rain, and again in the heading of the detailed forecast. Above the
+  polar circle, where Open-Meteo reports neither, nothing is shown rather than
+  a pair of dashes that would read as a failure.
+- **One interactive drawing of the day**, in place of the three static charts
+  the forecast window used to hold. It carries the sun's course over a horizon,
+  the moon and stars through the night, the temperature as a line with the past
+  hours dimmed and the day's extremes marked, and the chance of rain as bars.
+  Moving the pointer across it turns the heading into a reading of that hour:
+  time, sky, temperature, what it feels like, rain and wind. A finger reads it
+  by touch, and a keyboard by tabbing to it and using the arrow keys.
+
+### Changed
+
+- The forecast request now also asks Open-Meteo for the hourly apparent
+  temperature, wind speed, weather code and day/night flag, and for the daily
+  sunrise and sunset; it no longer asks for the hourly wind gusts, which only
+  the chart that was removed ever read. Cached forecasts from the previous
+  version are ignored rather than served without the new fields.
+- The drawing is SVG rather than canvas, so the six presets and the light/dark
+  switch drive its colours with no redraw. Rain keeps a blue of its own in
+  every preset, as the sun keeps its amber: under Ember, an accent-coloured
+  rain read as orange.
+
+### Fixed
+
+- The forecast window picked out "today" by a UTC date, so east of Greenwich it
+  highlighted and labelled the wrong day during the last hours of the evening.
+- A clear sky at three in the morning was drawn with a sun.
+
 ## 1.8.0 — 2026-10-03
 
 Sign in by scanning a code, and parcels that actually report.

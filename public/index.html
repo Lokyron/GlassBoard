@@ -87,10 +87,17 @@
         <div class="mini2"><div class="box"><div class="k" data-t="wx.gusts">Wind gusts</div><div class="v"><span id="modal-wind">--</span> <small>km/h</small></div></div>
           <div class="box" id="modal-rain-box"><div class="k" data-t="wx.rain">Rain</div><div class="v"><span id="modal-rain">--</span> <small>%</small></div></div></div>
       </div>
-      <div class="cgrid">
-        <div><div class="clab" data-t="wx.temperature">Temperature</div><div class="cbox"><canvas id="modalChartTemp"></canvas></div></div>
-        <div><div class="clab" data-t="wx.rain">Rain</div><div class="cbox"><canvas id="modalChartRain"></canvas></div></div>
-        <div><div class="clab" data-t="wx.wind">Wind</div><div class="cbox"><canvas id="modalChartWind"></canvas></div></div>
+      <div class="wc" id="wx-curve" tabindex="0" role="slider" aria-label="" data-ta="wx.curveAria"
+           aria-valuemin="0" aria-valuemax="23" aria-orientation="horizontal">
+        <div class="wc-head">
+          <div class="wc-rest">
+            <span class="wc-title" data-t="wx.throughTheDay">Through the day</span>
+            <span class="wc-range" id="wc-range"></span>
+            <span class="wc-sun" id="wc-sun"></span>
+          </div>
+          <div class="wc-read" id="wc-read"></div>
+        </div>
+        <div class="wc-plot" id="wc-plot"></div>
       </div>
     </div>
   </div>

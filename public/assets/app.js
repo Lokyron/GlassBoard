@@ -37,10 +37,23 @@ const state = {
   marker: null,
   modalTile: null,
   selectedDay: 0,
+  curve: null,        // the selected day, folded for the curve and its cursor
+  curveNodes: null,   // the cursor's svg nodes, built once per render and moved
+  curveIndex: null,   // the hour being read, or null when nothing is
 };
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const weatherEmoji = (code) => (code <= 1 ? '☀️' : code <= 3 ? '⛅' : code <= 67 ? '🌧️' : '⛈️');
+const weatherEmoji = (code, day = true) =>
+  (code <= 1 ? (day ? '☀️' : '🌙') : code <= 3 ? (day ? '⛅' : '☁️') : code <= 67 ? '🌧️' : '⛈️');
+/** Today in the browser's own timezone. toISOString() would give UTC, which is
+ *  the wrong day for anyone east of Greenwich late in the evening. */
+function localDayKey(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** "07:38" out of an Open-Meteo local timestamp, or '' when there is none. */
+const clockOf = (stamp) => (typeof stamp === 'string' && stamp.length >= 16 ? stamp.slice(11, 16) : '');
 
 /* --------------------------------- API ----------------------------------- */
 
@@ -221,7 +234,7 @@ function weatherTileMarkup(tile, index, { local }) {
     : `<h3>${esc(t('tile.followedCity'))} <span data-role="clock" class="muted" style="font-weight:600"></span></h3>`;
   return `<article class="card glass wx rise" style="${delay}" data-tile="${tile.id}" data-type="${tile.type}">
         <div class="wtop"><div><div class="lbl">${label}</div>${heading}</div><div data-role="emoji" class="emoji">${local ? '🧭' : '🏙️'}</div></div>
-        <div class="wmain"><div data-role="temp" class="temp">--°</div><div class="wstats"><span>${esc(t('tile.wind'))} <strong data-role="wind">--</strong> km/h</span><span>${esc(t('tile.rain'))} <strong data-role="rain">--</strong>%</span></div></div>
+        <div class="wmain"><div data-role="temp" class="temp">--°</div><div class="wstats"><span>${esc(t('tile.wind'))} <strong data-role="wind">--</strong> km/h</span><span>${esc(t('tile.rain'))} <strong data-role="rain">--</strong>%</span><span class="wsun" data-role="sun"></span></div></div>
         <div class="spark"><canvas id="spark-${tile.id}"></canvas></div></article>`;
 }
 
@@ -344,76 +357,6 @@ function drawSpark(canvasId, data, color) {
   ctx.stroke();
 }
 
-function drawChart(canvasId, labels, data, color, type) {
-  const canvas = id(canvasId);
-  if (!canvas || !data?.length) return;
-  canvas._chart = { labels, data, color, type };
-  const ctx = fitCanvas(canvas);
-  if (!ctx) return;
-  const w = canvas._w;
-  const h = canvas._h;
-  const axis = 16;
-  const pX = 6;
-  const pT = 6;
-  const plotH = h - axis - pT;
-  const plotW = w - pX * 2;
-  let min = Math.min(...data);
-  let max = Math.max(...data);
-  if (type === 'bar') { min = 0; max = Math.max(max, 100); }
-  if (min === max) { min -= 1; max += 1; }
-  const X = (i) => pX + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
-  const Y = (v) => pT + (1 - (v - min) / (max - min)) * plotH;
-
-  if (type === 'bar') {
-    const bw = Math.max(3, (plotW / data.length) * 0.55);
-    ctx.fillStyle = color;
-    data.forEach((v, i) => {
-      const x = pX + ((i + 0.5) / data.length) * plotW - bw / 2;
-      const y = Y(v);
-      const bh = pT + plotH - y;
-      const r = Math.min(4, bw / 2, bh);
-      ctx.beginPath();
-      ctx.moveTo(x, y + bh);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.lineTo(x + bw - r, y);
-      ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
-      ctx.lineTo(x + bw, y + bh);
-      ctx.closePath();
-      ctx.fill();
-    });
-  } else {
-    const points = data.map((v, i) => ({ x: X(i), y: Y(v) }));
-    ctx.beginPath();
-    smooth(ctx, points);
-    ctx.lineTo(points[points.length - 1].x, pT + plotH);
-    ctx.lineTo(points[0].x, pT + plotH);
-    ctx.closePath();
-    ctx.fillStyle = `${color}2e`;
-    ctx.fill();
-    ctx.beginPath();
-    smooth(ctx, points);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    ctx.fillStyle = color;
-    points.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 6.2832); ctx.fill(); });
-  }
-
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted');
-  ctx.font = '10px -apple-system,Inter,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  labels.forEach((label, i) =>
-    ctx.fillText(
-      label,
-      Math.min(w - 8, Math.max(8, type === 'bar' ? pX + ((i + 0.5) / data.length) * plotW : X(i))),
-      h
-    )
-  );
-}
-
 /* -------------------------------- weather -------------------------------- */
 
 function updateWeatherTile(tile) {
@@ -427,6 +370,16 @@ function updateWeatherTile(tile) {
   safe(el('wind'), Math.round(current.wind_speed_10m ?? daily.wind_speed_10m_max?.[0] ?? 0));
   safe(el('rain'), daily.precipitation_probability_max?.[0] ?? 0);
   safe(el('emoji'), weatherEmoji(current.weather_code || 0));
+  const sun = el('sun');
+  if (sun) {
+    // Open-Meteo returns null for both inside a polar day or night. Showing
+    // nothing is the honest answer there; "--:--" would read as a failure.
+    const rise = clockOf(daily.sunrise?.[0]);
+    const set = clockOf(daily.sunset?.[0]);
+    sun.innerHTML = rise && set
+      ? `${svg('sun', 'font-size:13px')} ${esc(rise)} <span class="wsun-sep">·</span> ${svg('moon', 'font-size:13px')} ${esc(set)}`
+      : '';
+  }
   if (data.hourly?.temperature_2m) {
     drawSpark(`spark-${tile.id}`, data.hourly.temperature_2m.slice(0, 24), tile.type === 'weather-local' ? '#0a84ff' : '#a78bff');
   }
@@ -496,7 +449,7 @@ function renderDays() {
   const data = state.forecasts[state.modalTile];
   if (!data?.daily?.time) return;
   container.innerHTML = '';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDayKey();
   data.daily.time.forEach((day, index) => {
     const [y, m, d] = day.split('-');
     const date = new Date(y, m - 1, d);
@@ -514,13 +467,12 @@ function renderDays() {
 function updateWeatherModal() {
   const data = state.forecasts[state.modalTile];
   const daily = data?.daily;
-  const hourly = data?.hourly;
   const i = state.selectedDay;
   if (!daily?.temperature_2m_max?.length) return;
 
   const [y, m, d] = daily.time[i].split('-');
   const date = new Date(y, m - 1, d);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDayKey();
   safe(
     id('modal-date-label'),
     daily.time[i] === today
@@ -533,13 +485,7 @@ function updateWeatherModal() {
   safe(id('modal-rain'), daily.precipitation_probability_max[i] || 0);
   id('modal-rain-box').classList.toggle('alert', (daily.precipitation_probability_max[i] || 0) >= 50);
 
-  const start = i * 24;
-  const end = start + 24;
-  const pick = (arr) => (arr ? arr.slice(start, Math.min(end, arr.length)).filter((_, k) => k % 3 === 0) : []);
-  const labels = pick(hourly.time).map((value) => value.slice(11, 16));
-  drawChart('modalChartTemp', labels, pick(hourly.temperature_2m), '#5e5ce6', 'line');
-  drawChart('modalChartRain', labels, pick(hourly.precipitation_probability), '#0a84ff', 'bar');
-  drawChart('modalChartWind', labels, pick(hourly.wind_gusts_10m), '#64d2ff', 'line');
+  renderDayCurve();
 }
 
 function openWeatherModal(tileId) {
@@ -556,6 +502,489 @@ function openWeatherModal(tileId) {
   id('weather-modal').classList.add('open');
   renderDays();
   updateWeatherModal();
+}
+
+/* --------------------------- weather: day curve --------------------------- */
+/* One SVG for the whole day: the sun and moon course over the horizon, the
+   rain as bars, the temperature as a line, and a cursor that reads any hour
+   under the pointer. Every colour lives in app-extra.css, so a preset change
+   or a light/dark switch costs nothing and needs no redraw — which is the
+   reason this is SVG and not one more canvas. */
+
+/* The bands are fixed heights; only the width follows the column. The svg
+   keeps its aspect ratio, so a viewBox of a fixed width would render about
+   95 px tall inside a phone sheet and unreadable. Measuring the column and
+   sizing the viewBox to it instead keeps the drawing ~182 px tall at every
+   width, and keeps one user unit worth about one real pixel, so the font
+   sizes below stay the sizes they say they are. */
+const WC = {
+  w: 720, h: 182,
+  padX: 26,
+  skyBottom: 56,           // the horizon
+  tempTop: 66, tempBottom: 132,
+  rainBottom: 158, rainMax: 26,
+  hourY: 176,
+  plotW: 720 - 26 * 2,
+  hourStep: 3,             // a label every N hours; 6 when the column is narrow
+};
+const SUN_H = 44;          // how high the sun climbs above the horizon
+const MOON_H = 22;         // the night course is deliberately shallower
+
+/** Fit the viewBox to the column the curve is actually rendered in. */
+function wcFit(width) {
+  WC.w = Math.round(Math.max(300, Math.min(960, width)));
+  WC.padX = WC.w < 420 ? 16 : 26;
+  WC.plotW = WC.w - WC.padX * 2;
+  WC.hourStep = WC.w < 420 ? 6 : 3;
+}
+
+/** Hour of the day, as a fraction, from an Open-Meteo local timestamp. */
+function hourOf(stamp) {
+  if (typeof stamp !== 'string' || stamp.length < 16) return null;
+  const h = Number(stamp.slice(11, 13));
+  const m = Number(stamp.slice(14, 16));
+  return Number.isFinite(h) && Number.isFinite(m) ? h + m / 60 : null;
+}
+
+const wcX = (hour) => WC.padX + (Math.max(0, Math.min(24, hour)) / 24) * WC.plotW;
+
+function svgNode(name, attrs = {}, className) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  if (className) node.setAttribute('class', className);
+  return node;
+}
+
+/** Quadratic-midpoint smoothing, the same shape the canvas charts used. */
+function smoothPath(points) {
+  if (!points.length) return '';
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const xc = (points[i].x + points[i + 1].x) / 2;
+    const yc = (points[i].y + points[i + 1].y) / 2;
+    d += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+  }
+  const last = points[points.length - 1];
+  return `${d} Q ${last.x} ${last.y} ${last.x} ${last.y}`;
+}
+
+/** The selected day, folded into one object the renderer and the cursor share. */
+function dayCurveModel() {
+  const data = state.forecasts[state.modalTile];
+  const hourly = data?.hourly;
+  const daily = data?.daily;
+  if (!hourly?.time || !daily?.time) return null;
+
+  const start = state.selectedDay * 24;
+  const at = (series, k) => (Array.isArray(series) ? series[start + k] : undefined);
+  const hours = [];
+  for (let k = 0; k < 24; k += 1) {
+    const stamp = at(hourly.time, k);
+    if (stamp === undefined) break;
+    hours.push({
+      hour: hourOf(stamp) ?? k,
+      temp: Number(at(hourly.temperature_2m, k)),
+      feels: Number(at(hourly.apparent_temperature, k)),
+      rain: Number(at(hourly.precipitation_probability, k)) || 0,
+      wind: Number(at(hourly.wind_speed_10m, k)),
+      code: Number(at(hourly.weather_code, k)) || 0,
+      day: at(hourly.is_day, k) !== 0,
+    });
+  }
+  if (hours.length < 2 || hours.some((h) => !Number.isFinite(h.temp))) return null;
+
+  const temps = hours.map((h) => h.temp);
+  let min = Math.min(...temps);
+  let max = Math.max(...temps);
+  if (max - min < 2) { const mid = (min + max) / 2; min = mid - 1; max = mid + 1; }
+
+  const isToday = daily.time[state.selectedDay] === localDayKey();
+  return {
+    hours,
+    min,
+    max,
+    minIndex: temps.indexOf(Math.min(...temps)),
+    maxIndex: temps.indexOf(Math.max(...temps)),
+    sunrise: hourOf(daily.sunrise?.[state.selectedDay]),
+    sunset: hourOf(daily.sunset?.[state.selectedDay]),
+    isToday,
+    nowHour: isToday ? new Date().getHours() + new Date().getMinutes() / 60 : null,
+  };
+}
+
+
+/** A point on an astre's course, as a half-sine between its rise and its set.
+ *  The course is allowed to start before midnight or end after it — the night
+ *  one always does — and only the visible stretch is ever drawn. */
+const arcPoint = (rise, set, height, hour) => ({
+  x: wcX(hour),
+  y: WC.skyBottom - Math.sin(Math.PI * ((hour - rise) / (set - rise))) * height,
+});
+
+/** The course from `rise` to `set`, drawn only between `from` and `to`.
+ *  Separating the two is what keeps the night arcs honest: their course runs
+ *  from one evening to the next morning, so clamping it into the box instead
+ *  of clipping it would flatten half of it against the left edge. */
+function arcPath(rise, set, height, from = rise, to = set) {
+  if (![rise, set, from, to].every(Number.isFinite) || set <= rise || to <= from) return '';
+  const steps = 48;
+  const points = [];
+  for (let s = 0; s <= steps; s += 1) {
+    const p = arcPoint(rise, set, height, from + (to - from) * (s / steps));
+    points.push(`${s ? 'L' : 'M'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`);
+  }
+  return points.join(' ');
+}
+
+function renderDayCurve() {
+  const plot = id('wc-plot');
+  const wrap = id('wx-curve');
+  if (!plot || !wrap) return;
+  const model = dayCurveModel();
+  state.curve = model;
+  if (!model) { plot.innerHTML = `<p class="muted">${esc(t('wx.unavailable'))}</p>`; return; }
+  // A hidden modal measures 0: fall back to the last good width rather than
+  // drawing a curve one pixel wide.
+  const measured = plot.getBoundingClientRect().width;
+  wcFit(measured > 40 ? measured : (state.curveWidth || 720));
+  state.curveWidth = WC.w;
+
+  const { hours, min, max } = model;
+  const tempH = WC.tempBottom - WC.tempTop;
+  const Y = (value) => WC.tempTop + (1 - (value - min) / (max - min)) * tempH;
+  const points = hours.map((h) => ({ x: wcX(h.hour), y: Y(h.temp) }));
+  const line = smoothPath(points);
+
+  const svgRoot = svgNode('svg', {
+    viewBox: `0 0 ${WC.w} ${WC.h}`,
+    preserveAspectRatio: 'xMidYMid meet',
+    'aria-hidden': 'true',
+  }, 'wc-svg');
+
+  /* The past is dimmed by clipping the same paths twice rather than by veiling
+     the region: a veil would also dim whatever wallpaper shows through. */
+  const nowX = model.nowHour === null ? null : wcX(model.nowHour);
+  const defs = svgNode('defs');
+  if (nowX !== null) {
+    const clip = svgNode('clipPath', { id: 'wc-clip-past' });
+    clip.appendChild(svgNode('rect', { x: 0, y: 0, width: nowX, height: WC.h }));
+    defs.appendChild(clip);
+  }
+  svgRoot.appendChild(defs);
+
+  /* ---- sky: stars, the two courses, the sun or the moon ---- */
+  const sky = svgNode('g', {}, 'wc-sky');
+  const { sunrise, sunset } = model;
+  const hasSun = Number.isFinite(sunrise) && Number.isFinite(sunset) && sunset > sunrise;
+
+  if (hasSun) {
+    const stars = svgNode('g', {}, 'wc-stars');
+    // Deterministic placement: the same day always gets the same sky, so the
+    // stars do not jump around when the curve is redrawn.
+    let seed = state.selectedDay * 7919 + 13;
+    const random = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let s = 0; s < 26; s += 1) {
+      const hour = random() * 24;
+      if (hour > sunrise - 0.6 && hour < sunset + 0.6) continue;
+      const star = svgNode('circle', {
+        cx: wcX(hour).toFixed(1),
+        cy: (6 + random() * (WC.skyBottom - 14)).toFixed(1),
+        r: (0.7 + random() * 0.9).toFixed(2),
+      });
+      star.style.animationDelay = `${(random() * 3).toFixed(2)}s`;
+      stars.appendChild(star);
+    }
+    sky.appendChild(stars);
+
+    sky.appendChild(svgNode('path', { d: arcPath(sunrise, sunset, SUN_H) }, 'wc-arc wc-arc-sun'));
+    // The night shows as two stretches of one course that straddles midnight:
+    // the end of last night up to sunrise, and from sunset into the next one.
+    sky.appendChild(svgNode('path', {
+      d: arcPath(sunset - 24, sunrise, MOON_H, 0, sunrise),
+    }, 'wc-arc wc-arc-moon'));
+    sky.appendChild(svgNode('path', {
+      d: arcPath(sunset, sunrise + 24, MOON_H, sunset, 24),
+    }, 'wc-arc wc-arc-moon'));
+    sky.appendChild(svgNode('line', {
+      x1: WC.padX, y1: WC.skyBottom, x2: WC.w - WC.padX, y2: WC.skyBottom,
+    }, 'wc-horizon'));
+
+    if (model.nowHour !== null) {
+      const now = model.nowHour;
+      if (now > sunrise && now < sunset) {
+        // The part of the course already run, as a solid overlay.
+        sky.appendChild(svgNode('path', {
+          d: arcPath(sunrise, sunset, SUN_H, sunrise, now),
+        }, 'wc-arc-done wc-arc-sun'));
+        const p = arcPoint(sunrise, sunset, SUN_H, now);
+        sky.appendChild(svgNode('circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 11 }, 'wc-sun-halo'));
+        const rays = svgNode('g', {}, 'wc-sun-rays');
+        for (let r = 0; r < 8; r += 1) {
+          const angle = (r / 8) * Math.PI * 2;
+          rays.appendChild(svgNode('line', {
+            x1: (p.x + Math.cos(angle) * 7.5).toFixed(1), y1: (p.y + Math.sin(angle) * 7.5).toFixed(1),
+            x2: (p.x + Math.cos(angle) * 10.5).toFixed(1), y2: (p.y + Math.sin(angle) * 10.5).toFixed(1),
+          }));
+        }
+        sky.appendChild(rays);
+        sky.appendChild(svgNode('circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 5.4 }, 'wc-sun-disc'));
+      } else {
+        // A crescent: the lit disc, with a second disc offset over it.
+        const night = now > sunset
+          ? arcPoint(sunset, sunrise + 24, MOON_H, now)
+          : arcPoint(sunset - 24, sunrise, MOON_H, now);
+        const moon = svgNode('g', {}, 'wc-moon');
+        moon.appendChild(svgNode('circle', { cx: night.x.toFixed(1), cy: night.y.toFixed(1), r: 5 }, 'wc-moon-disc'));
+        moon.appendChild(svgNode('circle', { cx: (night.x + 2.6).toFixed(1), cy: (night.y - 1.4).toFixed(1), r: 4.4 }, 'wc-moon-shadow'));
+        sky.appendChild(moon);
+      }
+    }
+  }
+  svgRoot.appendChild(sky);
+
+  /* ---- rain ---- */
+  const rains = svgNode('g', {}, 'wc-rains');
+  const barW = Math.max(3, (WC.plotW / 24) * 0.5);
+  hours.forEach((h, k) => {
+    if (!h.rain) return;
+    const height = Math.max(1.5, (h.rain / 100) * WC.rainMax);
+    const bar = svgNode('rect', {
+      x: (wcX(h.hour) - barW / 2).toFixed(1),
+      y: (WC.rainBottom - height).toFixed(1),
+      width: barW.toFixed(1),
+      height: height.toFixed(1),
+      rx: Math.min(2, barW / 2),
+      'data-k': k,
+    }, 'wc-rain');
+    rains.appendChild(bar);
+  });
+  svgRoot.appendChild(rains);
+
+  /* ---- temperature ---- */
+  const area = `${line} L ${points[points.length - 1].x} ${WC.tempBottom} L ${points[0].x} ${WC.tempBottom} Z`;
+  svgRoot.appendChild(svgNode('path', { d: area }, 'wc-area'));
+  svgRoot.appendChild(svgNode('path', { d: line }, 'wc-glow'));
+  svgRoot.appendChild(svgNode('path', { d: line }, 'wc-line'));
+  if (nowX !== null) {
+    svgRoot.appendChild(svgNode('path', { d: line, 'clip-path': 'url(#wc-clip-past)' }, 'wc-glow wc-past'));
+    svgRoot.appendChild(svgNode('path', { d: line, 'clip-path': 'url(#wc-clip-past)' }, 'wc-line wc-past'));
+  }
+
+  /* ---- the two extremes, labelled where they happen ---- */
+  [model.maxIndex, model.minIndex].forEach((k, which) => {
+    const p = points[k];
+    if (!p) return;
+    const label = svgNode('text', {
+      x: Math.max(WC.padX, Math.min(WC.w - WC.padX, p.x)).toFixed(1),
+      y: (which === 0 ? p.y - 9 : p.y + 16).toFixed(1),
+      'text-anchor': 'middle',
+    }, 'wc-extreme');
+    label.textContent = `${Math.round(hours[k].temp)}°`;
+    svgRoot.appendChild(label);
+  });
+
+  /* ---- hour labels, every three hours ---- */
+  hours.forEach((h, k) => {
+    if (k % WC.hourStep) return;
+    const label = svgNode('text', {
+      x: wcX(h.hour).toFixed(1), y: WC.hourY, 'text-anchor': 'middle',
+    }, 'wc-hour');
+    label.textContent = String(Math.floor(h.hour)).padStart(2, '0');
+    svgRoot.appendChild(label);
+  });
+
+  /* ---- the present hour ---- */
+  if (nowX !== null) {
+    const nowTemp = curveValueAt(model, model.nowHour);
+    const now = svgNode('g', {}, 'wc-now');
+    now.appendChild(svgNode('line', { x1: nowX.toFixed(1), y1: WC.tempTop - 6, x2: nowX.toFixed(1), y2: WC.rainBottom }));
+    if (nowTemp !== null) {
+      now.appendChild(svgNode('circle', { cx: nowX.toFixed(1), cy: Y(nowTemp).toFixed(1), r: 3.2 }, 'wc-now-pulse'));
+      now.appendChild(svgNode('circle', { cx: nowX.toFixed(1), cy: Y(nowTemp).toFixed(1), r: 3.2 }, 'wc-now-dot'));
+    }
+    svgRoot.appendChild(now);
+  }
+
+  /* ---- cursor, built once and only moved afterwards ---- */
+  const cursorLine = svgNode('line', {
+    x1: 0, y1: WC.skyBottom - 2, x2: 0, y2: WC.rainBottom,
+  }, 'wc-cursor-line');
+  const cursor = svgNode('g', {}, 'wc-cursor');
+  cursor.appendChild(svgNode('circle', { cx: 0, cy: 0, r: 7 }, 'wc-cursor-halo'));
+  cursor.appendChild(svgNode('circle', { cx: 0, cy: 0, r: 3.6 }, 'wc-cursor-dot'));
+  const bubble = svgNode('g', {}, 'wc-bubble');
+  bubble.appendChild(svgNode('rect', { x: -18, y: -12, width: 36, height: 17, rx: 6 }));
+  const bubbleText = svgNode('text', { x: 0, y: 0, 'text-anchor': 'middle' });
+  bubble.appendChild(bubbleText);
+  svgRoot.append(cursorLine, cursor, bubble);
+
+  plot.innerHTML = '';
+  plot.appendChild(svgRoot);
+
+  state.curveNodes = { svg: svgRoot, cursorLine, cursor, bubble, bubbleText, Y, points };
+  wrap.classList.remove('wc-intro');
+  // Restart the intro animation on every render: the class has to leave the
+  // element and come back, with a reflow in between, or nothing replays.
+  void wrap.offsetWidth;
+  wrap.classList.add('wc-intro');
+  wrap.classList.remove('reading');
+  wrap.setAttribute('aria-valuemin', '0');
+  wrap.setAttribute('aria-valuemax', String(model.hours.length - 1));
+  wrap.removeAttribute('aria-valuenow');
+  wrap.removeAttribute('aria-valuetext');
+  renderCurveHeader(model);
+}
+
+
+/** Temperature at a fractional hour, interpolated between the two readings. */
+function curveValueAt(model, hour) {
+  const hours = model.hours;
+  const k = Math.floor(hour);
+  const a = hours[Math.max(0, Math.min(hours.length - 1, k))];
+  const b = hours[Math.max(0, Math.min(hours.length - 1, k + 1))];
+  if (!a) return null;
+  if (!b || a === b) return a.temp;
+  return a.temp + (b.temp - a.temp) * (hour - k);
+}
+
+function renderCurveHeader(model) {
+  const range = id('wc-range');
+  const sun = id('wc-sun');
+  if (range) {
+    range.innerHTML = `${Math.round(model.min)}°<i>→</i>${Math.round(model.max)}°`;
+  }
+  if (!sun) return;
+  const clock = (hour) => {
+    if (!Number.isFinite(hour)) return '—';
+    const h = Math.floor(hour);
+    return `${String(h).padStart(2, '0')}:${String(Math.round((hour - h) * 60)).padStart(2, '0')}`;
+  };
+  sun.innerHTML =
+    `<span class="wc-astre sunrise" title="${esc(t('wx.sunrise'))}">${svg('sun')}${clock(model.sunrise)}</span>` +
+    `<span class="wc-astre sunset" title="${esc(t('wx.sunset'))}">${svg('moon')}${clock(model.sunset)}</span>`;
+}
+
+/** Move the cursor to an hour index, or clear the reading when given null. */
+function readCurveAt(index) {
+  const wrap = id('wx-curve');
+  const model = state.curve;
+  const nodes = state.curveNodes;
+  if (!wrap || !model || !nodes) return;
+
+  if (index === null) {
+    wrap.classList.remove('reading');
+    state.curveIndex = null;
+    wrap.removeAttribute('aria-valuenow');
+    wrap.removeAttribute('aria-valuetext');
+    nodes.svg.querySelectorAll('.wc-rain.aimed').forEach((bar) => bar.classList.remove('aimed'));
+    return;
+  }
+
+  const k = Math.max(0, Math.min(model.hours.length - 1, Math.round(index)));
+  state.curveIndex = k;
+  const h = model.hours[k];
+  const point = nodes.points[k];
+
+  nodes.cursorLine.setAttribute('x1', point.x.toFixed(1));
+  nodes.cursorLine.setAttribute('x2', point.x.toFixed(1));
+  nodes.cursor.setAttribute('transform', `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
+  // The bubble is held inside the box at both ends, or it would hang off the
+  // edge on the first and the last hour.
+  const bubbleX = Math.max(WC.padX - 4, Math.min(WC.w - WC.padX + 4, point.x));
+  nodes.bubble.setAttribute('transform', `translate(${bubbleX.toFixed(1)} ${(point.y - 12).toFixed(1)})`);
+  nodes.bubbleText.textContent = `${Math.round(h.temp)}°`;
+
+  nodes.svg.querySelectorAll('.wc-rain').forEach((bar) => {
+    bar.classList.toggle('aimed', Number(bar.dataset.k) === k);
+  });
+
+  const read = id('wc-read');
+  if (read) {
+    const hourLabel = `${String(Math.floor(h.hour)).padStart(2, '0')}:00`;
+    const feels = t('wx.feelsLike', { value: Math.round(h.feels) });
+    const rain = t('wx.rainShort', { value: h.rain });
+    const wind = t('wx.windShort', { value: Math.round(h.wind) });
+    const showFeels = Number.isFinite(h.feels) && Math.round(h.feels) !== Math.round(h.temp);
+    const parts = [
+      `<span class="wc-r-hour">${esc(hourLabel)}</span>`,
+      `<span class="wc-r-sky">${weatherEmoji(h.code, h.day)}</span>`,
+      `<span class="wc-r-temp">${Math.round(h.temp)}°</span>`,
+    ];
+    const spoken = [hourLabel, `${Math.round(h.temp)}°`];
+    if (showFeels) {
+      parts.push(`<span class="wc-r-feels">${esc(feels)}</span>`);
+      spoken.push(feels);
+    }
+    parts.push(`<span class="wc-r-rain">${esc(rain)}</span>`);
+    spoken.push(rain);
+    if (Number.isFinite(h.wind)) {
+      parts.push(`<span class="wc-r-wind">${esc(wind)}</span>`);
+      spoken.push(wind);
+    }
+    read.innerHTML = parts.join('');
+    wrap.setAttribute('aria-valuenow', k);
+    // Built from the parts rather than read back off the element: on screen
+    // they are spaced by a flex gap, so the text content of the row runs the
+    // values together and a screen reader would say "14 degrees8 km/h".
+    wrap.setAttribute('aria-valuetext', spoken.join(', '));
+  }
+  wrap.classList.add('reading');
+}
+
+/** Pointer position to an hour index. The svg scales, so the ratio has to be
+ *  taken from the rendered box and not from the viewBox. */
+function curveIndexFromEvent(event) {
+  const plot = id('wc-plot');
+  const model = state.curve;
+  if (!plot || !model) return null;
+  const rect = plot.getBoundingClientRect();
+  if (rect.width < 2) return null;
+  const ratio = (event.clientX - rect.left) / rect.width;
+  const hour = (((ratio * WC.w) - WC.padX) / WC.plotW) * 24;
+  return Math.max(0, Math.min(model.hours.length - 1, Math.round(hour)));
+}
+
+function bindDayCurve() {
+  const wrap = id('wx-curve');
+  const plot = id('wc-plot');
+  if (!wrap || !plot) return;
+
+  // Pointer events cover mouse, pen and touch in one path. The plot keeps
+  // touch-action: pan-y, so a vertical swipe still scrolls the sheet while a
+  // horizontal drag reads the curve.
+  plot.addEventListener('pointermove', (event) => readCurveAt(curveIndexFromEvent(event)));
+  plot.addEventListener('pointerdown', (event) => readCurveAt(curveIndexFromEvent(event)));
+  plot.addEventListener('pointerleave', (event) => {
+    if (event.pointerType === 'mouse') readCurveAt(null);
+  });
+  plot.addEventListener('pointercancel', () => readCurveAt(null));
+
+  wrap.addEventListener('keydown', (event) => {
+    const model = state.curve;
+    if (!model) return;
+    // Escape clears the reading, but only when there is one. Letting it
+    // through otherwise is what keeps the second press closing the modal,
+    // which is what every other panel in here does.
+    if (event.key === 'Escape') {
+      if (state.curveIndex === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      readCurveAt(null);
+      return;
+    }
+    const last = model.hours.length - 1;
+    const current = state.curveIndex ?? (model.nowHour === null ? 12 : Math.round(model.nowHour));
+    const keys = {
+      ArrowLeft: () => readCurveAt(current - 1),
+      ArrowRight: () => readCurveAt(current + 1),
+      Home: () => readCurveAt(0),
+      End: () => readCurveAt(last),
+    };
+    if (!keys[event.key]) return;
+    event.preventDefault();
+    keys[event.key]();
+  });
+  wrap.addEventListener('blur', () => readCurveAt(null));
 }
 
 /* -------------------------------- GeoRide -------------------------------- */
@@ -1498,6 +1927,7 @@ async function boot() {
   });
 
   installParallax();
+  bindDayCurve();
   pwa.onChange = syncInstallItem;
   syncInstallItem();
   checkForUpdateBadge();
@@ -1511,10 +1941,10 @@ async function boot() {
       document.querySelectorAll('.spark canvas').forEach((canvas) => {
         if (canvas._spark) drawSpark(canvas.id, canvas._spark.data, canvas._spark.color);
       });
-      ['modalChartTemp', 'modalChartRain', 'modalChartWind'].forEach((canvasId) => {
-        const canvas = id(canvasId);
-        if (canvas?._chart) drawChart(canvasId, canvas._chart.labels, canvas._chart.data, canvas._chart.color, canvas._chart.type);
-      });
+      // The curve's viewBox is cut to its column, so a resize has to redraw
+      // it. A theme or preset change still does not: its colours are CSS
+      // variables.
+      if (state.curve && id('weather-modal').classList.contains('open')) renderDayCurve();
       if (state.map) state.map.invalidateSize();
     }, 150);
   });

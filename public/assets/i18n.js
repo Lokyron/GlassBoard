@@ -41,7 +41,10 @@ const I18N = {
     'apps.title': 'Applications & folders', 'apps.shortcuts': '{n} shortcuts',
     'apps.direct': 'Direct access', 'apps.links': '{n} links',
     'wx.detailed': 'Detailed forecast', 'wx.today': 'Today', 'wx.todayShort': 'Today', 'wx.gusts': 'Wind gusts',
-    'wx.rain': 'Rain', 'wx.temperature': 'Temperature', 'wx.wind': 'Wind',
+    'wx.rain': 'Rain',
+    'wx.throughTheDay': 'Through the day', 'wx.sunrise': 'Sunrise', 'wx.sunset': 'Sunset',
+    'wx.curveAria': 'Hour by hour. Use the left and right arrow keys to read an hour.',
+    'wx.feelsLike': 'feels {value}°', 'wx.rainShort': '{value}% rain', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Weather unavailable',
     'gr.title': 'Motorcycle', 'gr.distance': 'Distance', 'gr.time': 'Time',
     'gr.trips': 'Trips', 'gr.topSpeed': 'Top', 'gr.lastFix': 'Last fix',
@@ -253,7 +256,10 @@ const I18N = {
     'apps.title': 'Applications & dossiers', 'apps.shortcuts': '{n} raccourcis',
     'apps.direct': 'Accès direct', 'apps.links': '{n} liens',
     'wx.detailed': 'Prévisions détaillées', 'wx.today': 'Aujourd’hui', 'wx.todayShort': 'Auj.', 'wx.gusts': 'Rafales vent',
-    'wx.rain': 'Pluie', 'wx.temperature': 'Température', 'wx.wind': 'Vent',
+    'wx.rain': 'Pluie',
+    'wx.throughTheDay': 'Au fil de la journée', 'wx.sunrise': 'Lever du soleil', 'wx.sunset': 'Coucher du soleil',
+    'wx.curveAria': 'Heure par heure. Utilisez les flèches gauche et droite pour lire une heure.',
+    'wx.feelsLike': 'ressenti {value}°', 'wx.rainShort': '{value} % de pluie', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Météo indisponible',
     'gr.title': 'Moto', 'gr.distance': 'Distance', 'gr.time': 'Temps',
     'gr.trips': 'Trajets', 'gr.topSpeed': 'V. max', 'gr.lastFix': 'Dernier point',
@@ -465,7 +471,10 @@ const I18N = {
     'apps.title': 'Aplicaciones y carpetas', 'apps.shortcuts': '{n} accesos directos',
     'apps.direct': 'Acceso directo', 'apps.links': '{n} enlaces',
     'wx.detailed': 'Previsión detallada', 'wx.today': 'Hoy', 'wx.todayShort': 'Hoy', 'wx.gusts': 'Rachas de viento',
-    'wx.rain': 'Lluvia', 'wx.temperature': 'Temperatura', 'wx.wind': 'Viento',
+    'wx.rain': 'Lluvia',
+    'wx.throughTheDay': 'A lo largo del día', 'wx.sunrise': 'Amanecer', 'wx.sunset': 'Atardecer',
+    'wx.curveAria': 'Hora por hora. Use las flechas izquierda y derecha para leer una hora.',
+    'wx.feelsLike': 'sensación {value}°', 'wx.rainShort': '{value} % de lluvia', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Tiempo no disponible',
     'gr.title': 'Moto', 'gr.distance': 'Distancia', 'gr.time': 'Tiempo',
     'gr.trips': 'Viajes', 'gr.topSpeed': 'Máx.', 'gr.lastFix': 'Última posición',
@@ -677,7 +686,10 @@ const I18N = {
     'apps.title': 'Anwendungen & Ordner', 'apps.shortcuts': '{n} Verknüpfungen',
     'apps.direct': 'Direktzugriff', 'apps.links': '{n} Links',
     'wx.detailed': 'Detaillierte Vorhersage', 'wx.today': 'Heute', 'wx.todayShort': 'Heute', 'wx.gusts': 'Windböen',
-    'wx.rain': 'Regen', 'wx.temperature': 'Temperatur', 'wx.wind': 'Wind',
+    'wx.rain': 'Regen',
+    'wx.throughTheDay': 'Im Tagesverlauf', 'wx.sunrise': 'Sonnenaufgang', 'wx.sunset': 'Sonnenuntergang',
+    'wx.curveAria': 'Stunde für Stunde. Mit den Pfeiltasten links und rechts eine Stunde ablesen.',
+    'wx.feelsLike': 'gefühlt {value}°', 'wx.rainShort': '{value} % Regen', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Wetter nicht verfügbar',
     'gr.title': 'Motorrad', 'gr.distance': 'Strecke', 'gr.time': 'Zeit',
     'gr.trips': 'Fahrten', 'gr.topSpeed': 'Max.', 'gr.lastFix': 'Letzte Ortung',
@@ -889,7 +901,10 @@ const I18N = {
     'apps.title': 'Applicazioni e cartelle', 'apps.shortcuts': '{n} scorciatoie',
     'apps.direct': 'Accesso diretto', 'apps.links': '{n} link',
     'wx.detailed': 'Previsioni dettagliate', 'wx.today': 'Oggi', 'wx.todayShort': 'Oggi', 'wx.gusts': 'Raffiche di vento',
-    'wx.rain': 'Pioggia', 'wx.temperature': 'Temperatura', 'wx.wind': 'Vento',
+    'wx.rain': 'Pioggia',
+    'wx.throughTheDay': 'Nel corso della giornata', 'wx.sunrise': 'Alba', 'wx.sunset': 'Tramonto',
+    'wx.curveAria': 'Ora per ora. Usa le freccie sinistra e destra per leggere un’ora.',
+    'wx.feelsLike': 'percepita {value}°', 'wx.rainShort': '{value}% di pioggia', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Meteo non disponibile',
     'gr.title': 'Moto', 'gr.distance': 'Distanza', 'gr.time': 'Tempo',
     'gr.trips': 'Viaggi', 'gr.topSpeed': 'Max', 'gr.lastFix': 'Ultima posizione',
@@ -1101,7 +1116,10 @@ const I18N = {
     'apps.title': 'Aplicações e pastas', 'apps.shortcuts': '{n} atalhos',
     'apps.direct': 'Acesso direto', 'apps.links': '{n} ligações',
     'wx.detailed': 'Previsão detalhada', 'wx.today': 'Hoje', 'wx.todayShort': 'Hoje', 'wx.gusts': 'Rajadas de vento',
-    'wx.rain': 'Chuva', 'wx.temperature': 'Temperatura', 'wx.wind': 'Vento',
+    'wx.rain': 'Chuva',
+    'wx.throughTheDay': 'Ao longo do dia', 'wx.sunrise': 'Nascer do sol', 'wx.sunset': 'Pôr do sol',
+    'wx.curveAria': 'Hora a hora. Use as setas esquerda e direita para ler uma hora.',
+    'wx.feelsLike': 'sensação {value}°', 'wx.rainShort': '{value}% de chuva', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Meteorologia indisponível',
     'gr.title': 'Mota', 'gr.distance': 'Distância', 'gr.time': 'Tempo',
     'gr.trips': 'Viagens', 'gr.topSpeed': 'Máx.', 'gr.lastFix': 'Última posição',
@@ -1313,7 +1331,10 @@ const I18N = {
     'apps.title': 'Toepassingen en mappen', 'apps.shortcuts': '{n} snelkoppelingen',
     'apps.direct': 'Directe toegang', 'apps.links': '{n} links',
     'wx.detailed': 'Gedetailleerde verwachting', 'wx.today': 'Vandaag', 'wx.todayShort': 'Vand.', 'wx.gusts': 'Windstoten',
-    'wx.rain': 'Regen', 'wx.temperature': 'Temperatuur', 'wx.wind': 'Wind',
+    'wx.rain': 'Regen',
+    'wx.throughTheDay': 'In de loop van de dag', 'wx.sunrise': 'Zonsopkomst', 'wx.sunset': 'Zonsondergang',
+    'wx.curveAria': 'Uur na uur. Gebruik de pijltjestoetsen links en rechts om een uur te lezen.',
+    'wx.feelsLike': 'voelt als {value}°', 'wx.rainShort': '{value}% regen', 'wx.windShort': '{value} km/h',
     'wx.unavailable': 'Weer niet beschikbaar',
     'gr.title': 'Motor', 'gr.distance': 'Afstand', 'gr.time': 'Tijd',
     'gr.trips': 'Ritten', 'gr.topSpeed': 'Max.', 'gr.lastFix': 'Laatste positie',
@@ -1530,14 +1551,18 @@ function t(key, vars) {
   return value;
 }
 
-/** Fill every [data-t] element in the document with its translation, and every
- *  [data-tp] field with its placeholder. */
+/** Fill every [data-t] element in the document with its translation, every
+ *  [data-tp] field with its placeholder, and every [data-ta] element with its
+ *  accessible name. */
 function applyTranslations(root = document) {
   root.querySelectorAll('[data-t]').forEach((el) => {
     el.textContent = t(el.dataset.t);
   });
   root.querySelectorAll('[data-tp]').forEach((el) => {
     el.placeholder = t(el.dataset.tp);
+  });
+  root.querySelectorAll('[data-ta]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.dataset.ta));
   });
 }
 

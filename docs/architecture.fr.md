@@ -126,7 +126,7 @@ Pas de tests, linter ni CI configurés.
 | `GET /api/health` | Santé + indicateur `setupRequired` |
 | `/api/auth` | `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
-| `/api/integrations` | `GET /weather/forecast`, `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /parcels/suggestions`, `POST /parcels/suggestions/:id/accept\|ignore`, `POST /parcels/mail/scan\|test`, `PUT/DELETE /parcels/mail/password`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/integrations` | `GET /weather/forecast` (horaire : température, ressenti, vent, code, jour/nuit ; quotidien : min/max, pluie, code, vent, **lever et coucher**), `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /parcels/suggestions`, `POST /parcels/suggestions/:id/accept\|ignore`, `POST /parcels/mail/scan\|test`, `PUT/DELETE /parcels/mail/password`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
 
@@ -139,6 +139,19 @@ Pas de tests, linter ni CI configurés.
   de Node 24 LTS dans le Dockerfile et sur le CT.
 - **README modifié directement sur GitHub** (captures) : toujours faire `git fetch` avant de repartir du README local.
 - **`document.startViewTransition`** : le callback est différé ; modifier l'état *avant* l'appel (piège déjà rencontré).
+- **Courbe du jour** (`renderDayCurve` dans `app.js`, styles `.wc-*` dans `app-extra.css`) : dessin **SVG
+  et non canvas**, pour que les six presets et le clair/sombre pilotent les couleurs sans redessin. Le
+  `viewBox` est **taillé sur la largeur réelle de la colonne** (`wcFit`), sinon le rapport d'aspect
+  écraserait le dessin à ~95 px de haut dans une feuille de téléphone ; c'est la seule raison pour
+  laquelle un redimensionnement de fenêtre doit redessiner. Les **arcs de nuit** ont une course qui
+  enjambe minuit : il faut la *découper* à la fenêtre visible (`arcPath(rise, set, h, from, to)`) et non
+  la *borner*, sinon la moitié de l'arc s'aplatit contre le bord gauche. Le passé est atténué par un
+  `clipPath` sur les mêmes tracés, pas par un voile : un voile assombrirait aussi le fond d'écran.
+- **Forme de la réponse Open-Meteo** : la clé de cache contient une version (`FORECAST_SHAPE` dans
+  `weather.js`). **À incrémenter à chaque changement de `FORECAST_PARAMS`**, sinon une instance qui vient
+  d'être mise à jour sert pendant `refreshMinutes` une charge utile dépourvue des nouveaux champs.
+- **Date du jour** : `new Date().toISOString().slice(0,10)` donne le jour **UTC**. À l'est de Greenwich,
+  en fin de soirée, ce n'est pas le bon jour. Utiliser `localDayKey()`.
 - **Fenêtre de dialogue unique** (`#dialog-modal`) : un éditeur imbriqué (un lien dans un dossier) doit
   rouvrir l'éditeur parent sur le même brouillon, jamais le fermer, sinon le brouillon est perdu.
 - **Glisser-déposer « écran d'accueil »** (`makeArrangeable` dans `edit.js`, événements pointeur) :

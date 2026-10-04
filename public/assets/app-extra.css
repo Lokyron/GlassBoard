@@ -338,3 +338,143 @@ a.btn{text-decoration:none}
 .pc-suggest-meta{color:var(--muted);font-size:.76rem;font-variant-numeric:tabular-nums}
 .pc-suggest .btn{padding:7px 14px;font-size:.84rem}
 .pane-title{margin:26px 0 4px;font-size:.98rem;padding-top:18px;border-top:1px solid var(--border)}
+
+/* ------------------------- weather: the day curve ------------------------ */
+/* One SVG replaces the three separate canvases. It is SVG and not canvas on
+   purpose: every colour below is a CSS variable, so the six presets and the
+   light/dark switch drive the drawing without it being redrawn, and the hover
+   reading gets hit-testing and focus for free. Only the geometry is computed
+   in JavaScript; nothing here is written as an inline style except the
+   positions, which have to be. */
+
+/* The sun, the moon and the rain keep their own colours in every preset: an
+   amber sun is not a theme accent, it is what a sun looks like, and rain read
+   as orange under the Ember preset. Only the temperature follows the accent. */
+:root{--wc-sun:#f5a524;--wc-sun-soft:#ffd79a;--wc-moon:#cbd5e1;--wc-moon-line:#94a3b8;
+  --wc-star:#f1f5f9;--wc-rain:#3b82f6}
+[data-theme="light"]{--wc-sun:#e08a00;--wc-sun-soft:#f7c873;--wc-moon:#94a3b8;--wc-moon-line:#64748b;
+  --wc-star:#cbd5e1;--wc-rain:#2563eb}
+
+.wc{position:relative;border-radius:var(--rlg);outline:none;container-type:inline-size}
+.wc:focus-visible{box-shadow:0 0 0 2px var(--primary)}
+
+/* The header holds two layers in the same box: the resting summary and the
+   cursor reading. They cross-fade, so the row never changes height and the
+   curve below never shifts by a pixel while the pointer moves. */
+.wc-head{position:relative;height:17px;margin-bottom:6px}
+.wc-rest,.wc-read{position:absolute;inset:0;display:flex;align-items:center;gap:10px;
+  white-space:nowrap;overflow:hidden;transition:opacity .22s ease,transform .3s var(--ease)}
+.wc-read{opacity:0;transform:translateY(5px);gap:8px;font-size:.74rem;font-weight:600;color:var(--muted)}
+.wc.reading .wc-rest{opacity:0;transform:translateY(-5px)}
+.wc.reading .wc-read{opacity:1;transform:none}
+
+.wc-title{font-size:.68rem;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-weight:700}
+.wc-range{font-size:.76rem;font-weight:750;font-variant-numeric:tabular-nums}
+.wc-range i{font-style:normal;color:var(--muted);margin:0 3px;font-weight:600}
+.wc-sun{margin-left:auto;display:flex;align-items:center;gap:12px}
+.wc-astre{display:inline-flex;align-items:center;gap:5px;font-size:.73rem;font-weight:700;
+  color:var(--muted);font-variant-numeric:tabular-nums}
+.wc-astre .i{font-size:14px}
+.wc-astre.sunrise .i{color:var(--wc-sun)}
+.wc-astre.sunset .i{color:var(--wc-moon-line)}
+
+.wc-r-hour{font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.wc-r-temp{font-weight:750;color:var(--text);font-variant-numeric:tabular-nums}
+.wc-r-rain{color:var(--wc-rain);font-weight:700;font-variant-numeric:tabular-nums}
+.wc-r-feels,.wc-r-wind{font-variant-numeric:tabular-nums}
+/* Both rows have to fit on one line. What no longer fits is dropped, least
+   useful first — which is why these are container queries and not media
+   queries: the modal is narrower than the viewport, and narrower again on a
+   phone sheet. The title goes before either sun time does: "Through the day"
+   is a label, and the two times are the thing itself. */
+@container (max-width:460px){.wc-r-wind{display:none}}
+@container (max-width:400px){.wc-title{display:none}}
+@container (max-width:360px){.wc-r-feels{display:none}}
+@container (max-width:280px){.wc-range{display:none}}
+
+.wc-plot{position:relative;touch-action:pan-y;cursor:crosshair}
+.wc-svg{display:block;width:100%;height:auto;overflow:visible;font-family:inherit}
+
+/* sky */
+.wc-horizon{stroke:var(--border-strong);stroke-width:1}
+.wc-stars circle{fill:var(--wc-star);animation:wc-twinkle 3s ease-in-out infinite}
+.wc-arc{fill:none;stroke-width:1.3;stroke-linecap:round;stroke-dasharray:.01 3.6;opacity:.55;
+  transition:opacity .3s}
+.wc.reading .wc-arc{opacity:.9}
+/* The part of the course already run: solid, but quiet. */
+.wc-arc-done{fill:none;stroke-width:1.2;stroke-linecap:round;opacity:.45}
+.wc-arc-sun,.wc-arc-sun.wc-arc-done{stroke:var(--wc-sun)}
+.wc-arc-moon,.wc-arc-moon.wc-arc-done{stroke:var(--wc-moon-line)}
+.wc-sun-disc{fill:var(--wc-sun);stroke:var(--wc-sun-soft);stroke-width:1}
+.wc-sun-rays{fill:none;stroke:var(--wc-sun);stroke-width:1.3;stroke-linecap:round;
+  transform-box:fill-box;transform-origin:center;animation:wc-spin 36s linear infinite}
+.wc-sun-halo{fill:var(--wc-sun);opacity:.22;transform-box:fill-box;transform-origin:center;
+  animation:wc-breathe 4.5s ease-in-out infinite}
+.wc-moon-disc{fill:var(--wc-moon)}
+.wc-moon-shadow{fill:var(--surface-soft)}
+
+/* rain and temperature */
+.wc-rain{fill:var(--wc-rain);fill-opacity:.6;transition:fill-opacity .2s}
+.wc-rain.aimed{fill-opacity:1}
+.wc-area{fill:var(--primary-2);opacity:.16}
+.wc-line{fill:none;stroke:var(--primary-2);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;
+  transition:stroke-width .25s}
+.wc-glow{fill:none;stroke:var(--primary-2);stroke-width:5;opacity:.3;transition:opacity .25s}
+.wc.reading .wc-line{stroke-width:2.8}
+.wc.reading .wc-glow{opacity:.5}
+/* Hours already gone, dimmed by clipping the same paths twice rather than by
+   veiling the region — a veil would also dim the wallpaper showing through. */
+.wc-past{opacity:.45}
+
+.wc-extreme{fill:var(--text);font-size:10.5px;font-weight:800;transition:opacity .25s;
+  paint-order:stroke;stroke:var(--surface-soft);stroke-width:3px;stroke-linejoin:round}
+.wc.reading .wc-extreme{opacity:.25}
+.wc-hour{fill:var(--muted);font-size:10px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* now */
+.wc-now{transition:opacity .25s}
+.wc-now line{stroke:var(--primary);opacity:.55;stroke-width:1;stroke-dasharray:2 3}
+.wc-now-dot{fill:var(--primary);stroke:var(--surface-soft);stroke-width:1.6}
+.wc-now-pulse{fill:var(--primary);transform-box:fill-box;transform-origin:center;
+  animation:wc-pulse 2.4s ease-out infinite}
+.wc.reading .wc-now{opacity:.3}
+
+/* cursor */
+.wc-cursor-line,.wc-cursor,.wc-bubble{opacity:0;transition:opacity .2s;pointer-events:none}
+.wc.reading .wc-cursor-line,.wc.reading .wc-cursor,.wc.reading .wc-bubble{opacity:1}
+.wc-cursor-line{stroke:var(--border-strong);stroke-width:1}
+.wc-cursor-halo{fill:var(--primary-2);opacity:.28;transform-box:fill-box;transform-origin:center;
+  animation:wc-breathe 1.8s ease-in-out infinite}
+.wc-cursor-dot{fill:var(--primary-2);stroke:var(--surface-soft);stroke-width:2}
+.wc-bubble rect{fill:var(--surface-soft);stroke:var(--border-strong);stroke-width:1}
+.wc-bubble text{fill:var(--text);font-size:10.5px;font-weight:800;font-variant-numeric:tabular-nums}
+
+/* The line draws itself left to right while the area, the courses and the
+   stars come up. "backwards" and not "both": once it is over, the animation
+   hands control back to the hover transitions. */
+.wc-intro .wc-line,.wc-intro .wc-glow{stroke-dasharray:1;
+  animation:wc-trace 1.2s cubic-bezier(.3,.7,.2,1) backwards}
+.wc-intro .wc-area{animation:wc-appear .9s ease .35s backwards}
+.wc-intro .wc-sky,.wc-intro .wc-rains{animation:wc-appear 1s ease .15s backwards}
+.wc-intro .wc-extreme,.wc-intro .wc-now{animation:wc-appear .6s ease .9s backwards}
+
+@keyframes wc-trace{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes wc-appear{from{opacity:0}}
+@keyframes wc-twinkle{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes wc-spin{to{transform:rotate(360deg)}}
+@keyframes wc-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+@keyframes wc-pulse{from{transform:scale(1);opacity:.7}to{transform:scale(3.2);opacity:0}}
+
+@media(prefers-reduced-motion:reduce){
+  .wc-stars circle,.wc-sun-rays,.wc-sun-halo,.wc-now-pulse,.wc-cursor-halo{animation:none!important}
+  .wc-intro .wc-line,.wc-intro .wc-glow,.wc-intro .wc-area,.wc-intro .wc-sky,
+  .wc-intro .wc-rains,.wc-intro .wc-extreme,.wc-intro .wc-now{animation:none!important}
+}
+
+/* Sunrise and sunset, on the tile itself. One line inside .wstats, which is
+   already a grid of rows, so it needs no layout of its own. */
+.wsun{display:flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.wsun .i{color:var(--wc-sun)}
+.wsun .i:last-of-type{color:var(--wc-moon-line)}
+.wsun-sep{color:var(--muted);opacity:.6}
+.wsun:empty{display:none}
