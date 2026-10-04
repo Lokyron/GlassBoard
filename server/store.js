@@ -24,9 +24,13 @@ export function getConfig(userId) {
     .prepare('SELECT json FROM config_revisions WHERE user_id = ? ORDER BY id DESC LIMIT 1')
     .get(userId);
   if (!row) {
-    const seeded = defaultConfig();
-    saveConfig(userId, seeded, 'initial default configuration');
-    return seeded;
+    // The validated document, not the raw default: the example configuration
+    // leaves out whole blocks the validator fills in — `integrations.parcels`
+    // among them — and returning it unvalidated served a first-load document
+    // with holes the dashboard then read straight through. It used to happen
+    // once per instance; with one configuration per account it happens to
+    // everyone, on their first screen.
+    return saveConfig(userId, defaultConfig(), 'initial default configuration');
   }
   try {
     // A document saved by an older version lacks the fields added since, so it

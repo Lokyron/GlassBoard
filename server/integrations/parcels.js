@@ -379,7 +379,7 @@ export async function getParcels(userId, { refreshMinutes = 180, hideDeliveredAf
   let error = null;
   if (isConfigured(userId)) {
     try {
-      await refresh({ refreshMinutes });
+      await refresh(userId, { refreshMinutes });
     } catch (failure) {
       error = failure.message;
     }

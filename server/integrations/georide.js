@@ -80,7 +80,7 @@ export function isConfigured(userId) {
 export function credentialStatus(userId) {
   const issuedAt = getMeta(tokenIssuedKey(userId));
   return {
-    configured: isConfigured(),
+    configured: isConfigured(userId),
     hasStoredPassword: Boolean(getSecret(userId, SECRET_PASSWORD)),
     email: decrypt(getSecret(userId, SECRET_EMAIL)) || '',
     tokenIssuedAt: issuedAt,
@@ -226,7 +226,7 @@ function summariseTrips(trips, periodStart) {
  * which the trips endpoint does not carry.
  */
 export async function getTrips(userId, { trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
-  if (!isConfigured()) {
+  if (!isConfigured(userId)) {
     return { ok: false, configured: false, error: 'GeoRide is not configured yet.' };
   }
   const key = `${cachePrefix(userId)}trips:${trackerId ?? 'auto'}:${periodDays}`;
@@ -326,7 +326,7 @@ export async function getTrips(userId, { trackerId = null, periodDays = 7, refre
  * the tile instead of breaking the dashboard.
  */
 export async function getSummary(userId, { trackerId = null, periodDays = 7, refreshMinutes = 5 } = {}) {
-  if (!isConfigured()) {
+  if (!isConfigured(userId)) {
     return { ok: false, configured: false, error: 'GeoRide is not configured yet.' };
   }
   const key = `${cachePrefix(userId)}summary:${trackerId ?? 'auto'}:${periodDays}`;
