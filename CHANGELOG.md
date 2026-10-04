@@ -78,6 +78,12 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- The mail server panel said nothing about Gmail needing an application
+  password, while the mailbox panel next door had always said so — the same
+  provider, the same requirement, and only one of the two warning about it.
+  It now carries the warning, and a refusal that names that cause is answered
+  with what to do about it rather than with the provider's status code.
+
 - The forecast window picked out "today" by a UTC date, so east of Greenwich it
   highlighted and labelled the wrong day during the last hours of the evening.
 - A clear sky at three in the morning was drawn with a sun.

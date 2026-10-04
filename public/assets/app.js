@@ -76,6 +76,11 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const error = new Error(payload?.error || `HTTP ${response.status}`);
     error.details = payload?.details;
+    // Several routes answer with a machine-readable code next to the message.
+    // Carrying it through is what lets a caller react to a particular failure
+    // rather than only display it.
+    error.code = payload?.code ?? null;
+    error.status = response.status;
     throw error;
   }
   return payload;

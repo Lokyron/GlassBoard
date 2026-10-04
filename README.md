@@ -446,7 +446,13 @@ also sent.
 
 The mail server is used for invitations and nothing else. STARTTLS on port 587,
 direct TLS on 465, or neither; the password is encrypted with `APP_SECRET` and
-never shown again. The **Test** button checks what is on screen rather than
+never shown again.
+
+With Gmail, this needs an **application password**, exactly as the mailbox scan
+does: turn on two-step verification, create a 16-character app password, and
+use that. The account password is refused — Google answers `534 5.7.9
+Application-specific password required`, which the panel translates into what
+to do about it. The **Test** button checks what is on screen rather than
 what is saved, which is the point of testing, and can send a message to an
 address of your choice.
 

@@ -1131,8 +1131,15 @@ function smtpPane() {
           const result = await api('/api/admin/smtp/test', {
             method: 'POST', body: { ...onScreen(), ...(testTo.value.trim() ? { to: testTo.value.trim() } : {}) },
           });
+          status.classList.remove('danger-text');
+          status.textContent = result.sent ? t('smtp.testSent') : t('smtp.testOk');
           toast(result.sent ? t('smtp.testSent') : t('smtp.testOk'));
         } catch (error) {
+          // A toast is the wrong place for an instruction: it is gone before
+          // it has been acted on. The advice stays in the panel, next to the
+          // field it is about.
+          status.classList.add('danger-text');
+          status.textContent = error.code === 'app_password' ? t('smtp.appPassword') : error.message;
           toast(error.message, 'error');
         } finally {
           button.disabled = false;

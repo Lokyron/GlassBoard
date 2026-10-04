@@ -44,6 +44,23 @@ class SmtpError extends Error {
 }
 
 /**
+ * What kind of refusal this is.
+ *
+ * 534 belongs with 535 and 530: it is Gmail's way of saying the credentials
+ * were understood and rejected. It reaches here as "Application-specific
+ * password required", which is the single most likely thing to go wrong when
+ * someone first points this at Gmail — the account password does not work
+ * there, only a 16-character app password does. Naming that case lets the
+ * settings panel say what to do about it instead of only relaying the code.
+ */
+function refusalCode(answer) {
+  const text = String(answer.text || '').toLowerCase();
+  if (/application-specific password|invalidsecondfactor/.test(text)) return 'app_password';
+  if ([534, 535, 530].includes(answer.code)) return 'auth';
+  return 'refused';
+}
+
+/**
  * A readable reason from a socket failure. Node reports a dual-stack connection
  * refusal as an AggregateError whose own message is empty, which would leave
  * the settings panel saying nothing at all.
@@ -160,7 +177,7 @@ class Session {
     if (expected && !expected.includes(answer.code)) {
       // The server's own words, which say far more than anything written here:
       // "Username and Password not accepted", "relay not permitted", and so on.
-      throw new SmtpError(answer.text.trim(), answer.code === 535 || answer.code === 530 ? 'auth' : 'refused');
+      throw new SmtpError(answer.text.trim(), refusalCode(answer));
     }
     return answer;
   }
