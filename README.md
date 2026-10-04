@@ -525,11 +525,29 @@ Endpoints used, from the official documentation at <https://api.georide.fr>:
 `GET /tracker/:id/trips`, `GET /tracker/:id/trips/positions`. Speeds are
 returned in knots and converted to km/h, distances are in metres.
 
-The last 30 days are fetched once, as the dashboard settles, so the panel opens
-on data that is already there and switching between rides or periods costs
-nothing: the shorter periods are slices of the month in hand, and picking a ride
-only restyles the tracks already on the map. JSON responses are gzipped, which
-takes a month of tracks from about 100 kB down to 35 kB on the wire.
+**The last month of rides is kept on the server, not cached.** They are written
+to the database as they are read, already thinned, and every later sync asks
+GeoRide only for what has happened since the newest one on record. A month of
+riding is tens of thousands of GPS positions — a dozen megabytes — and fetching
+it again whenever a cache expired is what used to make opening the card feel
+like loading a page. Now a page load that finds the month already there calls
+GeoRide not at all, and one that finds it a few hours old fetches a few hours.
+Only the very first ever, on a new instance, fetches the whole month.
+
+A sync also skips the positions of a ride that ended more than a quarter of an
+hour ago, since it will not gain another metre, and asks only for what came
+after it: a parked motorcycle costs well under a kilobyte. Rides that fall out
+of the retention window are dropped by the same sync, and by the hourly
+housekeeping on an instance where GeoRide has since been switched off, so the
+table stays the size of a month — about 8 kB a ride — whatever the mileage.
+
+The panel therefore opens on data that is already there, and switching between
+rides or periods costs nothing: the shorter periods are slices of the month in
+hand, and picking a ride only restyles the tracks already on the map. The
+dashboard asks for the month once, and again only when the tile says a ride has
+arrived since. JSON responses are gzipped, which takes a month of tracks from
+about 100 kB down to 35 kB on the wire. When GeoRide cannot be reached at all,
+the stored month is served anyway and the card says it is behind.
 
 Two details about the tracks, because the API decides them for us. The
 positions endpoint returns the whole period in one list and never says which

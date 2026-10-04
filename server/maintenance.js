@@ -16,6 +16,7 @@ import {
 import { getConfig } from './store.js';
 import { getMeta } from './db.js';
 import * as mailbox from './integrations/mailbox.js';
+import { pruneStoredTrips } from './integrations/georide.js';
 
 const TILE_DIR = path.join(DATA_DIR, 'tiles');
 const TILE_CACHE_MAX_BYTES = 128 * 1024 * 1024;
@@ -74,6 +75,7 @@ export async function runMaintenance({ quiet = true } = {}) {
   purgeExpiredLoginRequests();
   purgeExpiredInvitations();
   const tiles = await pruneTiles().catch(() => 0);
+  const rides = pruneStoredTrips();
 
   // Fold the write-ahead log back into the database and refresh the planner's
   // statistics. Both are cheap and keep the footprint flat over months.
@@ -86,8 +88,8 @@ export async function runMaintenance({ quiet = true } = {}) {
 
   const mail = await scanMailboxes();
 
-  if (!quiet) console.log(`[glassboard] maintenance: ${cacheRows} cache rows, ${tiles} tiles removed`);
-  return { cacheRows, tiles, mail };
+  if (!quiet) console.log(`[glassboard] maintenance: ${cacheRows} cache rows, ${rides} rides, ${tiles} tiles removed`);
+  return { cacheRows, rides, tiles, mail };
 }
 
 /**

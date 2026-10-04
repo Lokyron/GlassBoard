@@ -167,6 +167,35 @@ CREATE TABLE IF NOT EXISTS cache (
   value      TEXT NOT NULL,
   expires_at INTEGER NOT NULL
 );
+
+-- The last month of GeoRide rides. Stored, not cached.
+--
+-- The detail view offers a month of history, and a month of riding is tens of
+-- thousands of GPS positions. Behind a five-minute cache that meant fetching
+-- the whole month again several times an hour, which is what made opening the
+-- card feel like loading a page. Here each ride is written once, already
+-- thinned, and a sync asks the API only for what has happened since the newest
+-- one on record. Rides that fall out of the retention window are dropped by
+-- the same sync, so the table stays the size of a month whatever the mileage.
+--
+-- The metrics are columns as well as being inside the JSON: the tile wants
+-- totals over a period and nothing else, and a SUM over a few rows beats
+-- parsing a megabyte of track to add up four numbers.
+CREATE TABLE IF NOT EXISTS georide_trips (
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tracker_id   INTEGER NOT NULL,
+  trip_key     TEXT NOT NULL,
+  started_at   INTEGER NOT NULL,
+  ended_at     INTEGER NOT NULL,
+  distance_km  REAL NOT NULL DEFAULT 0,
+  duration_min INTEGER NOT NULL DEFAULT 0,
+  average_kmh  INTEGER NOT NULL DEFAULT 0,
+  top_kmh      INTEGER NOT NULL DEFAULT 0,
+  trip         TEXT NOT NULL,
+  PRIMARY KEY (user_id, tracker_id, trip_key)
+);
+CREATE INDEX IF NOT EXISTS idx_georide_trips_window
+  ON georide_trips(user_id, tracker_id, started_at);
 `);
 
 /** Add a column to a table that already exists, once.
@@ -510,4 +539,140 @@ export function cacheSet(key, value, ttlSeconds) {
 
 export function cacheDeletePrefix(prefix) {
   db.prepare("DELETE FROM cache WHERE key LIKE ? || '%'").run(prefix);
+}
+
+/* ---------------------------- GeoRide trip store -------------------------- */
+/* Rides are kept rather than cached — the table's own comment in the schema
+   says why. The JSON in `trip` is the finished object the browser receives, so
+   answering the card is a read and a concatenation: nothing upstream is parsed,
+   recomputed or waited for. */
+
+/** The rides that started on or after `sinceMs`, newest first. */
+export function listTripRows(userId, trackerId, sinceMs) {
+  return db
+    .prepare(
+      `SELECT trip FROM georide_trips
+        WHERE user_id = ? AND tracker_id = ? AND started_at >= ?
+        ORDER BY started_at DESC`
+    )
+    .all(Number(userId), Number(trackerId), Math.round(sinceMs))
+    .map((row) => {
+      try {
+        return JSON.parse(row.trip);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+/** Totals over a period, without reading a single track. */
+export function tripTotals(userId, trackerId, sinceMs) {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS trips,
+              COALESCE(SUM(distance_km), 0)  AS distance,
+              COALESCE(SUM(duration_min), 0) AS duration,
+              COALESCE(MAX(average_kmh), 0)  AS average,
+              COALESCE(MAX(top_kmh), 0)      AS top,
+              MAX(ended_at)                  AS last
+         FROM georide_trips
+        WHERE user_id = ? AND tracker_id = ? AND started_at >= ?`
+    )
+    .get(Number(userId), Number(trackerId), Math.round(sinceMs));
+  return {
+    tripCount: row.trips,
+    distanceKm: Math.round(row.distance * 10) / 10,
+    durationMinutes: Math.round(row.duration),
+    bestAverageSpeedKmh: Math.round(row.average),
+    topSpeedKmh: Math.round(row.top),
+    lastTripAt: row.last ? new Date(row.last).toISOString() : null,
+  };
+}
+
+/** Which rides are already on record, for a sync to tell apart what it has
+ *  been handed again from what is genuinely new. */
+export function listTripKeys(userId, trackerId) {
+  return new Set(
+    db
+      .prepare('SELECT trip_key FROM georide_trips WHERE user_id = ? AND tracker_id = ?')
+      .all(Number(userId), Number(trackerId))
+      .map((row) => row.trip_key)
+  );
+}
+
+/** The newest ride on record, which is where the next sync picks up. */
+export function latestTripRow(userId, trackerId) {
+  return (
+    db
+      .prepare(
+        `SELECT trip_key, started_at, ended_at FROM georide_trips
+          WHERE user_id = ? AND tracker_id = ? ORDER BY started_at DESC LIMIT 1`
+      )
+      .get(Number(userId), Number(trackerId)) ?? null
+  );
+}
+
+/**
+ * Store a batch of rides and drop whatever has aged out, in one transaction: a
+ * sync lands whole or not at all, so a connection that dies halfway through
+ * cannot leave a month with a hole in the middle of it.
+ *
+ * Rides are upserted on their own identity, which is what lets a sync overlap
+ * the one already on record: a ride that was still in progress last time
+ * simply replaces itself, rather than arriving twice or staying truncated.
+ */
+export function saveTripRows(userId, trackerId, rows, { pruneBefore = null } = {}) {
+  const insert = db.prepare(
+    `INSERT INTO georide_trips
+       (user_id, tracker_id, trip_key, started_at, ended_at,
+        distance_km, duration_min, average_kmh, top_kmh, trip)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, tracker_id, trip_key) DO UPDATE SET
+       started_at   = excluded.started_at,
+       ended_at     = excluded.ended_at,
+       distance_km  = excluded.distance_km,
+       duration_min = excluded.duration_min,
+       average_kmh  = excluded.average_kmh,
+       top_kmh      = excluded.top_kmh,
+       trip         = excluded.trip`
+  );
+  db.exec('BEGIN');
+  try {
+    for (const row of rows) {
+      insert.run(
+        Number(userId),
+        Number(trackerId),
+        String(row.key),
+        Math.round(row.startedAt),
+        Math.round(row.endedAt),
+        Number(row.trip.distanceKm) || 0,
+        Math.round(Number(row.trip.durationMinutes) || 0),
+        Math.round(Number(row.trip.averageSpeedKmh) || 0),
+        Math.round(Number(row.trip.topSpeedKmh) || 0),
+        JSON.stringify(row.trip)
+      );
+    }
+    if (pruneBefore !== null) {
+      db.prepare('DELETE FROM georide_trips WHERE user_id = ? AND tracker_id = ? AND ended_at < ?')
+        .run(Number(userId), Number(trackerId), Math.round(pruneBefore));
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/** Drop every ride that ended before `beforeMs`, whoever it belongs to: the
+ *  housekeeping sweep, for an instance where no sync will run again. */
+export function deleteTripsBefore(beforeMs) {
+  return db.prepare('DELETE FROM georide_trips WHERE ended_at < ?').run(Math.round(beforeMs)).changes;
+}
+
+/** Every ride an account has stored, for every tracker: what signing out of
+ *  GeoRide has to leave behind. Deleting the account itself is handled by the
+ *  foreign key. */
+export function deleteTripRows(userId) {
+  db.prepare('DELETE FROM georide_trips WHERE user_id = ?').run(Number(userId));
 }

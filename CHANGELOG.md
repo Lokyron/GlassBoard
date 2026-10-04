@@ -61,6 +61,30 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The last month of GeoRide rides is kept on the server, not cached.** A
+  month of riding is tens of thousands of GPS positions, a dozen megabytes of
+  them, and the card used to fetch the whole month again every time a
+  five-minute cache expired — which is what made opening it feel like loading a
+  page, especially just after a page load. The rides are now written to the
+  database as they are read, already thinned, and a sync asks GeoRide only for
+  what has happened since the newest one on record. A page load that finds the
+  month already there calls GeoRide not at all; one that finds it hours old
+  fetches those hours. Only the first ever, on a new instance, fetches a month.
+  The tile's figures come off the same rides, so it has stopped pulling a week
+  of positions of its own just to work out a top speed.
+- A sync leaves alone the positions of a ride that ended more than a quarter of
+  an hour ago, since it will not gain another metre, and asks only for what came
+  after it. A parked motorcycle costs well under a kilobyte to stay up to date.
+- Rides that fall out of the retention window are dropped by the sync, and by
+  the hourly housekeeping on an instance where GeoRide has since been switched
+  off. The table stays the size of a month, about 8 kB a ride, whatever the
+  mileage.
+- **Refresh every (minutes)** under GeoRide has stopped meaning how long an
+  answer may be served from a cache and now means how often GeoRide is asked.
+  The answer itself is always on disk, so the card opens at the same speed
+  whatever the setting — and whatever GeoRide is doing: when it cannot be
+  reached at all, the stored month is served anyway and the card says it is
+  behind, instead of the whole thing failing.
 - `npm run config:export` and `npm run config:import` take `--user <name|id>`.
   It is optional while the instance has one account and **required** once it
   has several: picking the first one silently would mean exporting, or worse
@@ -91,7 +115,10 @@ Notable changes, newest first. The format follows
   provider, the same requirement, and only one of the two warning about it.
   It now carries the warning, and a refusal that names that cause is answered
   with what to do about it rather than with the provider's status code.
-
+- Clicking the motorcycle card while the dashboard was still fetching the month
+  in the background started a second request for the same thirty days, next to
+  the one already in the air. Whoever asks in the meantime now waits on that
+  one.
 - The forecast window picked out "today" by a UTC date, so east of Greenwich it
   highlighted and labelled the wrong day during the last hours of the evening.
 - A clear sky at three in the morning was drawn with a sun.

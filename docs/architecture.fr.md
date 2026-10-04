@@ -33,8 +33,8 @@
   se retrograder ni être supprimé. Deux parcours d'entrée : création directe par l'administrateur, ou
   **lien d'invitation à usage unique** (48 h), envoyé par mail si un SMTP est configuré.
 - **Base de données & stockage** : SQLite via `node:sqlite`, fichier `$DATA_DIR/glassboard.db`
-  (configurations, comptes, sessions, défis de connexion, invitations, révisions, cache, secrets chiffrés
-  AES-256-GCM). Fonds d'écran : un fichier `wallpaper-<id>.bin` par compte.
+  (configurations, comptes, sessions, défis de connexion, invitations, révisions, cache, **trajets GeoRide
+  du dernier mois**, secrets chiffrés AES-256-GCM). Fonds d'écran : un fichier `wallpaper-<id>.bin` par compte.
   `$DATA_DIR/backups/` (instantanés avant import), `$DATA_DIR/tiles/` (cache de tuiles OSM plafonné à 128 Mo).
 - **Outils externes & APIs tierces** (tous appelés **côté serveur**, aucun jeton dans le navigateur) :
   - **Open-Meteo** (prévisions, géocodage) ;
@@ -195,6 +195,21 @@ Pas de tests, linter ni CI configurés.
   enjambe minuit : il faut la *découper* à la fenêtre visible (`arcPath(rise, set, h, from, to)`) et non
   la *borner*, sinon la moitié de l'arc s'aplatit contre le bord gauche. Le passé est atténué par un
   `clipPath` sur les mêmes tracés, pas par un voile : un voile assombrirait aussi le fond d'écran.
+- **Trajets GeoRide : une table, pas un cache** (`georide_trips`, `server/integrations/georide.js`).
+  Un mois de trajets, ce sont des dizaines de milliers de positions GPS — une douzaine de mégaoctets —
+  et le redemander à chaque expiration de cache était la cause des ouvertures de carte interminables.
+  Les trajets sont donc **stockés**, déjà amincis, et chaque synchronisation ne demande que ce qui suit
+  le plus récent connu. Quatre points à ne pas défaire :
+  - la fenêtre part du **début** du trajet le plus récent, pas de sa fin : un trajet encore en cours lors
+    du dernier passage est stocké à moitié, et repartir de sa fin le laisserait tronqué pour toujours ;
+  - sauf s'il est **terminé depuis plus de `SETTLED_MINUTES`** : ses positions ne sont alors plus
+    demandées du tout, sinon une moto garée coûte un trajet entier de GPS toutes les cinq minutes ;
+  - un trajet **déjà stocké qui revient sans positions** n'est pas réécrit (sa trace serait effacée) ;
+  - **une seule synchronisation à la fois** par traceur (`syncing`), sinon la tuile et le mois, demandés
+    au même instant à chaque chargement de page, rapatrient tous les deux le mois complet.
+  `refreshMinutes` ne veut plus dire « durée de vie d'une réponse en cache » mais « fréquence d'appel
+  à l'API » : la réponse, elle, est toujours sur le disque. `RETENTION_DAYS` vaut **31** et non 30, parce
+  que c'est le maximum qu'accepte `integrations.georide.periodDays`.
 - **Forme de la réponse Open-Meteo** : la clé de cache contient une version (`FORECAST_SHAPE` dans
   `weather.js`). **À incrémenter à chaque changement de `FORECAST_PARAMS`**, sinon une instance qui vient
   d'être mise à jour sert pendant `refreshMinutes` une charge utile dépourvue des nouveaux champs.

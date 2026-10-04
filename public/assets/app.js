@@ -1191,8 +1191,9 @@ function renderGeorideTile(tile, summary) {
 /* ---------------------- GeoRide detail view (trips) ---------------------- */
 
 const TRIP_PERIODS = [1, 7, 30];
-// The whole month is fetched once and the shorter periods are slices of it, so
-// switching period or trip never waits on the network.
+// The month is asked for in one request and the shorter periods are slices of
+// it, so switching period or trip never waits on the network. The server keeps
+// that month on disk, so the request itself is a read rather than a download.
 const TRIP_WINDOW_DAYS = 30;
 
 const tripKey = (trip) => `${trip.id ?? ''}|${trip.startTime}`;
@@ -1224,7 +1225,7 @@ async function openGeorideModal(origin = null) {
   openModal('georide-modal', origin ?? tileOfType('georide'));
   renderTripPeriods();
   if (state.trips) renderTrips();   // prefetched while the dashboard loaded
-  else await loadTrips();
+  else await loadTrips();           // or still in the air: joined, not repeated
 }
 
 function renderTripPeriods() {
@@ -1245,9 +1246,37 @@ function renderTripPeriods() {
   });
 }
 
-/** Fetch the month once. Called in the background as the dashboard settles. */
-async function loadTrips({ quiet = false } = {}) {
+/* The month, requested at most once at a time.
+   The dashboard prefetches it as the page settles, and the card can be clicked
+   while that is still in the air — which used to fire a second, identical
+   request for the same thirty days. Everyone who asks in the meantime waits on
+   the one already running. */
+let tripsRequest = null;
+
+/** Fetch the month. Called in the background as the dashboard settles, and
+ *  again on opening the card if that has not landed yet. */
+function loadTrips({ quiet = false } = {}) {
+  // Said before the early return, so joining a prefetch still shows the reader
+  // that something is on its way.
   if (!quiet) id('gr-trip-list').innerHTML = `<p class="gr-empty">${esc(t('gr.loading'))}</p>`;
+  if (tripsRequest) return tripsRequest;
+  tripsRequest = fetchTrips().finally(() => { tripsRequest = null; });
+  return tripsRequest;
+}
+
+/* Has anything happened since the month we are holding?
+   The answer is a couple of hundred kilobytes, and a motorcycle is ridden a few
+   times a week, so asking on every tick would be a download an hour for nothing
+   — which on a phone away from home is not nothing. The tile has just been
+   refreshed and carries the end of the most recent ride, so it already knows.
+   `null` means no ride at all within the tile's own period, which says nothing
+   about the month and is not a reason to re-fetch it. */
+function newRideSince(summary) {
+  const latest = summary.stats?.lastTripAt ?? null;
+  return latest !== null && latest !== (state.trips?.trips?.[0]?.endTime ?? null);
+}
+
+async function fetchTrips() {
   try {
     state.trips = await api(`/api/integrations/georide/trips?days=${TRIP_WINDOW_DAYS}`);
   } catch (error) {
@@ -1424,11 +1453,21 @@ async function loadGeoride() {
     const summary = await api('/api/integrations/georide/summary');
     state.georide = summary;
     renderGeorideTile(tile, summary);
-    // Pull the month in the background so the detail view opens on ready data.
-    if (summary.ok && !state.trips) {
+    if (!summary.ok) return;
+    // Pull the month in the background, once, so the detail view opens on data
+    // that is already there.
+    if (!state.trips) {
       const prefetch = () => loadTrips({ quiet: true });
       if (typeof requestIdleCallback === 'function') requestIdleCallback(prefetch, { timeout: 4000 });
       else setTimeout(prefetch, 1200);
+      return;
+    }
+    // After that it is only worth asking again once a ride has actually
+    // arrived, which the tile has just said. Not while the panel is open,
+    // either: a ride appearing under the cursor renumbers the list and moves
+    // the selection onto a different ride.
+    if (newRideSince(summary) && !id('georide-modal').classList.contains('open')) {
+      loadTrips({ quiet: true });
     }
   } catch (error) {
     renderGeorideTile(tile, { ok: false, error: error.message });
