@@ -110,6 +110,18 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- Dropping a shortcut on a folder to file it away never worked, although the
+  hint under the editing bar had always said it would. A folder is aimed at by
+  its middle, but its edges are crossed on the way in, and crossing an edge
+  made the folder step aside at once — it was out from under the pointer before
+  the middle was ever reached, so the gesture could only ever reorder. A folder
+  now holds its ground for a moment, long enough to reach its middle, and only
+  steps aside if you linger on its edge.
+- The pencil on a shortcut opened the shortcut in a new tab as well as its
+  settings. The shortcut is a link, and in editing mode it cancels its own
+  navigation; the buttons on top of it stopped the click from travelling that
+  far, so nothing cancelled anything. The link now cancels on the way down,
+  before the buttons are reached.
 - The mail server panel said nothing about Gmail needing an application
   password, while the mailbox panel next door had always said so — the same
   provider, the same requirement, and only one of the two warning about it.

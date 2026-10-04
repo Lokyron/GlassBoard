@@ -137,6 +137,7 @@ function cancelEditing() {
 
 const LONG_PRESS_MS = 300;
 const DRAG_THRESHOLD = 6;
+const NEST_GRACE_MS = 220;
 const SLIDE = { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' };
 
 /** Put `list` in the order given as a list of former indexes. */
@@ -240,7 +241,7 @@ function bindArranging(container, selector) {
     document.body.appendChild(ghost);
     node.classList.add('drag-source');
     document.body.classList.add('arranging');
-    drag = { node, ghost, pointer, from: Number(node.dataset.index), offX: x - box.left, offY: y - box.top, x, y, into: null, outside: false };
+    drag = { node, ghost, pointer, from: Number(node.dataset.index), offX: x - box.left, offY: y - box.top, x, y, into: null, outside: false, over: null, overSince: 0 };
     place(x, y);
     navigator.vibrate?.(8);
     drag.frame = requestAnimationFrame(autoScroll);
@@ -264,18 +265,32 @@ function bindArranging(container, selector) {
     }
 
     const under = document.elementFromPoint(x, y)?.closest(selector);
-    if (!isCard(under) || under === drag.node) { if (under !== drag.into) markInto(null); return; }
+    if (!isCard(under) || under === drag.node) { markInto(null); markOver(null); return; }
+    markOver(under);
     // A card still sliding would bounce back under the pointer: wait for it to
     // settle. Timed by the clock, since animations stall in a background tab.
     if (performance.now() < (under.slidingUntil || 0)) return;
 
     const to = Number(under.dataset.index);
-    if (canNest?.(drag.from, to) && inMiddle(under, x, y)) { markInto(under); return; }
+    const nestable = Boolean(canNest?.(drag.from, to));
+    if (nestable && inMiddle(under, x, y)) { markInto(under); return; }
     markInto(null);
+    // A folder is entered by its middle, but its edges are crossed first. Shoving
+    // it aside straight away would move it out from under the pointer before the
+    // middle is ever reached, which makes filing a shortcut impossible. So a
+    // folder holds its ground for a moment, and only then steps aside.
+    if (nestable && performance.now() - drag.overSince < NEST_GRACE_MS) return;
 
     const list = [...container.children];
     const after = list.indexOf(drag.node) < list.indexOf(under);
     slide(() => under[after ? 'after' : 'before'](drag.node));
+  }
+
+  /** The card the pointer sits on, and since when, to time the grace above. */
+  function markOver(node) {
+    if (drag.over === node) return;
+    drag.over = node;
+    drag.overSince = performance.now();
   }
 
   function markInto(node) {
@@ -518,7 +533,9 @@ function decorateLinksForEditing() {
     const index = Number(node.dataset.link);
     node.dataset.index = index;
     node.classList.add('editable');
-    if (node.tagName === 'A') node.addEventListener('click', (event) => event.preventDefault());
+    // Captured, so that it still runs for a click on the buttons below, which
+    // stop the event from bubbling up to the shortcut.
+    if (node.tagName === 'A') node.addEventListener('click', (event) => event.preventDefault(), { capture: true });
     node.appendChild(el('div', { class: 'tile-edit' }, [
       el('button', { class: 'tinybtn', title: t('edit.settings'), html: svg('pencil-simple'), onclick: (e) => { e.stopPropagation(); openLinkDialog(index); } }),
       el('button', { class: 'tinybtn danger', title: t('edit.remove'), html: svg('trash'), onclick: (e) => { e.stopPropagation(); removeLink(index); } }),
@@ -666,7 +683,7 @@ function decorateFolderForEditing(folderIndex) {
     const i = Number(node.dataset.item);
     node.dataset.index = i;
     node.classList.add('editable');
-    node.addEventListener('click', (event) => event.preventDefault());
+    node.addEventListener('click', (event) => event.preventDefault(), { capture: true });
     node.appendChild(el('div', { class: 'tile-edit' }, [
       el('button', { class: 'tinybtn', html: svg('pencil-simple'), onclick: (e) => { e.stopPropagation(); openLinkDialog(i, folderIndex); } }),
       el('button', { class: 'tinybtn danger', html: svg('trash'), onclick: (e) => { e.stopPropagation(); state.config.links[folderIndex].items.splice(i, 1); openFolder(folderIndex); renderLinks(); } }),
