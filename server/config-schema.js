@@ -2,16 +2,15 @@
 // Hand-written on purpose: the shape is small, and this keeps the dependency
 // list short while producing readable error messages for imports.
 
+import { TILE_TYPES, validateIntegrations, validateTileSettings } from './modules/registry.js';
+
 export const CONFIG_VERSION = 1;
 
-/** Tile types the renderer knows about. Adding an integration means adding an entry here. */
-export const TILE_TYPES = {
-  'weather-local': { label: 'Weather — current position', integration: 'weather', singleton: true },
-  'weather-secondary': { label: 'Weather — followed city', integration: 'weather', singleton: true },
-  georide: { label: 'GeoRide — weekly stats and map', integration: 'georide', singleton: true },
-  parcels: { label: 'Parcels — delivery tracking', integration: 'parcels', singleton: true },
-  note: { label: 'Note', integration: null, singleton: false },
-};
+/* Tile types and the integrations block are no longer listed here: each module
+   declares its own, and the registry composes them. Re-exported so that every
+   caller keeps importing them from the schema, which is where they belong
+   conceptually even now that they are assembled elsewhere. */
+export { TILE_TYPES };
 
 /** Colour presets. The ids match the [data-preset] rules in public/assets/themes.css. */
 export const THEME_PRESETS = {
@@ -119,31 +118,14 @@ function normaliseTile(v, raw, index) {
     v.fail(`${path}.type`, `unknown tile type "${type}"`);
     return null;
   }
-  const tile = {
+  return {
     id: v.id(raw?.id, `${path}.id`, 'tile'),
     type,
     span: v.num(raw?.span, `${path}.span`, { min: 0.4, max: 4, fallback: 1 }),
-    settings: {},
+    // The module that declares the type is the only thing that knows what its
+    // settings mean, so it is the thing that validates them.
+    settings: validateTileSettings(v, type, raw?.settings, `${path}.settings`),
   };
-  const s = raw?.settings ?? {};
-  if (type === 'weather-secondary') {
-    tile.settings = {
-      name: v.str(s.name, `${path}.settings.name`, { max: 80, fallback: '' }),
-      latitude: v.num(s.latitude, `${path}.settings.latitude`, { min: -90, max: 90, fallback: 0 }),
-      longitude: v.num(s.longitude, `${path}.settings.longitude`, { min: -180, max: 180, fallback: 0 }),
-      timezone: v.str(s.timezone, `${path}.settings.timezone`, { max: 60, fallback: 'Europe/Paris' }),
-    };
-  } else if (type === 'weather-local') {
-    tile.settings = {
-      label: v.str(s.label, `${path}.settings.label`, { max: 80, fallback: '' }),
-    };
-  } else if (type === 'note') {
-    tile.settings = {
-      heading: v.str(s.heading, `${path}.settings.heading`, { max: 80, fallback: 'Note' }),
-      body: v.str(s.body, `${path}.settings.body`, { max: 2000, fallback: '' }),
-    };
-  }
-  return tile;
 }
 
 /**
@@ -160,10 +142,6 @@ export function validateConfig(input) {
   const version = v.num(input.version, 'version', { min: 1, max: CONFIG_VERSION, fallback: CONFIG_VERSION });
   const site = input.site ?? {};
   const search = input.search ?? {};
-  const integrations = input.integrations ?? {};
-  const weather = integrations.weather ?? {};
-  const georide = integrations.georide ?? {};
-  const parcels = integrations.parcels ?? {};
 
   const value = {
     version: CONFIG_VERSION,
@@ -194,50 +172,8 @@ export function validateConfig(input) {
     },
     tiles: [],
     links: [],
-    integrations: {
-      weather: {
-        enabled: v.bool(weather.enabled, true),
-        useBrowserGeolocation: v.bool(weather.useBrowserGeolocation, true),
-        fallback: {
-          latitude: v.num(weather.fallback?.latitude, 'integrations.weather.fallback.latitude', { min: -90, max: 90, fallback: 48.8566 }),
-          longitude: v.num(weather.fallback?.longitude, 'integrations.weather.fallback.longitude', { min: -180, max: 180, fallback: 2.3522 }),
-        },
-        reverseGeocoding: v.bool(weather.reverseGeocoding, true),
-        refreshMinutes: v.num(weather.refreshMinutes, 'integrations.weather.refreshMinutes', { min: 5, max: 720, fallback: 30 }),
-      },
-      parcels: {
-        enabled: v.bool(parcels.enabled, false),
-        // One provider for now. A parcel with no usable tracking number is
-        // followed manually instead, which is decided per parcel, not here.
-        provider: '17track',
-        refreshMinutes: v.num(parcels.refreshMinutes, 'integrations.parcels.refreshMinutes', { min: 15, max: 1440, fallback: 180 }),
-        hideDeliveredAfterDays: v.num(parcels.hideDeliveredAfterDays, 'integrations.parcels.hideDeliveredAfterDays', { min: 0, max: 30, fallback: 3 }),
-        maxOnTile: v.num(parcels.maxOnTile, 'integrations.parcels.maxOnTile', { min: 1, max: 10, fallback: 4 }),
-        // Reading a mailbox to find parcels. The password lives in the secrets
-        // table, never here: this document is exported and restored.
-        mail: {
-          enabled: v.bool(parcels.mail?.enabled, false),
-          host: v.str(parcels.mail?.host, 'integrations.parcels.mail.host', { max: 120, fallback: 'imap.gmail.com' }),
-          port: v.num(parcels.mail?.port, 'integrations.parcels.mail.port', { min: 1, max: 65535, fallback: 993 }),
-          user: v.str(parcels.mail?.user, 'integrations.parcels.mail.user', { max: 200, fallback: '' }),
-          mailbox: v.str(parcels.mail?.mailbox, 'integrations.parcels.mail.mailbox', { max: 120, fallback: 'INBOX' }),
-          senders: v.str(parcels.mail?.senders, 'integrations.parcels.mail.senders', { max: 1000, fallback: '' }),
-          sinceDays: v.num(parcels.mail?.sinceDays, 'integrations.parcels.mail.sinceDays', { min: 1, max: 60, fallback: 14 }),
-          maxMessages: v.num(parcels.mail?.maxMessages, 'integrations.parcels.mail.maxMessages', { min: 10, max: 500, fallback: 150 }),
-          scanHours: v.num(parcels.mail?.scanHours, 'integrations.parcels.mail.scanHours', { min: 1, max: 48, fallback: 6 }),
-        },
-      },
-      georide: {
-        enabled: v.bool(georide.enabled, false),
-        trackerId: georide.trackerId === null || georide.trackerId === undefined
-          ? null
-          : v.num(georide.trackerId, 'integrations.georide.trackerId', { min: 1, max: 1e12, fallback: null }),
-        trackerName: v.str(georide.trackerName, 'integrations.georide.trackerName', { max: 80, fallback: '' }),
-        periodDays: v.num(georide.periodDays, 'integrations.georide.periodDays', { min: 1, max: 31, fallback: 7 }),
-        refreshMinutes: v.num(georide.refreshMinutes, 'integrations.georide.refreshMinutes', { min: 1, max: 720, fallback: 5 }),
-        showMap: v.bool(georide.showMap, true),
-      },
-    },
+    // Each module validates its own settings; the core composes them.
+    integrations: validateIntegrations(v, input.integrations),
   };
 
   if (input.appearance?.preset && !THEME_PRESETS[input.appearance.preset]) {

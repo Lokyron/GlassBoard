@@ -204,6 +204,44 @@ describe('first run', () => {
   });
 });
 
+describe('module routes', () => {
+  it('needs a session like everything else', async () => {
+    const saved = new Map(jar);
+    jar.clear();
+    assert.equal((await get('/api/m/weather/place?latitude=48&longitude=2')).status, 401);
+    saved.forEach((v, k) => jar.set(k, v));
+  });
+
+  it('answers from its own prefix, and says so when switched off', async () => {
+    /* With the integration off, both routes answer without reaching
+       Open-Meteo — which is what makes this assertable offline. */
+    const config = (await get('/api/config')).json.config;
+    config.integrations.weather.enabled = false;
+    assert.equal((await call('PUT', '/api/config', { config })).status, 200);
+
+    assert.equal((await get('/api/m/weather/forecast')).status, 404);
+    const place = await get('/api/m/weather/place?latitude=48&longitude=2');
+    assert.equal(place.status, 200);
+    assert.equal(place.json.name, '');
+
+    config.integrations.weather.enabled = true;
+    await call('PUT', '/api/config', { config });
+  });
+
+  it('serves a module\'s client folder and nothing beside it', async () => {
+    // manifest.js, server.js, jobs.js and worker.js share the module folder
+    // with client/. Only client/ is mounted, and this is what proves it.
+    for (const leak of ['/modules/weather/manifest.js', '/modules/weather/server.js', '/modules/weather/../manifest.js']) {
+      const response = await get(leak);
+      assert.notEqual(response.status, 200, `${leak} must not be served`);
+    }
+  });
+
+  it('no longer answers on the old integrations prefix', async () => {
+    assert.equal((await get('/api/integrations/weather/forecast')).status, 404);
+  });
+});
+
 describe('doors that stay shut', () => {
   it('an unknown API path answers 404 as JSON', async () => {
     const response = await get('/api/nothing-here');

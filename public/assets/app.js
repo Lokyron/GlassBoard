@@ -515,7 +515,7 @@ async function loadWeatherTile(tile) {
     longitude = position.longitude;
     if (weather.reverseGeocoding) {
       try {
-        const place = await api(`/api/integrations/weather/place?latitude=${latitude}&longitude=${longitude}`);
+        const place = await api(`/api/m/weather/place?latitude=${latitude}&longitude=${longitude}`);
         state.places[tile.id] = place.name || t('tile.localPosition');
       } catch {
         state.places[tile.id] = t('tile.localPosition');
@@ -525,7 +525,7 @@ async function loadWeatherTile(tile) {
 
   state.coords[tile.id] = { latitude, longitude };
   try {
-    const payload = await api(`/api/integrations/weather/forecast?latitude=${latitude}&longitude=${longitude}`);
+    const payload = await api(`/api/m/weather/forecast?latitude=${latitude}&longitude=${longitude}`);
     state.forecasts[tile.id] = payload.forecast;
     updateWeatherTile(tile);
   } catch {

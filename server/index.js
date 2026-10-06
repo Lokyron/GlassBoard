@@ -4,7 +4,7 @@ import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PORT, HOST, ROOT_DIR, TRUST_PROXY, DATA_DIR, IS_PRODUCTION } from './env.js';
-import { attachUser, needsSetup } from './auth.js';
+import { attachUser, needsSetup, requireAuth } from './auth.js';
 import { authRouter } from './routes/auth.js';
 import { configRouter } from './routes/config.js';
 import { integrationsRouter } from './routes/integrations.js';
@@ -12,8 +12,11 @@ import { updateRouter } from './routes/update.js';
 import { adminRouter } from './routes/admin.js';
 import { appearanceRouter } from './routes/appearance.js';
 import { scheduleMaintenance } from './maintenance.js';
+import { mountModules } from './modules/registry.js';
 
-const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const MODULES_DIR = path.join(ROOT, 'modules');
 const app = express();
 
 if (TRUST_PROXY) app.set('trust proxy', true);
@@ -138,6 +141,16 @@ app.use('/api/update', updateRouter);
 app.use('/api/admin', adminRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, setupRequired: needsSetup() }));
+
+/* Each module's own routes and its client files. Awaited before the server
+   starts listening, so no request can arrive at a half-mounted instance. */
+await mountModules(app, {
+  express,
+  requireAuth,
+  modulesDir: MODULES_DIR,
+  path,
+  staticOptions: { maxAge: IS_PRODUCTION ? '1h' : 0, etag: true },
+});
 
 /* -------------------------------- statics -------------------------------- */
 

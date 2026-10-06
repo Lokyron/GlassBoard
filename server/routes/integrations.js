@@ -2,7 +2,6 @@
 import express from 'express';
 import { requireAuth } from '../auth.js';
 import { getConfig } from '../store.js';
-import { getForecast, reverseGeocode } from '../integrations/weather.js';
 import * as georide from '../integrations/georide.js';
 import * as parcels from '../integrations/parcels.js';
 import * as mailbox from '../integrations/mailbox.js';
@@ -10,37 +9,6 @@ import { getTile, isValidTile } from '../integrations/map-tiles.js';
 
 export const integrationsRouter = express.Router();
 integrationsRouter.use(requireAuth);
-
-const coord = (value, limit) => {
-  const n = Number.parseFloat(value);
-  return Number.isFinite(n) && Math.abs(n) <= limit ? n : null;
-};
-
-/* -------------------------------- weather -------------------------------- */
-
-integrationsRouter.get('/weather/forecast', async (req, res) => {
-  const weather = getConfig(req.user.id).integrations.weather;
-  if (!weather.enabled) return res.status(404).json({ error: 'The weather integration is disabled.' });
-
-  const latitude = coord(req.query.latitude, 90) ?? weather.fallback.latitude;
-  const longitude = coord(req.query.longitude, 180) ?? weather.fallback.longitude;
-  try {
-    const forecast = await getForecast(latitude, longitude, Math.max(300, weather.refreshMinutes * 60));
-    res.json({ ok: true, latitude, longitude, forecast });
-  } catch (error) {
-    res.status(502).json({ ok: false, error: error.message });
-  }
-});
-
-integrationsRouter.get('/weather/place', async (req, res) => {
-  const weather = getConfig(req.user.id).integrations.weather;
-  if (!weather.enabled || !weather.reverseGeocoding) return res.json({ ok: true, name: '' });
-  const latitude = coord(req.query.latitude, 90);
-  const longitude = coord(req.query.longitude, 180);
-  if (latitude === null || longitude === null) return res.status(400).json({ error: 'Invalid coordinates.' });
-  const place = await reverseGeocode(latitude, longitude);
-  res.json({ ok: true, ...place });
-});
 
 /* -------------------------------- GeoRide -------------------------------- */
 
