@@ -86,3 +86,40 @@ export async function mountModules(app, { express, requireAuth, modulesDir, path
     );
   }
 }
+
+/* -------------------------------- jobs ----------------------------------- */
+
+/**
+ * Start every module's background work.
+ *
+ * This is what took the network and the parsing off the request path. A tile
+ * no longer triggers the work it needs and then waits for it; the job has
+ * already done it, and the route reads the result.
+ *
+ * A job that throws is reported and skipped. Nothing here may stop the server,
+ * and one module's upstream being down is not the other modules' problem.
+ */
+export async function startModuleJobs() {
+  const timers = [];
+  for (const module of MODULES) {
+    if (!module.jobs) continue;
+    const jobs = (await module.jobs()).default;
+    for (const job of jobs) {
+      const run = async () => {
+        try {
+          await job.run();
+        } catch (error) {
+          console.warn(`[glassboard] ${module.id}: job "${job.name}" failed — ${error.message}`);
+        }
+      };
+      const timer = setInterval(run, Math.max(1, job.everyMinutes) * 60_000);
+      // Background work must never be the reason the process stays alive.
+      timer.unref?.();
+      timers.push(timer);
+      // Once at start-up too, so a restart does not leave the dashboard on
+      // whatever was on disk until the first interval comes round.
+      run();
+    }
+  }
+  return timers;
+}

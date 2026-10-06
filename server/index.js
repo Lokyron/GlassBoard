@@ -7,12 +7,11 @@ import { PORT, HOST, ROOT_DIR, TRUST_PROXY, DATA_DIR, IS_PRODUCTION } from './en
 import { attachUser, needsSetup, requireAuth } from './auth.js';
 import { authRouter } from './routes/auth.js';
 import { configRouter } from './routes/config.js';
-import { integrationsRouter } from './routes/integrations.js';
 import { updateRouter } from './routes/update.js';
 import { adminRouter } from './routes/admin.js';
 import { appearanceRouter } from './routes/appearance.js';
 import { scheduleMaintenance } from './maintenance.js';
-import { mountModules } from './modules/registry.js';
+import { mountModules, startModuleJobs } from './modules/registry.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -135,7 +134,6 @@ app.get(['/index.html'], (_req, res) => res.redirect('/'));
 
 app.use('/api/auth', authRouter);
 app.use('/api/config', configRouter);
-app.use('/api/integrations', integrationsRouter);
 app.use('/api/appearance', appearanceRouter);
 app.use('/api/update', updateRouter);
 app.use('/api/admin', adminRouter);
@@ -184,6 +182,9 @@ app.use((error, _req, res, _next) => {
    the server cannot seed an account that does not exist yet: getConfig does it
    the first time an account asks for its dashboard. */
 scheduleMaintenance();
+/* Each module's background work. This is what keeps the GeoRide rides and the
+   mailbox up to date without a reader having to wait for either. */
+startModuleJobs();
 
 const server = app.listen(PORT, HOST, () => {
   // The port the socket actually got, not the one that was asked for: with

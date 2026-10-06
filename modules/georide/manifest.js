@@ -4,6 +4,9 @@
 export default {
   id: 'georide',
   label: 'GeoRide',
+  server: () => import('./server.js'),
+  jobs: () => import('./jobs.js'),
+  hasWorker: true,
 
   tiles: {
     georide: {

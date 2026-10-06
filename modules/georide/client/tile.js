@@ -38,7 +38,7 @@ function georideTileMarkup(tile, index) {
 
 /* -------------------------------- GeoRide -------------------------------- */
 
-const MAP_TILE_URL = '/api/integrations/map/tile/{z}/{x}/{y}.png';
+const MAP_TILE_URL = '/api/m/georide/map/tile/{z}/{x}/{y}.png';
 
 function refreshMapTheme(container = own.map?.getContainer()) {
   if (container) container.classList.toggle('map-dark', html.getAttribute('data-theme') === 'dark');
@@ -218,7 +218,7 @@ function newRideSince(summary) {
 
 async function fetchTrips() {
   try {
-    own.trips = await api(`/api/integrations/georide/trips?days=${TRIP_WINDOW_DAYS}`);
+    own.trips = await api(`/api/m/georide/trips?days=${TRIP_WINDOW_DAYS}`);
   } catch (error) {
     own.trips = { ok: false, error: error.message };
   }
@@ -396,7 +396,7 @@ async function loadGeoride() {
        synchronous and runs after this point. */
     const wantsMap = state.config.integrations.georide?.showMap !== false;
     const [summary] = await Promise.all([
-      api('/api/integrations/georide/summary'),
+      api('/api/m/georide/summary'),
       wantsMap ? ensureLeaflet().catch(() => null) : null,
     ]);
     own.georide = summary;

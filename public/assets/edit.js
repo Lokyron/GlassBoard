@@ -1414,7 +1414,7 @@ function georidePane(draft) {
   const connect = el('button', { class: 'btn primary', type: 'button', text: t('set.georideConnect'), onclick: async () => {
     connect.disabled = true;
     try {
-      const result = await api('/api/integrations/georide/login', { method: 'POST', body: { email: email.value, password: password.value } });
+      const result = await api('/api/m/georide/login', { method: 'POST', body: { email: email.value, password: password.value } });
       fillTrackers(result.trackers);
       georide.enabled = true;
       status.textContent = t('set.georideConnected', { email: email.value });
@@ -1427,7 +1427,7 @@ function georidePane(draft) {
     }
   } });
   const disconnect = el('button', { class: 'btn ghost', type: 'button', text: t('set.georideDisconnect'), onclick: async () => {
-    await api('/api/integrations/georide/logout', { method: 'POST' });
+    await api('/api/m/georide/logout', { method: 'POST' });
     georide.enabled = false;
     status.textContent = t('gr.notConfigured');
     toast(t('msg.saved'));
@@ -1442,11 +1442,11 @@ function georidePane(draft) {
   pane.appendChild(field(t('set.refresh'), textInput(georide.refreshMinutes, { type: 'number', min: '1', max: '720', oninput: (e) => { georide.refreshMinutes = Number(e.target.value); } })));
   pane.appendChild(checkbox(t('set.georideMap'), georide.showMap, (value) => { georide.showMap = value; }));
 
-  api('/api/integrations/georide/status')
+  api('/api/m/georide/status')
     .then(async (result) => {
       status.textContent = result.configured ? t('set.georideConnected', { email: result.email || '—' }) : t('gr.notConfigured');
       if (result.configured) {
-        try { fillTrackers((await api('/api/integrations/georide/trackers')).trackers); } catch { /* offline */ }
+        try { fillTrackers((await api('/api/m/georide/trackers')).trackers); } catch { /* offline */ }
       }
     })
     .catch(() => { status.textContent = t('gr.unavailable'); });
@@ -1464,7 +1464,7 @@ function parcelsPane(draft) {
   const save = el('button', { class: 'btn primary', type: 'button', text: t('set.parcelsSaveKey'), onclick: async () => {
     save.disabled = true;
     try {
-      await api('/api/integrations/parcels/key', { method: 'PUT', body: { apiKey: key.value } });
+      await api('/api/m/parcels/key', { method: 'PUT', body: { apiKey: key.value } });
       key.value = '';
       parcels.enabled = true;
       await showStatus();
@@ -1476,7 +1476,7 @@ function parcelsPane(draft) {
     }
   } });
   const forget = el('button', { class: 'btn ghost', type: 'button', text: t('set.parcelsForgetKey'), onclick: async () => {
-    await api('/api/integrations/parcels/key', { method: 'DELETE' });
+    await api('/api/m/parcels/key', { method: 'DELETE' });
     await showStatus();
     toast(t('msg.saved'));
   } });
@@ -1485,7 +1485,7 @@ function parcelsPane(draft) {
   // when a parcel is added, never when its status is read.
   async function showStatus() {
     try {
-      const result = await api('/api/integrations/parcels/status');
+      const result = await api('/api/m/parcels/status');
       if (!result.hasKey) {
         status.textContent = t('set.parcelsNoKey');
       } else if (result.quota) {
@@ -1519,7 +1519,7 @@ function parcelsPane(draft) {
   const saveMail = el('button', { class: 'btn primary', type: 'button', text: t('set.mailSave'), onclick: async () => {
     saveMail.disabled = true;
     try {
-      await api('/api/integrations/parcels/mail/password', { method: 'PUT', body: { password: mailPassword.value } });
+      await api('/api/m/parcels/mail/password', { method: 'PUT', body: { password: mailPassword.value } });
       mailPassword.value = '';
       mail.enabled = true;
       await showMailStatus();
@@ -1531,7 +1531,7 @@ function parcelsPane(draft) {
     }
   } });
   const forgetMail = el('button', { class: 'btn ghost', type: 'button', text: t('set.mailForget'), onclick: async () => {
-    await api('/api/integrations/parcels/mail/password', { method: 'DELETE' });
+    await api('/api/m/parcels/mail/password', { method: 'DELETE' });
     mail.enabled = false;
     await showMailStatus();
     toast(t('msg.saved'));
@@ -1542,7 +1542,7 @@ function parcelsPane(draft) {
     testMail.disabled = true;
     mailStatus.textContent = t('set.mailTesting');
     try {
-      const result = await api('/api/integrations/parcels/mail/test', { method: 'POST' });
+      const result = await api('/api/m/parcels/mail/test', { method: 'POST' });
       mailStatus.textContent = t('set.mailWorks', { n: result.recent });
     } catch (error) {
       mailStatus.textContent = error.message;
@@ -1553,7 +1553,7 @@ function parcelsPane(draft) {
 
   async function showMailStatus() {
     try {
-      const result = await api('/api/integrations/parcels/status');
+      const result = await api('/api/m/parcels/status');
       if (!result.mail?.configured) {
         mailStatus.textContent = t('set.mailNoPassword');
       } else if (result.mail.lastScan) {

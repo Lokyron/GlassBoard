@@ -97,7 +97,7 @@ async function loadParcels() {
   const tile = state.config.tiles.find((item) => item.type === 'parcels');
   if (!tile) return;
   try {
-    own.parcels = await api('/api/integrations/parcels');
+    own.parcels = await api('/api/m/parcels');
   } catch (error) {
     own.parcels = { ok: false, error: error.message };
   }
@@ -117,7 +117,7 @@ async function loadSuggestions() {
     return;
   }
   try {
-    own.suggestions = (await api('/api/integrations/parcels/suggestions')).suggestions;
+    own.suggestions = (await api('/api/m/parcels/suggestions')).suggestions;
   } catch {
     own.suggestions = [];   // an instance without the scan: nothing to show
   }
@@ -150,7 +150,7 @@ function renderSuggestions() {
     const answer = async (action) => {
       row.querySelectorAll('button').forEach((button) => { button.disabled = true; });
       try {
-        await api(`/api/integrations/parcels/suggestions/${encodeURIComponent(row.dataset.suggestion)}/${action}`, { method: 'POST' });
+        await api(`/api/m/parcels/suggestions/${encodeURIComponent(row.dataset.suggestion)}/${action}`, { method: 'POST' });
         await loadParcels();
         if (action === 'accept') toast(t('pc.added'));
       } catch (error) {
@@ -169,7 +169,7 @@ function renderSuggestions() {
 async function importParcels(button) {
   button.disabled = true;
   try {
-    const result = await api('/api/integrations/parcels/import', { method: 'POST' });
+    const result = await api('/api/m/parcels/import', { method: 'POST' });
     own.parcels = result;
     renderParcelsTile(state.config.tiles.find((item) => item.type === 'parcels'), result);
     renderParcels();
@@ -184,7 +184,7 @@ async function importParcels(button) {
 async function scanMailbox(button) {
   button.disabled = true;
   try {
-    const result = await api('/api/integrations/parcels/mail/scan', { method: 'POST' });
+    const result = await api('/api/m/parcels/mail/scan', { method: 'POST' });
     own.suggestions = result.suggestions;
     renderSuggestions();
     await loadParcels();
@@ -291,7 +291,7 @@ function renderParcelDetail(parcel) {
     if (!confirm(t('pc.confirmRemove', { name: parcelName(parcel) }))) return;
     button.disabled = true;
     try {
-      await api(`/api/integrations/parcels/${encodeURIComponent(parcel.id)}`, { method: 'DELETE' });
+      await api(`/api/m/parcels/${encodeURIComponent(parcel.id)}`, { method: 'DELETE' });
       own.selectedParcel = null;
       await loadParcels();
       toast(t('pc.removed'));
@@ -309,7 +309,7 @@ async function submitParcel(event) {
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
   try {
-    const parcel = await api('/api/integrations/parcels', {
+    const parcel = await api('/api/m/parcels', {
       method: 'POST',
       body: {
         label: id('pc-label').value,
@@ -331,7 +331,7 @@ async function submitParcel(event) {
 async function refreshParcels(button) {
   button.disabled = true;
   try {
-    own.parcels = await api('/api/integrations/parcels/refresh', { method: 'POST' });
+    own.parcels = await api('/api/m/parcels/refresh', { method: 'POST' });
     const tile = state.config.tiles.find((item) => item.type === 'parcels');
     if (tile) renderParcelsTile(tile, own.parcels);
     renderParcels();

@@ -18,6 +18,7 @@ import {
   listTripRows, tripTotals, latestTripRow, listTripKeys, saveTripRows, deleteTripRows, deleteTripsBefore,
 } from '../db.js';
 import { encrypt, decrypt } from '../crypto.js';
+import { runInWorker } from '../modules/workers.js';
 
 const BASE_URL = 'https://api.georide.fr';
 const KNOTS_TO_KMH = 1.852;
@@ -371,19 +372,32 @@ async function syncTrips(userId, trackerId) {
   return rows.length;
 }
 
-/* One sync at a time per tracker. On every page load the dashboard asks for
-   the tile and for the month within the same instant; without this they both
-   call the API, and on a cold store they both backfill the whole retention
-   period. The same promise is handed to everyone waiting. */
-const syncing = new Map();
+/* The sync itself runs in this module's worker thread, never here.
+ *
+ * It is the one piece of Glassboard that can hold the event loop: a month of
+ * positions is a multi-megabyte JSON.parse followed by a filter per ride over
+ * the whole array. On the main thread that is every other account's dashboard
+ * waiting. The worker has its own SQLite connection and writes the rides
+ * itself; this side only reads them back.
+ *
+ * The dedupe key is per tracker, so the tile and the month — asked for at the
+ * same instant on every page load — share one run. */
+export const syncKey = (userId, trackerId) => `georide:sync:${userId}:${trackerId}`;
 
-function sync(userId, trackerId) {
-  const key = `${userId}:${trackerId}`;
-  const pending = syncing.get(key);
-  if (pending) return pending;
-  const run = syncTrips(userId, trackerId).finally(() => syncing.delete(key));
-  syncing.set(key, run);
-  return run;
+/* Whether the API is due to be asked again. The marker is written by the
+   worker after a successful sync and expires after the account's own
+   refreshMinutes, so this is the one place the interval is honoured —
+   by the job and by a reader alike. */
+export const isSyncDue = (userId, trackerId) => !cacheGet(syncedKey(userId, trackerId));
+
+const sync = (userId, trackerId) =>
+  runInWorker('georide', { task: 'sync', userId, trackerId }, syncKey(userId, trackerId));
+
+/** The worker's half of a sync, exported for it to call. Nothing else should. */
+export async function syncTripsInWorker(userId, trackerId, refreshMinutes) {
+  const count = await syncTrips(userId, trackerId);
+  cacheSet(syncedKey(userId, trackerId), new Date().toISOString(), Math.max(60, refreshMinutes * 60));
+  return count;
 }
 
 /**
@@ -392,34 +406,43 @@ function sync(userId, trackerId) {
  * `refreshMinutes` has stopped meaning "how long an answer may be cached" and
  * now means "how often the API is asked" — the answer itself is always on disk.
  *
+ * The wait is the part that changed. With rides already stored, the sync is
+ * started and **not awaited**: the reader is served the month that is on disk
+ * now, and whatever arrived in the last few minutes lands for the next read.
+ * A tile that used to sit empty for the length of a GeoRide round trip —
+ * fifteen seconds at the timeout — now draws immediately.
+ *
+ * With nothing stored there is nothing to serve, so that first sync alone is
+ * awaited. It happens once per tracker, and the comment on syncTrips explains
+ * why it is the slow one.
+ *
  * A sync that fails with rides already stored is not an error the reader needs
- * to be stopped by: a month of history is still there, and all that is missing
- * is whatever happened in the last few minutes. It is said out loud all the
- * same, through `stale`, which is how the card already labels old data.
+ * to be stopped by: a month of history is still there. It is said out loud all
+ * the same, through `stale`, which is how the card already labels old data.
  */
 async function freshen(userId, trackerId, refreshMinutes) {
   const stored = latestTripRow(userId, trackerId) !== null;
   if (stored && cacheGet(syncedKey(userId, trackerId))) return {};
+
+  if (stored) {
+    // Started, not waited for. A failure is reported by the next read finding
+    // the store still behind, not by this one failing.
+    sync(userId, trackerId).catch((error) => {
+      console.warn(`[glassboard] georide sync failed for user ${userId}: ${error.message}`);
+    });
+    return { syncing: true };
+  }
+
   try {
     await sync(userId, trackerId);
-    cacheSet(syncedKey(userId, trackerId), new Date().toISOString(), Math.max(60, refreshMinutes * 60));
     return {};
   } catch (error) {
     // Nothing stored and nothing fetched: there is genuinely nothing to show,
     // and the caller turns this into the tile's "unavailable".
-    if (!stored) throw error;
-    return { stale: true, error: error.message, code: error.code ?? null };
+    throw error;
   }
 }
 
-/**
- * Drop rides that have aged out, for every account on the instance.
- *
- * A sync already prunes the tracker it syncs. This is for the instance where
- * GeoRide has been switched off, or the tile taken off the dashboard: nothing
- * will ever sync there again, and without a sweep the last month before it was
- * switched off would sit on disk for good.
- */
 export function pruneStoredTrips() {
   return deleteTripsBefore(periodStart(RETENTION_DAYS).getTime());
 }

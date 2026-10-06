@@ -3,6 +3,9 @@
 export default {
   id: 'parcels',
   label: 'Parcels',
+  server: () => import('./server.js'),
+  jobs: () => import('./jobs.js'),
+  hasWorker: true,
 
   tiles: {
     parcels: {

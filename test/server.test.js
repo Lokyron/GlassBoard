@@ -250,7 +250,25 @@ describe('module routes', () => {
   });
 
   it('no longer answers on the old integrations prefix', async () => {
-    assert.equal((await get('/api/integrations/weather/forecast')).status, 404);
+    for (const route of ['/api/integrations/weather/forecast', '/api/integrations/georide/summary', '/api/integrations/parcels']) {
+      assert.equal((await get(route)).status, 404, route);
+    }
+  });
+
+  it('does not let "/:id" swallow a literal path beside it', async () => {
+    /* DELETE /parcels/:id was declared before DELETE /parcels/key, so
+       removing a 17TRACK key from the settings answered "Unknown parcel"
+       and the key stayed. The literal paths come first now. */
+    const response = await call('DELETE', '/api/m/parcels/key');
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json, { ok: true });
+  });
+
+  it('keeps the map tiles with the module that draws maps', async () => {
+    // Out of range, so nothing is fetched upstream: what is asserted is that
+    // the route exists where the GeoRide client now looks for it.
+    const response = await get('/api/m/georide/map/tile/99/0/0.png');
+    assert.equal(response.status, 400);
   });
 });
 

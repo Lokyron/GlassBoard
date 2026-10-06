@@ -33,3 +33,6 @@ VERSION
 
 # Working notes kept out of the public repository
 Docs techniques (hors GitHub)/
+
+# Left behind only if the worker-pool test is killed mid-run
+modules/__test__/
