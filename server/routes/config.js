@@ -5,6 +5,7 @@ import {
   getConfig, saveConfig, listRevisions, getRevision, buildExport, importExport, writeBackup,
 } from '../store.js';
 import { TILE_TYPES, THEME_PRESETS } from '../config-schema.js';
+import { moduleSummary } from '../modules/registry.js';
 
 export const configRouter = express.Router();
 configRouter.use(requireAuth);
@@ -15,7 +16,13 @@ configRouter.use(requireAuth);
    session cookie resolved to. */
 
 configRouter.get('/', (req, res) => {
-  res.json({ config: getConfig(req.user.id), tileTypes: TILE_TYPES, themePresets: THEME_PRESETS });
+  res.json({
+    config: getConfig(req.user.id),
+    tileTypes: TILE_TYPES,
+    themePresets: THEME_PRESETS,
+    // What the settings dialog needs to list the modules and their tabs.
+    modules: moduleSummary(),
+  });
 });
 
 configRouter.put('/', (req, res) => {

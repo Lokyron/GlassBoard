@@ -15,6 +15,7 @@ export { onThemeChange, withTransition } from './theme.js';
 export { goTo } from './chrome.js';
 export { openDialog, closeDialog } from './dialogs.js';
 export { tileElement } from './tiles.js';
+export { field, textInput, checkbox, colourPicker, iconPicker, slider, dialogFooter, uid } from './forms.js';
 
 /* t() and applyTranslations() come from /assets/i18n.js, a classic script the
    sign-in pages share with the dashboard, so they are globals rather than

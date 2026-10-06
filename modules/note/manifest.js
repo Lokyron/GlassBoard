@@ -3,6 +3,7 @@
 export default {
   id: 'note',
   label: 'Note',
+  defaultEnabled: true,
 
   tiles: {
     note: {

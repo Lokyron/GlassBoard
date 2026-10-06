@@ -4,7 +4,10 @@
 export default {
   id: 'weather',
   label: 'Weather',
+  defaultEnabled: true,
   server: () => import('./server.js'),
+  // Its own tab in the settings, served from client/pane.js.
+  hasPane: true,
 
   tiles: {
     'weather-local': {
@@ -27,7 +30,6 @@ export default {
   },
 
   settings: (v, raw, path) => ({
-    enabled: v.bool(raw.enabled, true),
     useBrowserGeolocation: v.bool(raw.useBrowserGeolocation, true),
     fallback: {
       latitude: v.num(raw.fallback?.latitude, `${path}.fallback.latitude`, { min: -90, max: 90, fallback: 48.8566 }),

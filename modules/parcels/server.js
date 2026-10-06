@@ -22,7 +22,6 @@ export function routes(router) {
 
   router.get('/', async (req, res) => {
     const settings = getConfig(req.user.id).integrations.parcels;
-    if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The parcel integration is disabled.' });
     res.json(await parcels.getParcels(req.user.id, settings));
   });
 

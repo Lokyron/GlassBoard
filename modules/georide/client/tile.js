@@ -27,6 +27,21 @@ Object.assign(own, {
 let L = null;
 const ensureLeaflet = async () => { L ??= await leaflet(); return L; };
 
+/* Run something the first time an element comes into view, and once only.
+   Without IntersectionObserver — nothing current, but the fallback costs two
+   lines — it simply runs now. */
+function whenVisible(element, run) {
+  if (typeof IntersectionObserver !== 'function') return run();
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    observer.disconnect();
+    run();
+  }, { rootMargin: '200px' });
+  observer.observe(element);
+  own.observers = (own.observers ?? []).concat(observer);
+  return undefined;
+}
+
 function georideTileMarkup(tile, index) {
   const delay = `animation-delay:.${String(5 * (index + 1)).padStart(2, '0')}s`;
   return `<article class="card glass rise georide" style="${delay}" data-tile="${tile.id}" data-type="georide">
@@ -120,7 +135,11 @@ function renderGeorideTile(tile, summary) {
   safe(el('foot'), `${moving ? t('gr.moving') : t('gr.parked')} · ${t('gr.lastFix')} ${fixTime}${summary.stale ? ` · ${t('gr.stale')}` : ''}`);
 
   if (state.config.integrations.georide.showMap && summary.position) {
-    renderGeorideMap(tile, summary.position);
+    /* Built when the card is actually on screen. Leaflet lays out its tiles
+       and starts fetching them the moment a map exists, and on a phone the
+       motorcycle card is below the fold — building it at render time meant
+       paying for a map nobody had scrolled to yet. */
+    whenVisible(article, () => renderGeorideMap(tile, summary.position));
   } else {
     el('map').innerHTML = `<div class="gr-map-empty">${esc(t('gr.noPosition'))}</div>`;
   }
@@ -463,5 +482,9 @@ export default {
 
   /* A re-render throws the tile's element away, and Leaflet keeps global
      listeners for a map whose container is gone. */
-  unmount: destroyMap,
+  unmount() {
+    own.observers?.forEach((observer) => observer.disconnect());
+    own.observers = [];
+    destroyMap();
+  },
 };

@@ -7,92 +7,11 @@ import {
 } from './core/kernel.js';
 import { applyAppearance, withTransition } from './core/theme.js';
 import { renderLinks, openFolder, closeFolder, setEditDecorators } from './core/chrome.js';
-import { renderTiles } from './core/tiles.js';
+import { renderTiles, resizeModules, visibleTiles, isModuleEnabled } from './core/tiles.js';
 import { renderAll, refreshData } from './core/render.js';
 import { downloadExport, openNewsHistory } from './core/shell.js';
+import { uid, field, textInput, checkbox, colourPicker, iconPicker, slider, dialogFooter } from './core/forms.js';
 
-
-const uid = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-const PALETTE = ['#0a84ff', '#5e5ce6', '#64d2ff', '#16a34a', '#34c759', '#eab308', '#f97316', '#ea580c', '#ef4444', '#ec4899', '#a129cc', '#8b5cf6', '#3b82f6', '#10b981', '#14b8a6', '#475569'];
-
-/* ----------------------------- form building ----------------------------- */
-
-
-function field(label, control, hint) {
-  return el('label', { class: 'fld' }, [
-    el('span', { class: 'fld-l', text: label }),
-    control,
-    hint ? el('span', { class: 'fld-h', text: hint }) : null,
-  ]);
-}
-
-function textInput(value, attributes = {}) {
-  return el('input', { class: 'inp', type: 'text', value: value ?? '', ...attributes });
-}
-
-function checkbox(label, checked, onChange) {
-  const input = el('input', { type: 'checkbox', onchange: (event) => onChange(event.target.checked) });
-  input.checked = Boolean(checked);
-  return el('label', { class: 'chk' }, [input, el('span', { text: label })]);
-}
-
-function colourPicker(value, onChange) {
-  const wrap = el('div', { class: 'swatches' });
-  const native = el('input', { class: 'swatch-native', type: 'color', value, onchange: (e) => { onChange(e.target.value); paint(e.target.value); } });
-  const buttons = PALETTE.map((colour) =>
-    el('button', {
-      class: 'swatch', type: 'button', 'data-colour': colour,
-      style: `background:${colour}`,
-      onclick: () => { native.value = colour; onChange(colour); paint(colour); },
-    })
-  );
-  function paint(selected) {
-    buttons.forEach((button) => button.classList.toggle('on', button.dataset.colour === selected));
-  }
-  buttons.forEach((button) => wrap.appendChild(button));
-  wrap.appendChild(native);
-  paint(value);
-  return wrap;
-}
-
-function iconPicker(value, onChange) {
-  const wrap = el('div', { class: 'iconpick' });
-  const names = Object.keys(PH).sort();
-  const buttons = names.map((name) =>
-    el('button', {
-      class: `iconopt${name === iconName(value) ? ' on' : ''}`, type: 'button', 'data-icon': name,
-      title: name, html: svg(name),
-      onclick: () => {
-        onChange(name);
-        wrap.querySelectorAll('.iconopt').forEach((b) => b.classList.toggle('on', b.dataset.icon === name));
-      },
-    })
-  );
-  buttons.forEach((button) => wrap.appendChild(button));
-  return wrap;
-}
-
-function slider(value, min, max, step, onChange) {
-  const output = el('span', { class: 'fld-h', text: String(value) });
-  const input = el('input', {
-    class: 'range', type: 'range', min: String(min), max: String(max), step: String(step), value: String(value),
-    oninput: (event) => {
-      const next = Number(event.target.value);
-      output.textContent = String(next);
-      onChange(next);
-    },
-  });
-  return el('div', { class: 'rangerow' }, [input, output]);
-}
-
-function dialogFooter(onSave, onCancel = closeDialog, saveLabel = t('dlg.save')) {
-  return el('div', { class: 'dlg-foot' }, [
-    el('button', { class: 'btn ghost', type: 'button', text: t('dlg.cancel'), onclick: onCancel }),
-    el('button', { class: 'btn primary', type: 'button', text: saveLabel, onclick: onSave }),
-  ]);
-}
-
-/* ------------------------------- edit mode ------------------------------- */
 
 const isDirty = () => JSON.stringify(state.config) !== JSON.stringify(state.saved);
 
@@ -137,6 +56,18 @@ const SLIDE = { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' };
 
 /** Put `list` in the order given as a list of former indexes. */
 const reorder = (list, order) => order.map((index) => list[index]);
+
+/* The same, for a grid that shows only part of a list. `order` names the
+   positions that were on screen; everything else stays exactly where it is.
+   A tile belonging to a switched-off module is in the configuration but not
+   in the grid, and dragging its neighbours must not drop it. */
+const reorderSubset = (list, order) => {
+  const slots = [...order].sort((a, b) => a - b);
+  const moved = order.map((index) => list[index]);
+  const next = [...list];
+  slots.forEach((slot, i) => { next[slot] = moved[i]; });
+  return next;
+};
 
 /**
  * Rearrange the [data-index] children of a grid the way a phone home screen
@@ -419,11 +350,11 @@ export function decorateTilesForEditing() {
 
   const add = el('button', { class: 'card glass tile-add', html: `${svg('plus', 'font-size:26px')}<span>${esc(t('edit.addTile'))}</span>`, onclick: openAddTileDialog });
   grid.appendChild(add);
-  grid.style.gridTemplateColumns = `${state.config.tiles.map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
+  grid.style.gridTemplateColumns = `${visibleTiles().map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
 
   makeArrangeable(grid, '.editable', {
     onReorder: (order) => {
-      state.config.tiles = reorder(state.config.tiles, order);
+      state.config.tiles = reorderSubset(state.config.tiles, order);
       renderTiles();
       refreshData();
     },
@@ -436,15 +367,16 @@ function startResize(event, index) {
   const grid = id('tiles');
   const startX = event.clientX;
   const startSpan = state.config.tiles[index].span;
-  const totalSpan = state.config.tiles.reduce((sum, tile) => sum + tile.span, 0) + 0.5;
+  const totalSpan = visibleTiles().reduce((sum, tile) => sum + tile.span, 0) + 0.5;
   const pxPerFr = grid.getBoundingClientRect().width / totalSpan;
 
   const move = (moveEvent) => {
     const delta = (moveEvent.clientX - startX) / pxPerFr;
     const span = Math.min(4, Math.max(0.4, Math.round((startSpan + delta) * 20) / 20));
     state.config.tiles[index].span = span;
-    grid.style.gridTemplateColumns = `${state.config.tiles.map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
-    if (state.map) state.map.invalidateSize();
+    grid.style.gridTemplateColumns = `${visibleTiles().map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
+    // A map inside a tile being resized has to be told its box changed.
+    resizeModules();
   };
   const up = () => {
     removeEventListener('pointermove', move);
@@ -467,7 +399,11 @@ const TILE_ICONS = { georide: 'motorcycle', note: 'notebook', parcels: 'package'
 
 function openAddTileDialog() {
   const used = new Set(state.config.tiles.map((tile) => tile.type));
-  const available = Object.entries(state.tileTypes).filter(([type, meta]) => !meta.singleton || !used.has(type));
+  // Only what a switched-on module provides: offering a tile that would not
+  // be drawn is offering a disappointment.
+  const available = Object.entries(state.tileTypes)
+    .filter(([, meta]) => isModuleEnabled(meta.module))
+    .filter(([type, meta]) => !meta.singleton || !used.has(type));
   const body = el('div', { class: 'dlg' }, [
     el('div', { class: 'tile-choices' }, available.map(([type, meta]) =>
       el('button', {
@@ -1203,18 +1139,51 @@ export async function openSettings(section = 'general') {
   const sections = {
     general: () => generalPane(draft),
     appearance: () => appearancePane(draft),
-    weather: () => weatherPane(draft),
-    georide: () => georidePane(draft),
-    parcels: () => parcelsPane(draft),
+    modules: () => modulesPane(draft),
+  };
+  const labels = {
+    general: t('set.general'),
+    appearance: t('set.appearance'),
+    modules: t('set.modules'),
+  };
+
+  /* One tab per switched-on module that ships a pane, in the order the server
+     lists them. The dialog knows none of them by name: a module added to the
+     repository gets its tab by saying hasPane, and nothing here changes. */
+  for (const [moduleId, meta] of Object.entries(state.modules)) {
+    if (!meta.hasPane || draft.modules?.[moduleId]?.enabled !== true) continue;
+    sections[moduleId] = () => modulePanes.get(moduleId)?.(draft) ?? el('div', { class: 'pane' });
+    /* t() hands back the key itself when there is none, so a module with no
+       translation falls back to the label its manifest gave. */
+    const key = `set.${moduleId}`;
+    const translated = t(key);
+    labels[moduleId] = translated === key ? meta.label : translated;
+  }
+
+  Object.assign(sections, {
     account: () => accountPane(),
     data: () => dataPane(),
     about: () => aboutPane(),
-  };
-  const labels = {
-    general: t('set.general'), appearance: t('set.appearance'), weather: t('set.weather'),
-    georide: t('set.georide'), parcels: t('set.parcels'), account: t('set.account'), data: t('set.data'),
-    about: t('set.about'),
-  };
+  });
+  Object.assign(labels, {
+    account: t('set.account'), data: t('set.data'), about: t('set.about'),
+  });
+
+  /* Fetched before the dialog opens, so switching tab never shows a blank
+     pane while a file is in the air. Only the modules that are on. */
+  const modulePanes = new Map();
+  await Promise.all(
+    Object.keys(sections)
+      .filter((name) => state.modules[name]?.hasPane)
+      .map(async (moduleId) => {
+        try {
+          const loaded = await import(`/modules/${moduleId}/pane.js`);
+          modulePanes.set(moduleId, loaded.pane);
+        } catch (error) {
+          console.error(`[glassboard] settings pane for "${moduleId}" did not load`, error);
+        }
+      })
+  );
 
   /* The two administration tabs exist only for an administrator. Hiding them
      is a courtesy to everyone else, not the control: every route behind them
@@ -1254,6 +1223,24 @@ export async function openSettings(section = 'general') {
 
   openDialog({ title: t('set.title'), body });
   show(section);
+}
+
+/* The switches. One per module, and the only thing that decides whether a
+   feature exists on this dashboard: its tiles, its routes, its background
+   work and the fetching of its code all follow from here.
+
+   A module's tiles are left in the configuration when it is switched off, so
+   nothing is lost by trying. */
+function modulesPane(draft) {
+  const pane = el('div', { class: 'pane' });
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.modulesHint') }));
+  for (const [moduleId, meta] of Object.entries(state.modules)) {
+    draft.modules[moduleId] ??= { enabled: false };
+    pane.appendChild(checkbox(meta.label, draft.modules[moduleId].enabled, (value) => {
+      draft.modules[moduleId].enabled = value;
+    }));
+  }
+  return pane;
 }
 
 function generalPane(draft) {
@@ -1370,218 +1357,6 @@ function appearancePane(draft) {
     })
     .catch(() => {});
 
-  return pane;
-}
-
-function weatherPane(draft) {
-  const weather = draft.integrations.weather;
-  const pane = el('div', { class: 'pane' });
-  pane.appendChild(checkbox(t('set.weatherEnabled'), weather.enabled, (value) => { weather.enabled = value; }));
-  pane.appendChild(checkbox(t('set.useGeo'), weather.useBrowserGeolocation, (value) => { weather.useBrowserGeolocation = value; }));
-  pane.appendChild(checkbox(t('set.reverse'), weather.reverseGeocoding, (value) => { weather.reverseGeocoding = value; }));
-  pane.appendChild(field(t('set.fallbackLat'), textInput(weather.fallback.latitude, { type: 'number', step: '0.0001', oninput: (e) => { weather.fallback.latitude = Number(e.target.value); } })));
-  pane.appendChild(field(t('set.fallbackLon'), textInput(weather.fallback.longitude, { type: 'number', step: '0.0001', oninput: (e) => { weather.fallback.longitude = Number(e.target.value); } })));
-  pane.appendChild(field(t('set.refresh'), textInput(weather.refreshMinutes, { type: 'number', min: '5', max: '720', oninput: (e) => { weather.refreshMinutes = Number(e.target.value); } })));
-  return pane;
-}
-
-function georidePane(draft) {
-  const georide = draft.integrations.georide;
-  const pane = el('div', { class: 'pane' });
-  const status = el('div', { class: 'status', text: '…' });
-  pane.appendChild(status);
-
-  const trackerSelect = el('select', { class: 'inp', onchange: (e) => {
-    georide.trackerId = e.target.value ? Number(e.target.value) : null;
-    georide.trackerName = e.target.selectedOptions[0]?.dataset.name || '';
-  } });
-
-  const fillTrackers = (trackers) => {
-    trackerSelect.innerHTML = '';
-    trackers.forEach((tracker) => {
-      const option = el('option', { value: tracker.trackerId, text: `${tracker.trackerName} (#${tracker.trackerId})`, 'data-name': tracker.trackerName });
-      if (Number(georide.trackerId) === Number(tracker.trackerId)) option.selected = true;
-      trackerSelect.appendChild(option);
-    });
-    if (!georide.trackerId && trackers[0]) {
-      georide.trackerId = trackers[0].trackerId;
-      georide.trackerName = trackers[0].trackerName;
-    }
-  };
-
-  const email = textInput('', { type: 'email', placeholder: 'you@example.org' });
-  const password = textInput('', { type: 'password' });
-  const connect = el('button', { class: 'btn primary', type: 'button', text: t('set.georideConnect'), onclick: async () => {
-    connect.disabled = true;
-    try {
-      const result = await api('/api/m/georide/login', { method: 'POST', body: { email: email.value, password: password.value } });
-      fillTrackers(result.trackers);
-      georide.enabled = true;
-      status.textContent = t('set.georideConnected', { email: email.value });
-      password.value = '';
-      toast(t('msg.saved'));
-    } catch (error) {
-      toast(error.message, 'error');
-    } finally {
-      connect.disabled = false;
-    }
-  } });
-  const disconnect = el('button', { class: 'btn ghost', type: 'button', text: t('set.georideDisconnect'), onclick: async () => {
-    await api('/api/m/georide/logout', { method: 'POST' });
-    georide.enabled = false;
-    status.textContent = t('gr.notConfigured');
-    toast(t('msg.saved'));
-  } });
-
-  pane.appendChild(checkbox(t('set.georideEnabled'), georide.enabled, (value) => { georide.enabled = value; }));
-  pane.appendChild(field(t('set.georideEmail'), email));
-  pane.appendChild(field(t('set.georidePassword'), password));
-  pane.appendChild(el('div', { class: 'row' }, [connect, disconnect]));
-  pane.appendChild(field(t('set.georideTracker'), trackerSelect));
-  pane.appendChild(field(t('set.periodDays'), textInput(georide.periodDays, { type: 'number', min: '1', max: '31', oninput: (e) => { georide.periodDays = Number(e.target.value); } })));
-  pane.appendChild(field(t('set.refresh'), textInput(georide.refreshMinutes, { type: 'number', min: '1', max: '720', oninput: (e) => { georide.refreshMinutes = Number(e.target.value); } })));
-  pane.appendChild(checkbox(t('set.georideMap'), georide.showMap, (value) => { georide.showMap = value; }));
-
-  api('/api/m/georide/status')
-    .then(async (result) => {
-      status.textContent = result.configured ? t('set.georideConnected', { email: result.email || '—' }) : t('gr.notConfigured');
-      if (result.configured) {
-        try { fillTrackers((await api('/api/m/georide/trackers')).trackers); } catch { /* offline */ }
-      }
-    })
-    .catch(() => { status.textContent = t('gr.unavailable'); });
-
-  return pane;
-}
-
-function parcelsPane(draft) {
-  const parcels = draft.integrations.parcels;
-  const pane = el('div', { class: 'pane' });
-  const status = el('div', { class: 'status', text: '…' });
-  pane.appendChild(status);
-
-  const key = textInput('', { type: 'password', placeholder: '••••••••••••', autocomplete: 'off' });
-  const save = el('button', { class: 'btn primary', type: 'button', text: t('set.parcelsSaveKey'), onclick: async () => {
-    save.disabled = true;
-    try {
-      await api('/api/m/parcels/key', { method: 'PUT', body: { apiKey: key.value } });
-      key.value = '';
-      parcels.enabled = true;
-      await showStatus();
-      toast(t('msg.saved'));
-    } catch (error) {
-      toast(error.message, 'error');
-    } finally {
-      save.disabled = false;
-    }
-  } });
-  const forget = el('button', { class: 'btn ghost', type: 'button', text: t('set.parcelsForgetKey'), onclick: async () => {
-    await api('/api/m/parcels/key', { method: 'DELETE' });
-    await showStatus();
-    toast(t('msg.saved'));
-  } });
-
-  // The remaining allowance matters here: with this provider a unit is spent
-  // when a parcel is added, never when its status is read.
-  async function showStatus() {
-    try {
-      const result = await api('/api/m/parcels/status');
-      if (!result.hasKey) {
-        status.textContent = t('set.parcelsNoKey');
-      } else if (result.quota) {
-        status.textContent = t('set.parcelsQuota', { remaining: result.quota.remaining, total: result.quota.total });
-      } else {
-        status.textContent = result.error || t('set.parcelsConnected');
-      }
-    } catch (error) {
-      status.textContent = error.message;
-    }
-  }
-
-  pane.appendChild(checkbox(t('set.parcelsEnabled'), parcels.enabled, (value) => { parcels.enabled = value; }));
-  pane.appendChild(field(t('set.parcelsKey'), key, t('set.parcelsKeyHint')));
-  pane.appendChild(el('div', { class: 'row' }, [save, forget]));
-  pane.appendChild(field(t('set.refresh'), textInput(parcels.refreshMinutes, { type: 'number', min: '15', max: '1440', oninput: (e) => { parcels.refreshMinutes = Number(e.target.value); } }), t('set.parcelsRefreshHint')));
-  pane.appendChild(field(t('set.parcelsHideAfter'), textInput(parcels.hideDeliveredAfterDays, { type: 'number', min: '0', max: '30', oninput: (e) => { parcels.hideDeliveredAfterDays = Number(e.target.value); } }), t('set.parcelsHideAfterHint')));
-  pane.appendChild(field(t('set.parcelsMaxOnTile'), textInput(parcels.maxOnTile, { type: 'number', min: '1', max: '10', oninput: (e) => { parcels.maxOnTile = Number(e.target.value); } })));
-  pane.appendChild(el('p', { class: 'fld-h', text: t('set.parcelsManualHint') }));
-
-  /* -------------------------- the mailbox scan -------------------------- */
-
-  const mail = parcels.mail;
-  pane.appendChild(el('h4', { class: 'pane-title', text: t('set.mailTitle') }));
-  pane.appendChild(el('p', { class: 'fld-h', text: t('set.mailIntro') }));
-
-  const mailStatus = el('div', { class: 'status', text: '…' });
-  pane.appendChild(mailStatus);
-
-  const mailPassword = textInput('', { type: 'password', placeholder: '••••••••••••', autocomplete: 'off' });
-  const saveMail = el('button', { class: 'btn primary', type: 'button', text: t('set.mailSave'), onclick: async () => {
-    saveMail.disabled = true;
-    try {
-      await api('/api/m/parcels/mail/password', { method: 'PUT', body: { password: mailPassword.value } });
-      mailPassword.value = '';
-      mail.enabled = true;
-      await showMailStatus();
-      toast(t('msg.saved'));
-    } catch (error) {
-      toast(error.message, 'error');
-    } finally {
-      saveMail.disabled = false;
-    }
-  } });
-  const forgetMail = el('button', { class: 'btn ghost', type: 'button', text: t('set.mailForget'), onclick: async () => {
-    await api('/api/m/parcels/mail/password', { method: 'DELETE' });
-    mail.enabled = false;
-    await showMailStatus();
-    toast(t('msg.saved'));
-  } });
-  // Saving the whole settings dialog is not needed to find out whether the
-  // credentials work: the test signs in and hangs up, and says what failed.
-  const testMail = el('button', { class: 'btn ghost', type: 'button', text: t('set.mailTest'), onclick: async () => {
-    testMail.disabled = true;
-    mailStatus.textContent = t('set.mailTesting');
-    try {
-      const result = await api('/api/m/parcels/mail/test', { method: 'POST' });
-      mailStatus.textContent = t('set.mailWorks', { n: result.recent });
-    } catch (error) {
-      mailStatus.textContent = error.message;
-    } finally {
-      testMail.disabled = false;
-    }
-  } });
-
-  async function showMailStatus() {
-    try {
-      const result = await api('/api/m/parcels/status');
-      if (!result.mail?.configured) {
-        mailStatus.textContent = t('set.mailNoPassword');
-      } else if (result.mail.lastScan) {
-        mailStatus.textContent = t('set.mailLastScan', {
-          when: new Date(result.mail.lastScan).toLocaleString(state.config.site.locale),
-          n: result.mail.pending,
-        });
-      } else {
-        mailStatus.textContent = t('set.mailNeverScanned');
-      }
-    } catch (error) {
-      mailStatus.textContent = error.message;
-    }
-  }
-
-  pane.appendChild(checkbox(t('set.mailEnabled'), mail.enabled, (value) => { mail.enabled = value; }));
-  pane.appendChild(field(t('set.mailAddress'), textInput(mail.user, { type: 'email', placeholder: 'you@gmail.com', oninput: (e) => { mail.user = e.target.value.trim(); } })));
-  pane.appendChild(field(t('set.mailPassword'), mailPassword, t('set.mailPasswordHint')));
-  pane.appendChild(el('div', { class: 'row' }, [saveMail, forgetMail, testMail]));
-  pane.appendChild(field(t('set.mailHost'), textInput(mail.host, { oninput: (e) => { mail.host = e.target.value.trim(); } })));
-  pane.appendChild(field(t('set.mailPort'), textInput(mail.port, { type: 'number', min: '1', max: '65535', oninput: (e) => { mail.port = Number(e.target.value); } })));
-  pane.appendChild(field(t('set.mailSenders'), textInput(mail.senders, { placeholder: '@colissimo.fr, @amazon.fr', oninput: (e) => { mail.senders = e.target.value; } }), t('set.mailSendersHint')));
-  pane.appendChild(field(t('set.mailSinceDays'), textInput(mail.sinceDays, { type: 'number', min: '1', max: '60', oninput: (e) => { mail.sinceDays = Number(e.target.value); } }), t('set.mailSinceDaysHint')));
-  pane.appendChild(field(t('set.mailScanHours'), textInput(mail.scanHours, { type: 'number', min: '1', max: '48', oninput: (e) => { mail.scanHours = Number(e.target.value); } })));
-  pane.appendChild(el('p', { class: 'fld-h', text: t('set.mailPrivacy') }));
-
-  showStatus();
-  showMailStatus();
   return pane;
 }
 

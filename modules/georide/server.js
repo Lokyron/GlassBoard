@@ -45,7 +45,6 @@ export function routes(router) {
 
   router.get('/summary', async (req, res) => {
     const settings = getConfig(req.user.id).integrations.georide;
-    if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The GeoRide integration is disabled.' });
     res.json(await georide.getSummary(req.user.id, settings));
   });
 

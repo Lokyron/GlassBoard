@@ -11,19 +11,21 @@
  * starting a second. */
 import { db } from '../../server/db.js';
 import { getConfig } from '../../server/store.js';
+import { isModuleEnabled } from '../../server/modules/registry.js';
 import { runInWorker } from '../../server/modules/workers.js';
 import { syncKey, isSyncDue, isConfigured } from '../../server/integrations/georide.js';
 
 async function syncEveryAccount() {
   const accounts = db.prepare('SELECT id FROM users ORDER BY id').all();
   for (const account of accounts) {
-    let settings;
+    let config;
     try {
-      settings = getConfig(account.id).integrations.georide;
+      config = getConfig(account.id);
     } catch {
       continue;
     }
-    if (!settings?.enabled || !settings.trackerId || !isConfigured(account.id)) continue;
+    const settings = config.integrations.georide;
+    if (!isModuleEnabled(config, 'georide') || !settings?.trackerId || !isConfigured(account.id)) continue;
     // The account's own refreshMinutes, honoured through the marker the
     // worker writes: due or not is not this job's clock to decide.
     if (!isSyncDue(account.id, settings.trackerId)) continue;

@@ -4,7 +4,10 @@
 export default {
   id: 'georide',
   label: 'GeoRide',
+  defaultEnabled: false,
   server: () => import('./server.js'),
+  // Its own tab in the settings, served from client/pane.js.
+  hasPane: true,
   jobs: () => import('./jobs.js'),
   hasWorker: true,
 
@@ -19,7 +22,6 @@ export default {
   },
 
   settings: (v, raw, path) => ({
-    enabled: v.bool(raw.enabled, false),
     trackerId:
       raw.trackerId === null || raw.trackerId === undefined
         ? null

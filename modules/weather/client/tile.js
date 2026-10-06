@@ -123,7 +123,6 @@ function updateWeatherTile(tile) {
 
 async function loadWeatherTile(tile) {
   const weather = state.config.integrations.weather;
-  if (!weather.enabled) return;
   let latitude;
   let longitude;
 

@@ -16,7 +16,6 @@ const coord = (value, limit) => {
 export function routes(router) {
   router.get('/forecast', async (req, res) => {
     const weather = getConfig(req.user.id).integrations.weather;
-    if (!weather.enabled) return res.status(404).json({ error: 'The weather integration is disabled.' });
 
     const latitude = coord(req.query.latitude, 90) ?? weather.fallback.latitude;
     const longitude = coord(req.query.longitude, 180) ?? weather.fallback.longitude;
@@ -30,7 +29,7 @@ export function routes(router) {
 
   router.get('/place', async (req, res) => {
     const weather = getConfig(req.user.id).integrations.weather;
-    if (!weather.enabled || !weather.reverseGeocoding) return res.json({ ok: true, name: '' });
+    if (!weather.reverseGeocoding) return res.json({ ok: true, name: '' });
     const latitude = coord(req.query.latitude, 90);
     const longitude = coord(req.query.longitude, 180);
     if (latitude === null || longitude === null) return res.status(400).json({ error: 'Invalid coordinates.' });

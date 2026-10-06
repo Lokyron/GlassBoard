@@ -8,6 +8,7 @@ export const state = {
   config: null,
   saved: null,
   tileTypes: {},
+  modules: {},   // module id -> { label, hasPane }, as the server lists them
   editing: false,
   themePresets: {},
   wallpaperVersion: '',

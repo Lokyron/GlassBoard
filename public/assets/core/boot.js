@@ -136,6 +136,7 @@ async function boot() {
   state.config = payload.config;
   state.saved = clone(payload.config);
   state.tileTypes = payload.tileTypes;
+  state.modules = payload.modules || {};
   state.themePresets = payload.themePresets || {};
   if (payload.config.appearance?.wallpaper?.enabled) await loadWallpaperVersion();
 

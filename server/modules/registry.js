@@ -56,6 +56,65 @@ export function validateIntegrations(v, raw) {
   return integrations;
 }
 
+/* ------------------------------- switches -------------------------------- */
+
+/**
+ * The one switch per module, per account.
+ *
+ * It used to take two things to decide whether a feature was on: a flag in
+ * integrations.<id>.enabled, and whether a tile of its type happened to be on
+ * the dashboard. They could disagree, and when they did there was no telling
+ * which one the reader was looking at. This is now the only answer.
+ *
+ * Off means off all the way down: no tile, no route, no background job, and
+ * the module's own code is never even fetched by the browser.
+ */
+export function validateModules(v, input) {
+  const raw = input?.modules ?? {};
+  const modules = {};
+  for (const module of MODULES) {
+    const own = raw[module.id];
+    modules[module.id] = {
+      enabled: typeof own?.enabled === 'boolean'
+        ? own.enabled
+        : inferEnabled(module, input),
+    };
+  }
+  return modules;
+}
+
+/**
+ * What a configuration written before the switch existed meant.
+ *
+ * A module counts as on if its old integration flag said so, or if the
+ * dashboard already has one of its tiles — someone with a note on their page
+ * and no integrations block should not lose the note. Failing both, the
+ * module's own default applies. Runs once: the answer is written into the
+ * document on the first save and read back from there afterwards.
+ */
+function inferEnabled(module, input) {
+  if (input?.integrations?.[module.id]?.enabled === true) return true;
+  const types = new Set(Object.keys(module.tiles ?? {}));
+  if (Array.isArray(input?.tiles) && input.tiles.some((tile) => types.has(tile?.type))) return true;
+  return Boolean(module.defaultEnabled);
+}
+
+/* A switched-off module keeps its tiles in the document. They are not drawn
+   and its routes answer nothing, but switching it back on gives the dashboard
+   back as it was — deleting them would make the switch a destructive act, and
+   nobody expects that of a switch. */
+
+/** Whether a module is on for the account this configuration belongs to. */
+export const isModuleEnabled = (config, moduleId) =>
+  config?.modules?.[moduleId]?.enabled === true;
+
+/** What the browser is told about the modules: enough to draw the settings. */
+export const moduleSummary = () =>
+  Object.fromEntries(MODULES.map((module) => [
+    module.id,
+    { label: module.label, hasPane: Boolean(module.hasPane) },
+  ]));
+
 /** A tile's own settings, validated by the module that declares the type. */
 export function validateTileSettings(v, type, raw, path) {
   const tile = moduleOfTile(type)?.tiles?.[type];
@@ -71,11 +130,21 @@ export function validateTileSettings(v, type, raw, path) {
  * Only client/ is exposed. A module's manifest, routes, jobs and worker sit
  * beside it in the same folder and are never reachable over HTTP.
  */
-export async function mountModules(app, { express, requireAuth, modulesDir, path, staticOptions }) {
+export async function mountModules(app, { express, requireAuth, getConfig, modulesDir, path, staticOptions }) {
   for (const module of MODULES) {
     if (module.server) {
       const router = express.Router();
       router.use(requireAuth);
+      /* A switched-off module answers nothing. One guard in front of the
+         router rather than a check per handler: a route added later is
+         covered by having been added, not by somebody remembering. */
+      router.use((req, res, next) => {
+        if (isModuleEnabled(getConfig(req.user.id), module.id)) return next();
+        res.status(404).json({
+          error: `The ${module.label} module is switched off.`,
+          code: 'module_disabled',
+        });
+      });
       const loaded = await module.server();
       loaded.routes(router);
       app.use(`/api/m/${module.id}`, router);

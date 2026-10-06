@@ -10,19 +10,21 @@
  * messages held up every other request on the instance. */
 import { db, getMeta } from '../../server/db.js';
 import { getConfig } from '../../server/store.js';
+import { isModuleEnabled } from '../../server/modules/registry.js';
 import { runInWorker } from '../../server/modules/workers.js';
 import * as mailbox from '../../server/integrations/mailbox.js';
 
 async function scanMailboxes() {
   const accounts = db.prepare('SELECT id FROM users ORDER BY id').all();
   for (const account of accounts) {
-    let settings;
+    let config;
     try {
-      settings = getConfig(account.id).integrations.parcels;
+      config = getConfig(account.id);
     } catch {
       continue;
     }
-    if (!settings?.enabled || !settings.mail?.enabled || !mailbox.isConfigured(account.id)) continue;
+    const settings = config.integrations.parcels;
+    if (!isModuleEnabled(config, 'parcels') || !settings?.mail?.enabled || !mailbox.isConfigured(account.id)) continue;
 
     const last = getMeta(`mail.${account.id}.last_scan`);
     const due = !last || Date.now() - new Date(last).getTime() >= Math.max(1, settings.mail.scanHours) * 3_600_000;

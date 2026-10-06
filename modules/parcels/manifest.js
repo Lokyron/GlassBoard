@@ -3,7 +3,10 @@
 export default {
   id: 'parcels',
   label: 'Parcels',
+  defaultEnabled: false,
   server: () => import('./server.js'),
+  // Its own tab in the settings, served from client/pane.js.
+  hasPane: true,
   jobs: () => import('./jobs.js'),
   hasWorker: true,
 
@@ -16,7 +19,6 @@ export default {
   },
 
   settings: (v, raw, path) => ({
-    enabled: v.bool(raw.enabled, false),
     // One provider for now. A parcel with no usable tracking number is
     // followed manually instead, which is decided per parcel, not here.
     provider: '17track',

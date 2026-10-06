@@ -43,37 +43,86 @@
 
 ## 3. Architecture & arborescence
 
+Depuis la **2.0**, le cœur ne connaît aucune fonctionnalité par son nom : chaque fonctionnalité
+est un **module** qui se déclare, et le cœur compose. Ajouter un module, c'est un dossier sous
+`modules/` et une ligne dans `server/modules/registry.js` — rien d'autre ne change.
+
 ```
 Glassboard/
-├── server/
-│   ├── index.js            # Express : en-têtes de sécurité, session (attachUser), pages, routeurs, statiques
+├── server/                 # le cœur : il sait ce qu'est une configuration, une tuile,
+│   │                       #   un compte ; il ne sait pas qu'il existe une météo.
+│   ├── index.js            # Express : en-têtes, session (attachUser), pages, montage des modules
 │   ├── env.js              # Lecture et validation des variables d'environnement
 │   ├── db.js               # Ouverture SQLite (node:sqlite), schéma
 │   ├── auth.js             # argon2id, sessions HttpOnly, défi de connexion 5 min, verrouillage
 │   ├── crypto.js           # AES-256-GCM dérivé de APP_SECRET
 │   ├── store.js            # Lecture / écriture de la config + révisions
-│   ├── config-schema.js    # Validateur de la config (complète aussi les champs ajoutés = migration)
+│   ├── config-schema.js    # Validateur ; tuiles et intégrations composées depuis le registre
 │   ├── default-config.js   # Configuration d'exemple neutre
 │   ├── wallpaper.js        # Fond d'écran (contrôle des magic bytes, 4 Mo max)
 │   ├── maintenance.js      # Tâche horaire : cache, sessions, tuiles, wal_checkpoint, ANALYZE
 │   ├── update.js           # Canaux stable / bêta, fichier de requête lu par le service root
 │   ├── smtp.js             # Client SMTP maison (RFC 5321), réglages d'instance dans `meta`
 │   ├── release-notes.js    # Analyse de CHANGELOG.md pour la fenêtre « Nouveautés »
-│   ├── mail-templates.js   # Le seul message envoyé : l'invitation
-│   ├── html.js             # Échappement HTML côté serveur (pour le mail)
-│   ├── routes/             # auth.js, config.js, integrations.js, appearance.js, update.js, admin.js
-│   └── integrations/       # weather.js, georide.js, parcels.js, mailbox.js, imap.js, mime.js, map-tiles.js
-├── public/                 # index.html, login.html, setup.html, assets/ (app.js, edit.js, i18n.js,
-│                           #   themes.css, mobile.css, vendor/leaflet), manifest.webmanifest
-├── scripts/                # config-export.mjs, config-import.mjs, account.mjs (CLI)
-├── docs/                   # configuration-format.md, captures d'écran
-├── Dockerfile              # node:24-bookworm-slim
-└── docker-compose.yml      # service unique + volume glassboard-data
+│   ├── modules/
+│   │   ├── registry.js     # la liste des modules, et tout ce qu'il compose à partir d'elle
+│   │   ├── workers.js      # pool de worker_threads : le travail lourd hors de la boucle
+│   │   └── worker-host.js  # l'autre moitié, importée par un worker.js de module
+│   ├── routes/             # auth.js, config.js, appearance.js, update.js, admin.js
+│   └── integrations/       # weather.js, georide.js, parcels.js, mailbox.js, imap.js, map-tiles.js
+├── modules/                # une fonctionnalité = un dossier (voir modules/README.md)
+│   ├── weather/            # manifest.js, server.js, client/{tile,pane}.js
+│   ├── georide/            # + jobs.js, worker.js, client/leaflet.js
+│   ├── parcels/            # + jobs.js, worker.js
+│   └── note/               # le plus petit : un manifeste et un rendu, rien d'autre
+├── public/
+│   ├── index.html          # charge /assets/main.js en <script type="module">
+│   ├── assets/core/        # le noyau navigateur : dom, api, state, modals, theme,
+│   │                       #   chrome, tiles (le registre client), forms, dialogs,
+│   │                       #   shell, render, boot, kernel (ce qu'un module peut utiliser)
+│   ├── assets/edit.js      # mode édition et réglages
+│   ├── assets/i18n.js      # 7 langues (script classique, partagé avec les pages de connexion)
+│   └── assets/vendor/      # Leaflet, chargé à la demande par le module georide
+├── scripts/                # config-export.mjs, config-import.mjs, account.mjs, check-client.mjs
+├── test/                   # node:test — config-schema, auth, modules, workers, bout en bout
+└── docs/                   # configuration-format.md, captures d'écran
 ```
 
-**Flux** : navigateur → Express (session obligatoire hors `/login` et `/setup`) → `store.js` / SQLite ;
-les tuiles d'intégration appellent `/api/integrations/*`, qui interrogent les APIs tierces avec les
-identifiants déchiffrés et mettent en cache. Premier démarrage : `/setup` crée le compte et enrôle le TOTP.
+### Le contrat de module
+
+```
+modules/<id>/
+  manifest.js      ce qu'il est : ses tuiles, la forme de ses réglages, son défaut d'activation
+  server.js        facultatif — routes(router), monté sur /api/m/<id>
+  jobs.js          facultatif — travail récurrent, hors du chemin des requêtes
+  worker.js        facultatif — la moitié lourde, sur son propre thread
+  client/tile.js   son rendu, servi sur /modules/<id>/tile.js
+  client/pane.js   facultatif — son onglet dans les réglages
+```
+
+**La règle qui structure tout : une route n'appelle jamais le réseau.** Elle lit ce qu'un job a
+écrit. C'est elle qui empêche une API tierce lente de retarder un tableau de bord — et, Node
+servant toutes les requêtes sur un seul thread, de retarder ceux de tout le monde.
+
+Seul `client/` est exposé en HTTP, sur `/modules/<id>/`. Le manifeste, les routes, les jobs et
+le worker vivent dans le même dossier et ne sont joignables par personne (un test l'affirme,
+traversée de chemin comprise).
+
+### Un interrupteur par module, par compte
+
+`config.modules.<id>.enabled`. Éteint veut dire éteint jusqu'en bas : pas de tuile, pas de route
+(un garde devant le routeur répond `404 module_disabled`), pas de job, et le navigateur ne va
+même pas chercher le code du module. **Ses tuiles restent dans la configuration** : rallumer rend
+le tableau de bord tel qu'il était, sinon l'interrupteur serait un piège.
+
+Une configuration écrite avant la 2.0 ne dit rien des modules : `validateModules` déduit l'état
+de l'ancien `integrations.<id>.enabled` et de la présence d'une tuile du module, puis l'écrit dans
+le document à la première sauvegarde. Rien à faire à la main.
+
+**Flux** : navigateur → Express (session obligatoire hors `/login` et `/setup`) → `store.js` / SQLite.
+Le navigateur charge `/assets/main.js`, qui importe le noyau, puis **importe dynamiquement** le
+client des seuls modules dont une tuile est affichée. Les tuiles appellent `/api/m/<id>/*`, qui
+lisent la base ; ce sont les jobs qui, eux, parlent aux APIs tierces, dans un worker.
 
 ## 4. Prérequis & environnement
 
@@ -123,10 +172,19 @@ ne les touche pas et aucune migration manuelle n'est nécessaire.
 | `npm run config:export -- --out backup.json [--include-secrets]` | Export de la configuration (secrets exclus par défaut) |
 | `npm run config:import -- backup.json` | Import (instantané automatique avant remplacement) |
 | `docker compose exec glassboard node scripts/config-export.mjs --stdout > backup.json` | Export en Docker |
+| `npm test` | Le filet : `node:test` (82 tests) plus la vérification du graphe navigateur |
+| `npm run check:client` | Analyse et lie tous les modules ES du navigateur avec le chargeur de Node |
 
-Pas de tests, linter ni CI configurés.
+`npm test` couvre le validateur de configuration, le flux d'authentification, le registre de
+modules, le pool de workers et un bout en bout (setup, enrôlement, connexion en deux temps,
+sauvegarde). `check:client` attrape un import qui ne résout plus ou un export disparu ; il
+n'exécute rien, donc une référence à une variable locale supprimée reste invisible pour lui —
+d'où l'habitude de charger la page pour de vrai après une refonte. Pas de linter ni de CI.
 
 ## 7. Endpoints & interfaces
+
+Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registre, derrière
+`requireAuth` et derrière le garde d'activation. Il n'y a plus de `/api/integrations`.
 
 - **Pages** : `/` (tableau de bord, session requise), `/login`, `/setup` (premier lancement),
   `/approve` (approbation QR), `/invite` (acceptation d'une invitation, publique).
@@ -137,7 +195,9 @@ Pas de tests, linter ni CI configurés.
 | `GET /api/health` | Santé + indicateur `setupRequired` |
 | `/api/auth` | `GET /invite` et `POST /invite` (publics), `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
-| `/api/integrations` | `GET /weather/forecast` (horaire : température, ressenti, vent, code, jour/nuit ; quotidien : min/max, pluie, code, vent, **lever et coucher**), `/weather/place`, `/georide/status\|trackers\|summary\|trips`, `POST /georide/login\|logout`, `GET /parcels`, `/parcels/status`, `POST /parcels`, `/parcels/refresh`, `PATCH/DELETE /parcels/:id`, `PUT/DELETE /parcels/key`, `GET /parcels/suggestions`, `POST /parcels/suggestions/:id/accept\|ignore`, `POST /parcels/mail/scan\|test`, `PUT/DELETE /parcels/mail/password`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/m/weather` | `GET /forecast`, `/place` |
+| `/api/m/georide` | `GET /status\|trackers\|summary\|trips`, `POST /login\|logout`, `GET /map/tile/:z/:x/:y.png` |
+| `/api/m/parcels` | `GET /`, `/status`, `/suggestions`, `POST /`, `/refresh`, `/import`, `/suggestions/:id/accept\|ignore`, `/mail/scan\|test`, `PUT/DELETE /key`, `/mail/password`, `DELETE /:id` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start`, `GET /news`, `POST /news/seen` |
 | `/api/admin` | **administrateur uniquement** : `GET /accounts`, `POST /accounts`, `PATCH /accounts/:id`, `POST /accounts/:id/sign-out`, `DELETE /accounts/:id`, `POST /invitations`, `DELETE /invitations/:id`, `GET/PUT /smtp`, `POST /smtp/test` |
 | `/api/appearance` | `GET/PUT/DELETE /wallpaper`, `GET /wallpaper/info` |
@@ -257,6 +317,27 @@ Pas de tests, linter ni CI configurés.
 - **Outlook / Microsoft 365 sont hors jeu en IMAP** depuis octobre 2024 : plus d'authentification par mot de
   passe, même d'application. Il faudrait OAuth2, et dans ce cas Microsoft Graph serait plus simple que
   IMAP+XOAUTH2. Gmail accepte toujours l'IMAP avec un mot de passe d'application (2FA obligatoire).
-- **Pas de tests automatisés** : prioriser le validateur de configuration (`config-schema.js`) et le flux d'authentification.
-- `express.json({ limit: '16mb' })` global : large (motivé par l'import avec fond d'écran en base64) ;
-  le restreindre aux routes d'import si possible.
+- **Le travail lourd ne doit jamais revenir sur le thread principal.** C'était le défaut central
+  avant la 2.0 : `syncTrips` analysait un mois de positions GPS et filtrait, par trajet, le tableau
+  entier, pendant que plus aucune requête n'était servie — pour aucun compte. Tout cela vit
+  maintenant dans `modules/georide/worker.js`, et le scan IMAP dans `modules/parcels/worker.js`.
+  Un worker ouvre sa **propre** connexion SQLite ; c'est sûr parce que la base est en WAL.
+- **`freshen` ne se fait plus attendre** : avec des trajets déjà en base, la synchronisation est
+  *lancée sans être attendue* et le lecteur reçoit le mois qui est sur le disque. Seule la toute
+  première synchronisation d'un traceur, quand il n'y a rien à servir, est attendue. Ne pas
+  remettre un `await` là : c'est ce qui laissait la tuile vide jusqu'à quinze secondes.
+- **Ordre des routes d'un module** : `'/:id'` ne correspond qu'à un segment, donc il masque toute
+  route littérale d'un seul segment déclarée après lui. C'est arrivé : `DELETE /parcels/key`
+  répondait « colis inconnu » et la clé 17TRACK restait en place. Les chemins littéraux d'abord.
+- **URL d'un client de module** : le serveur sert `client/` sur `/modules/<id>/`, donc le dossier
+  n'apparaît pas dans l'URL. Le registre importe `/modules/<id>/tile.js`. Un test l'affirme, parce
+  que rien d'autre ne le dirait — un décalage ne se voit qu'en chargeant la page.
+- **`check:client` n'exécute rien** : il analyse et lie, donc il attrape un import cassé ou un
+  export disparu, jamais une référence à une variable locale qu'un déplacement a laissée derrière.
+  Après une refonte du navigateur, charger la page reste la seule vérification complète.
+- **Un module éteint reste chargé en mémoire** s'il l'était avant qu'on l'éteigne : il n'y a pas
+  de déchargement d'un module ES. D'où le contrôle de l'interrupteur dans `refreshModules`, sinon
+  un module éteint continue d'interroger une route qui répond désormais 404.
+- **Indices des tuiles en mode édition** : la grille n'affiche que les tuiles des modules allumés,
+  mais les indices désignent `state.config.tiles` en entier. D'où `reorderSubset` : un glisser
+  réordonne les positions visibles et laisse les autres exactement où elles sont.

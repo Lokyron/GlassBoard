@@ -204,6 +204,72 @@ describe('first run', () => {
   });
 });
 
+/** Flip a module's switch and save, as the settings dialog would. */
+async function setModule(moduleId, enabled) {
+  const config = (await get('/api/config')).json.config;
+  config.modules[moduleId].enabled = enabled;
+  const saved = await call('PUT', '/api/config', { config });
+  assert.equal(saved.status, 200, `switching ${moduleId}`);
+  return saved;
+}
+
+describe('module switches', () => {
+  it('are in the configuration, one per module', async () => {
+    const { config, modules } = (await get('/api/config')).json;
+    assert.ok(config.modules, 'the document carries them');
+    for (const moduleId of Object.keys(modules)) {
+      assert.equal(typeof config.modules[moduleId]?.enabled, 'boolean', moduleId);
+    }
+  });
+
+  it('start from each module\'s own default', async () => {
+    const { config } = (await get('/api/config')).json;
+    assert.equal(config.modules.weather.enabled, true, 'weather costs nothing');
+    assert.equal(config.modules.note.enabled, true);
+    assert.equal(config.modules.georide.enabled, false, 'nothing to connect to yet');
+    assert.equal(config.modules.parcels.enabled, false);
+  });
+
+  it('shut the whole module\'s routes, not one handler', async () => {
+    await setModule('weather', false);
+    for (const route of ['/api/m/weather/forecast', '/api/m/weather/place?latitude=48&longitude=2']) {
+      const response = await get(route);
+      assert.equal(response.status, 404, route);
+      assert.equal(response.json.code, 'module_disabled');
+    }
+    await setModule('weather', true);
+    assert.notEqual((await get('/api/m/weather/place?latitude=48&longitude=2')).status, 404);
+  });
+
+  it('leave the tiles in the document rather than delete them', async () => {
+    /* Switching a module off stops it being drawn and stops its routes
+       answering. It does not throw the tiles away: switching it back on has
+       to give the dashboard back as it was, or the switch is a trap. */
+    const before = (await get('/api/config')).json.config.tiles.length;
+    await setModule('weather', false);
+    assert.equal((await get('/api/config')).json.config.tiles.length, before);
+    await setModule('weather', true);
+    assert.equal((await get('/api/config')).json.config.tiles.length, before);
+  });
+
+  it('read an older document rather than reset it', async () => {
+    /* A configuration written before the switch existed says nothing about
+       modules. What it did say was an integration flag and a list of tiles,
+       and both have to be honoured or somebody loses a feature on upgrade. */
+    const { config } = (await get('/api/config')).json;
+    const legacy = structuredClone(config);
+    delete legacy.modules;
+    legacy.integrations.parcels.enabled = true;          // the old flag
+    legacy.tiles = [{ type: 'note', settings: { heading: 'Kept' } }];
+    const saved = await call('PUT', '/api/config', { config: legacy });
+    assert.equal(saved.status, 200);
+    const after = (await get('/api/config')).json.config;
+    assert.equal(after.modules.parcels.enabled, true, 'the old flag is honoured');
+    assert.equal(after.modules.note.enabled, true, 'a tile on the page keeps its module');
+    assert.equal(after.tiles.length, 1);
+  });
+});
+
 describe('module routes', () => {
   it('needs a session like everything else', async () => {
     const saved = new Map(jar);
@@ -212,20 +278,15 @@ describe('module routes', () => {
     saved.forEach((v, k) => jar.set(k, v));
   });
 
-  it('answers from its own prefix, and says so when switched off', async () => {
-    /* With the integration off, both routes answer without reaching
-       Open-Meteo — which is what makes this assertable offline. */
+  it('answers from its own prefix', async () => {
+    // Reverse geocoding off, so the route answers without reaching
+    // Open-Meteo — which is what makes this assertable offline.
     const config = (await get('/api/config')).json.config;
-    config.integrations.weather.enabled = false;
+    config.integrations.weather.reverseGeocoding = false;
     assert.equal((await call('PUT', '/api/config', { config })).status, 200);
-
-    assert.equal((await get('/api/m/weather/forecast')).status, 404);
     const place = await get('/api/m/weather/place?latitude=48&longitude=2');
     assert.equal(place.status, 200);
     assert.equal(place.json.name, '');
-
-    config.integrations.weather.enabled = true;
-    await call('PUT', '/api/config', { config });
   });
 
   it('serves every module\'s tile at the URL the registry imports', async () => {
@@ -256,6 +317,7 @@ describe('module routes', () => {
   });
 
   it('does not let "/:id" swallow a literal path beside it', async () => {
+    await setModule('parcels', true);
     /* DELETE /parcels/:id was declared before DELETE /parcels/key, so
        removing a 17TRACK key from the settings answered "Unknown parcel"
        and the key stayed. The literal paths come first now. */
@@ -265,6 +327,7 @@ describe('module routes', () => {
   });
 
   it('keeps the map tiles with the module that draws maps', async () => {
+    await setModule('georide', true);
     // Out of range, so nothing is fetched upstream: what is asserted is that
     // the route exists where the GeoRide client now looks for it.
     const response = await get('/api/m/georide/map/tile/99/0/0.png');

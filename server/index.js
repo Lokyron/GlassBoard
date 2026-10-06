@@ -11,6 +11,7 @@ import { updateRouter } from './routes/update.js';
 import { adminRouter } from './routes/admin.js';
 import { appearanceRouter } from './routes/appearance.js';
 import { scheduleMaintenance } from './maintenance.js';
+import { getConfig } from './store.js';
 import { mountModules, startModuleJobs } from './modules/registry.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -145,6 +146,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, setupRequired: needsS
 await mountModules(app, {
   express,
   requireAuth,
+  getConfig,
   modulesDir: MODULES_DIR,
   path,
   staticOptions: { maxAge: IS_PRODUCTION ? '1h' : 0, etag: true },

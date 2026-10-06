@@ -7,6 +7,25 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Every feature is a module.** One folder under `modules/`, listed once in
+  the registry: its tiles, the shape of its settings, its routes, its
+  background work and its browser code all come from there. The core no
+  longer knows that a weather tile or a motorcycle exists, and adding a
+  feature no longer means editing five files that have nothing to do with it.
+- **A switch per module, per account, in Settings → Modules.** It used to
+  take two things to decide whether a feature was on — a flag in its settings
+  and whether one of its tiles happened to be on the dashboard — and they
+  could disagree. There is one answer now. Off means no tile, no route, no
+  background work, and the browser does not even fetch the module's code. The
+  tiles stay in the configuration, so switching it back on gives the
+  dashboard back exactly as it was.
+- **Tests, at last: 82 of them**, on `node:test` with no new dependency.
+  `npm test` covers the configuration validator, the whole authentication
+  flow, the module registry, the worker pool and an end-to-end run against a
+  real server — setup, enrolment, the two-step sign-in, saving. It also links
+  the entire browser module graph, which catches an import that no longer
+  resolves or a binding nobody exports.
+
 - **Several accounts on one instance.** The first account ever created is the
   instance's administrator; the role can be handed to anyone else afterwards,
   and taken back, as long as one administrator is always left standing.
@@ -61,6 +80,33 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The heavy work left the main thread, and this is the point of the
+  release.** A GeoRide sync is a multi-megabyte parse of a month of positions
+  followed by a filter per ride over the whole array; a mailbox scan is a
+  hundred and fifty messages decoded and searched. Node serves every request
+  on one thread, so while either ran, *nothing else on the instance was
+  answered* — not another account's dashboard, not a configuration save, not
+  the clock on the page. Both now run on a worker thread of their own.
+- **A tile no longer waits for the work it needs.** The rides and the mailbox
+  are brought up to date by scheduled jobs, so the routes read what is
+  already on disk. Where a sync is still wanted and rides are already stored,
+  it is started and not awaited: the motorcycle card used to sit empty for as
+  long as the GeoRide API took to answer, up to fifteen seconds.
+- **The browser code is a kernel and a set of modules.** `app.js` was 2268
+  lines in which the renderer, the forecast, the map and the parcel list
+  shared one scope; it is gone. A module's own state lives under its own
+  name and cannot be reached by another.
+- **Modules are fetched only when they are used.** A dashboard with no
+  motorcycle on it never downloads the motorcycle code, and Leaflet — 148 kB
+  that every single page load used to parse, map or no map — now arrives the
+  first time a map is actually going to be drawn. The tile's map is built
+  when the card comes into view rather than at render time.
+- **Integration routes moved to `/api/m/<id>`.** `/api/integrations/*` is
+  gone. Nothing to do: the dashboard was updated with them.
+- The JSON body limit is a megabyte everywhere except the one route that
+  genuinely needs more — importing a configuration with its wallpaper inlined.
+  It was sixteen megabytes for every route on the instance.
+
 - **The last month of GeoRide rides is kept on the server, not cached.** A
   month of riding is tens of thousands of GPS positions, a dozen megabytes of
   them, and the card used to fetch the whole month again every time a
@@ -109,6 +155,12 @@ Notable changes, newest first. The format follows
   rain read as orange.
 
 ### Fixed
+
+- **Removing the 17TRACK key from the settings did nothing.** `DELETE
+  /parcels/:id` was declared before `DELETE /parcels/key`, matched first, and
+  answered "Unknown parcel" while the key stayed where it was.
+- The start-up line printed the port that was asked for rather than the one
+  the socket actually got, which made binding to port 0 unusable.
 
 - Dropping a shortcut on a folder to file it away never worked, although the
   hint under the editing bar had always said it would. A folder is aimed at by

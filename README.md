@@ -665,10 +665,34 @@ its own without touching your account.
 
 ### Adding your own
 
-A tile type is one entry in `TILE_TYPES` (`server/config-schema.js`), one
-renderer in `public/assets/app.js`, and, if it talks to an API, one module in
-`server/integrations/`. The configuration document carries its settings. No
-other part of the system needs to know about it.
+Every feature is a module: one folder under `modules/`, listed once in
+`server/modules/registry.js`. Nothing else in the application changes — the
+tile types, the configuration schema, the settings tabs, the routes and the
+background work are all composed from what the modules declare.
+
+```
+modules/<id>/
+  manifest.js      what it is: its tiles, and the shape of its settings
+  server.js        optional — routes(router), mounted at /api/m/<id>
+  jobs.js          optional — recurring work, run off the request path
+  worker.js        optional — the heavy half, run on its own thread
+  client/tile.js   how it draws, served at /modules/<id>/tile.js
+  client/pane.js   optional — its tab in the settings
+```
+
+One rule matters more than the rest: **a route does not call the network.**
+It reads what a job already wrote. That is what stops one slow third-party
+API from holding up somebody's dashboard — or, since Node serves every
+request on one thread, from holding up every dashboard on the instance.
+
+Anything expensive goes in `worker.js` and is run through `runInWorker`. A
+module's own state in the browser lives under `state.m.<id>`; it cannot see
+another module's.
+
+Each module has a switch of its own, per account, under **Settings →
+Modules**. Switched off means no tile, no route, no background work, and the
+module's code is never fetched by the browser. Its tiles stay in the
+configuration, so switching it back on gives the dashboard back as it was.
 
 ## Backup and restore
 

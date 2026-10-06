@@ -2,7 +2,7 @@
 // Hand-written on purpose: the shape is small, and this keeps the dependency
 // list short while producing readable error messages for imports.
 
-import { TILE_TYPES, validateIntegrations, validateTileSettings } from './modules/registry.js';
+import { TILE_TYPES, validateIntegrations, validateTileSettings, validateModules } from './modules/registry.js';
 
 export const CONFIG_VERSION = 1;
 
@@ -172,6 +172,9 @@ export function validateConfig(input) {
     },
     tiles: [],
     links: [],
+    // One switch per module, per account: the single answer to whether a
+    // feature is on. See validateModules for what an older document meant.
+    modules: validateModules(v, input),
     // Each module validates its own settings; the core composes them.
     integrations: validateIntegrations(v, input.integrations),
   };

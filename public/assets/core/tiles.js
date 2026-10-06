@@ -31,11 +31,17 @@ export const tileElement = (tileId) => document.querySelector(`[data-tile="${CSS
 /** The module that owns a tile type, as the server composed it. */
 const moduleIdOf = (type) => state.tileTypes?.[type]?.module ?? null;
 
+/** The one switch, per module and per account. */
+export const isModuleEnabled = (moduleId) => state.config?.modules?.[moduleId]?.enabled === true;
+
+/* A switched-off module is not drawn and not even fetched. Its tiles stay in
+   the configuration, so switching it back on returns the dashboard as it was. */
+export const visibleTiles = () =>
+  (state.config?.tiles ?? []).filter((tile) => isModuleEnabled(moduleIdOf(tile.type)));
+
 /** The module clients the current configuration needs, loaded once each. */
 export async function loadModulesForConfig() {
-  const wanted = new Set(
-    (state.config?.tiles ?? []).map((tile) => moduleIdOf(tile.type)).filter(Boolean)
-  );
+  const wanted = new Set(visibleTiles().map((tile) => moduleIdOf(tile.type)).filter(Boolean));
   await Promise.all(
     [...wanted]
       .filter((moduleId) => !loaded.has(moduleId))
@@ -68,7 +74,7 @@ const missingMarkup = (tile, index) =>
 
 export function renderTiles() {
   const grid = id('tiles');
-  const tiles = state.config.tiles;
+  const tiles = visibleTiles();
 
   /* Adding a tile in edit mode can call for a module the page has never
      needed. Rather than make every caller await, the tile is drawn as
@@ -101,9 +107,15 @@ export function renderTiles() {
   decorate('tiles');
 }
 
-/** The data tick: every module refreshes its own tiles, none waits on another. */
+/** The data tick: every module refreshes its own tiles, none waits on another.
+ *
+ * A module switched off while the page was open stays in memory — there is no
+ * unloading an ES module — so the switch is checked here rather than assumed
+ * from the module not being there. Without it, a module turned off went on
+ * polling a route that now answers 404. */
 export function refreshModules() {
-  loaded.forEach((client) => {
+  loaded.forEach((client, moduleId) => {
+    if (!isModuleEnabled(moduleId)) return;
     try { client.refresh?.(); } catch (error) { console.error(error); }
   });
 }
