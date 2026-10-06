@@ -172,8 +172,10 @@ app.use((error, _req, res, _next) => {
    the first time an account asks for its dashboard. */
 scheduleMaintenance();
 
-app.listen(PORT, HOST, () => {
-  console.log(`[glassboard] listening on http://${HOST}:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  // The port the socket actually got, not the one that was asked for: with
+  // PORT=0 the kernel picks it, and the line is then the only way to know.
+  console.log(`[glassboard] listening on http://${HOST}:${server.address().port}`);
   console.log(`[glassboard] data directory: ${DATA_DIR}`);
   if (needsSetup()) console.log('[glassboard] no account yet — open /setup to create the first one');
 });
