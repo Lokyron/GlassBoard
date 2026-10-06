@@ -1877,7 +1877,7 @@ function setPreset(preset) {
 
 /** Run a repaint inside a cross-fade where the browser supports one. */
 function withTransition(repaint) {
-  if (typeof document.startViewTransition === 'function' && !prefersReducedMotion()) {
+  if (typeof document.startViewTransition === 'function' && !reducedMotion()) {
     document.startViewTransition(repaint);
   } else {
     repaint();
@@ -1898,8 +1898,6 @@ async function shuffleTheme() {
     toast(error.message, 'error');
   }
 }
-
-const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The image is cached hard, so its timestamp is what busts that cache. */
 async function loadWallpaperVersion() {
@@ -2241,7 +2239,7 @@ function onVisibilityChange() {
  * per frame. Touch screens and reduced-motion users get a still backdrop.
  */
 function installParallax() {
-  if (!matchMedia('(hover: hover) and (pointer: fine)').matches || prefersReducedMotion()) return;
+  if (!matchMedia('(hover: hover) and (pointer: fine)').matches || reducedMotion()) return;
   const wall = id('wall');
   let queued = false;
   let x = 0;

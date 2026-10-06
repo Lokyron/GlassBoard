@@ -33,7 +33,16 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '16mb' }));
+/* A dashboard configuration is a few kilobytes. Only one route is ever large:
+   an import carries the wallpaper inlined as base64. Giving it its own parser
+   and capping every other route at a megabyte means nothing else on the
+   instance can be made to buffer sixteen of them. The choice is made here
+   rather than in the router, because a global parser would have rejected the
+   import long before its own parser ever ran. */
+const BULK_JSON_PATHS = new Set(['/api/config/import']);
+const smallJson = express.json({ limit: '1mb' });
+const bulkJson = express.json({ limit: '16mb' });
+app.use((req, res, next) => (BULK_JSON_PATHS.has(req.path) ? bulkJson : smallJson)(req, res, next));
 
 // JSON compresses by 80% or more, and a month of GPS tracks is the payload that
 // makes it worth it. zlib is built in, so this costs no dependency.

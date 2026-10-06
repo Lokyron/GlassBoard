@@ -877,7 +877,6 @@ async function startUpdate(draw) {
    refuses every route here regardless — the hidden tab is a convenience, not
    the control. */
 
-const ROLE_LABEL = (role) => (role === 'admin' ? t('adm.roleAdmin') : t('adm.roleUser'));
 
 /** "2 hours ago", or the date once that stops being useful. */
 function sinceLabel(iso) {

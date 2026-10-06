@@ -1,7 +1,7 @@
 // Accounts, sessions, TOTP enrolment and login throttling.
 import crypto from 'node:crypto';
 import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
-import { generateSecret, generate as totpGenerate, generateURI, verify as totpVerify } from 'otplib';
+import { generateSecret, generateURI, verify as totpVerify } from 'otplib';
 import { db, now, getMeta, setMeta } from './db.js';
 import { encrypt, decrypt, sign, unsign, randomId, sha256 } from './crypto.js';
 import { deleteWallpaper } from './wallpaper.js';
@@ -284,9 +284,6 @@ export async function checkUserTotp(user, token) {
   if (!secret) return false;
   return checkTotp(secret, token);
 }
-
-/** Used by the enrolment screen to show a live code when a user wants to double-check. */
-export const currentTotp = (secret) => totpGenerate({ secret });
 
 /* ----------------------------- recovery codes ---------------------------- */
 
