@@ -3,7 +3,7 @@
    changes with every deploy, so a cached copy is only ever a fallback, and the
    API (the user's data) is never cached at all. */
 
-const CACHE = 'glassboard-v5';
+const CACHE = 'glassboard-v6';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,

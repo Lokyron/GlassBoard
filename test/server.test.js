@@ -326,6 +326,25 @@ describe('module routes', () => {
     assert.deepEqual(response.json, { ok: true });
   });
 
+  it('has the tile and its panel agree about whether GeoRide is set up', async () => {
+    /* The symptom this encodes: the tile showed the motorcycle's position
+       while the map panel said the module was switched off. The trips route
+       was still testing integrations.georide.enabled, a field the module
+       switch replaced — so it was undefined, and the route answered
+       "disabled" forever. Two routes, two answers, one of them a lie.
+
+       Neither can be configured here (no GeoRide credentials), so what is
+       asserted is that they say the same thing and that neither claims to be
+       switched off while the switch is on. */
+    await setModule('georide', true);
+    const summary = (await get('/api/m/georide/summary')).json;
+    const trips = (await get('/api/m/georide/trips?days=7')).json;
+    assert.equal(trips.configured, summary.configured, 'the two routes disagree');
+    for (const [name, body] of [['summary', summary], ['trips', trips]]) {
+      assert.doesNotMatch(String(body.error ?? ''), /disabled|switched off/i, `${name} says disabled while the module is on`);
+    }
+  });
+
   it('keeps the map tiles with the module that draws maps', async () => {
     await setModule('georide', true);
     // Out of range, so nothing is fetched upstream: what is asserted is that

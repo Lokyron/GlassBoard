@@ -97,7 +97,9 @@
   .temp { font-size: 2.6rem; }
   .wstats { font-size: .78rem; gap: 2px; margin: 0; }
   .spark { height: 38px; margin-top: 6px; }
-  .gr-stats { grid-template-columns: repeat(4, 1fr); }
+  /* The card decides, through its own container query, so there is nothing
+     to override here any more: a phone tile is full width and gets its four
+     across, a narrow one falls to two by two on its own. */
   .gr-map { height: 170px; }
 
   /* ------------------------------- shortcuts ----------------------------- */

@@ -50,7 +50,6 @@ export function routes(router) {
 
   router.get('/trips', async (req, res) => {
     const settings = getConfig(req.user.id).integrations.georide;
-    if (!settings.enabled) return res.json({ ok: false, configured: false, error: 'The GeoRide integration is disabled.' });
     const days = Number.parseInt(req.query.days, 10);
     const periodDays = Number.isFinite(days) && days >= 1 && days <= 31 ? days : settings.periodDays;
     res.json(await georide.getTrips(req.user.id, { ...settings, periodDays }));

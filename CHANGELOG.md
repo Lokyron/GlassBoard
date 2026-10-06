@@ -156,6 +156,14 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **The GeoRide map panel said the module was switched off** while the tile
+  beside it showed the motorcycle's position quite happily. The trips route
+  was still testing a field the module switch replaced, so it read as
+  undefined and the route answered "disabled" whatever the switch said.
+- **The figures on the GeoRide tile could sit on top of each other.** They
+  were four fixed columns with nothing to stop a long one overflowing, and a
+  tile's width is set by its resize grip. Four across while the card is wide
+  enough, two by two when it is not — never three, and never overlapping.
 - **Removing the 17TRACK key from the settings did nothing.** `DELETE
   /parcels/:id` was declared before `DELETE /parcels/key`, matched first, and
   answered "Unknown parcel" while the key stayed where it was.

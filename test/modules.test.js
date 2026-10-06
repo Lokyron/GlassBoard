@@ -54,6 +54,19 @@ describe('composed configuration', () => {
     }
   });
 
+  it('leaves no "enabled" field behind in a module\'s settings', () => {
+    /* The switch lives in config.modules.<id>.enabled and nowhere else. A
+       leftover integrations.<id>.enabled would be a second answer to the same
+       question — and a handler still reading it would see undefined and treat
+       a switched-on module as off, which is exactly what happened to the
+       GeoRide trips route. */
+    const { value } = validateConfig({});
+    for (const [moduleId, settings] of Object.entries(value.integrations)) {
+      assert.equal(settings.enabled, undefined, `integrations.${moduleId}.enabled must not exist`);
+      assert.equal(typeof value.modules[moduleId]?.enabled, 'boolean', `modules.${moduleId}.enabled must`);
+    }
+  });
+
   it('lets a module validate its own tile settings', () => {
     const { value } = validateConfig({
       tiles: [{ type: 'note', settings: { heading: 'x'.repeat(500), body: 'kept' } }],

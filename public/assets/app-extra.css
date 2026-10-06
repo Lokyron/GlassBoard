@@ -45,12 +45,40 @@
 /* Sized to match the height of the weather tiles, so the tile row keeps the
    proportions of the original dashboard. */
 .georide .wtop h3{font-size:1.06rem;font-weight:650;margin-top:3px}
-.gr-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;position:relative;z-index:2}
-.gr-stat{min-width:0}
+/* Four figures across while the card is wide enough, two by two when it is
+   not. They were four fixed columns, and since a tile's width is set by its
+   resize grip, a narrow tile left "1234.5 km" wider than its column — with
+   nowrap and nothing to clip it, the number sat on top of its neighbour.
+   Two or four, never three: auto-fit would happily leave one figure alone on
+   a second row, which reads worse than two tidy rows. Hence the card being
+   the query container — the width that decides is the card's, not the
+   window's, because the grip is what sets it. */
+.card.georide{container-type:inline-size}
+.gr-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;margin-top:14px;position:relative;z-index:2}
+.gr-stat{min-width:0;overflow:hidden}
 .gr-stat .k{font-size:.6rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gr-stat .v{font-size:1.02rem;font-weight:750;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gr-stat .v{font-size:1.02rem;font-weight:750;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap;
+  /* A backstop for a figure wider than any column: an ellipsis is a worse
+     reading than the whole number, but a far better one than two numbers
+     written over each other. */
+  overflow:hidden;text-overflow:ellipsis}
 .gr-stat .v small{font-size:.66rem;font-weight:600;color:var(--muted)}
+
+/* After the rules above, not before: a container query adds no specificity,
+   so a block written earlier loses to an equally specific one written later.
+   The same trap as a media query in base.css against app-extra.css. */
+@container (min-width: 310px){
+  .gr-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+/* At the narrowest a tile may be (span 0.4), a full distance does not fit at
+   the normal size and would end in an ellipsis. A smaller figure reads
+   better than a truncated one. */
+@container (max-width: 210px){
+  .gr-stat .v{font-size:.88rem}
+  .gr-stat .v small{font-size:.58rem}
+  .gr-stat .k{font-size:.55rem;letter-spacing:.06em}
+}
 .gr-message{grid-column:1/-1;color:var(--muted);line-height:1.55;font-size:.92rem;margin-top:14px;position:relative;z-index:2}
 .gr-map{margin-top:14px;height:74px;border-radius:var(--rmd);overflow:hidden;border:1px solid var(--border);
   background:var(--surface-soft);position:relative;z-index:2}
