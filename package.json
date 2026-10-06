@@ -31,7 +31,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node --test test/*.test.js",
+    "test": "npm run check:client && node --test test/*.test.js",
+    "check:client": "node --experimental-vm-modules --no-warnings scripts/check-client.mjs",
     "dev": "node --watch server/index.js",
     "config:export": "node scripts/config-export.mjs",
     "config:import": "node scripts/config-import.mjs"

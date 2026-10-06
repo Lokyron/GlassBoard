@@ -1,27 +1,22 @@
 /* Glassboard — live editing, settings and backup dialogs.
-   Everything here is layered on top of the read-mode renderer in app.js: read
-   mode renders exactly the same markup whether or not this file did anything. */
+   Everything here is layered on top of the read-mode renderer: read mode
+   renders exactly the same markup whether or not this file did anything. */
+import {
+  id, esc, svg, iconName, hydrateIcons, el, clone, state,
+  api, toast, openDialog, closeDialog, tileElement,
+} from './core/kernel.js';
+import { applyAppearance, withTransition } from './core/theme.js';
+import { renderLinks, openFolder, closeFolder, setEditDecorators } from './core/chrome.js';
+import { renderTiles } from './core/tiles.js';
+import { renderAll, refreshData } from './core/render.js';
+import { downloadExport, openNewsHistory } from './core/shell.js';
+
 
 const uid = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 const PALETTE = ['#0a84ff', '#5e5ce6', '#64d2ff', '#16a34a', '#34c759', '#eab308', '#f97316', '#ea580c', '#ef4444', '#ec4899', '#a129cc', '#8b5cf6', '#3b82f6', '#10b981', '#14b8a6', '#475569'];
 
 /* ----------------------------- form building ----------------------------- */
 
-function el(tag, attributes = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attributes)) {
-    if (key === 'class') node.className = value;
-    else if (key === 'text') node.textContent = value;
-    else if (key === 'html') node.innerHTML = value;
-    else if (key.startsWith('on')) node.addEventListener(key.slice(2).toLowerCase(), value);
-    else if (value === true) node.setAttribute(key, '');
-    else if (value !== false && value !== null && value !== undefined) node.setAttribute(key, value);
-  }
-  for (const child of [].concat(children)) {
-    if (child) node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
-  }
-  return node;
-}
 
 function field(label, control, hint) {
   return el('label', { class: 'fld' }, [
@@ -101,7 +96,7 @@ function dialogFooter(onSave, onCancel = closeDialog, saveLabel = t('dlg.save'))
 
 const isDirty = () => JSON.stringify(state.config) !== JSON.stringify(state.saved);
 
-function setEditing(on) {
+export function setEditing(on) {
   if (!on && isDirty() && !confirm(t('edit.unsaved'))) return;
   state.editing = on;
   document.body.classList.toggle('editing', on);
@@ -405,7 +400,7 @@ document.addEventListener('touchmove', (event) => {
 
 /* --------------------------- tiles in edit mode -------------------------- */
 
-function decorateTilesForEditing() {
+export function decorateTilesForEditing() {
   const grid = id('tiles');
   state.config.tiles.forEach((tile, index) => {
     const article = tileElement(tile.id);
@@ -527,7 +522,7 @@ function openTileDialog(index) {
 
 /* --------------------------- links in edit mode -------------------------- */
 
-function decorateLinksForEditing() {
+export function decorateLinksForEditing() {
   const grid = id('links-grid');
   grid.querySelectorAll('[data-link]').forEach((node) => {
     const index = Number(node.dataset.link);
@@ -677,7 +672,7 @@ function openSubItemDialog(folderDraft, itemIndex, onDone, { isNew = false } = {
   openDialog({ title: item.title, body });
 }
 
-function decorateFolderForEditing(folderIndex) {
+export function decorateFolderForEditing(folderIndex) {
   const grid = id('folder-links-grid');
   grid.querySelectorAll('[data-item]').forEach((node) => {
     const i = Number(node.dataset.item);
@@ -1199,7 +1194,7 @@ function smtpPane() {
 
 /* -------------------------------- settings ------------------------------- */
 
-async function openSettings(section = 'general') {
+export async function openSettings(section = 'general') {
   const draft = clone(state.config);
   const body = el('div', { class: 'dlg' });
   const tabs = el('div', { class: 'tabs' });
@@ -1717,7 +1712,7 @@ function dataPane() {
 
 /* ----------------------------- export / import ---------------------------- */
 
-function openExportDialog() {
+export function openExportDialog() {
   const body = el('div', { class: 'dlg' }, [
     el('button', { class: 'btn primary', type: 'button', text: t('set.exportPlain'), onclick: () => { downloadExport(false); closeDialog(); } }),
     el('button', { class: 'btn ghost', type: 'button', text: t('set.exportSecrets'), onclick: () => {
@@ -1728,7 +1723,7 @@ function openExportDialog() {
   openDialog({ title: t('menu.export'), body });
 }
 
-function openImportDialog() {
+export function openImportDialog() {
   let includeSecrets = false;
   const input = el('input', { class: 'inp', type: 'file', accept: 'application/json,.json' });
   const body = el('div', { class: 'dlg' }, [
@@ -1763,10 +1758,19 @@ function openImportDialog() {
 
 /* --------------------------------- wiring -------------------------------- */
 
-document.addEventListener('DOMContentLoaded', () => {
+/* Called by the boot, rather than waiting for DOMContentLoaded: a module
+   script is deferred, so by the time this runs the document is already
+   parsed and the event has been and gone. */
+export function bindEditor() {
   id('edit-save').addEventListener('click', saveDashboard);
   id('edit-cancel').addEventListener('click', cancelEditing);
-});
+  // The renderer decorates nothing by itself; it calls back here in edit mode.
+  setEditDecorators({
+    links: decorateLinksForEditing,
+    folder: decorateFolderForEditing,
+    tiles: decorateTilesForEditing,
+  });
+}
 
 addEventListener('beforeunload', (event) => {
   if (state.editing && isDirty()) {

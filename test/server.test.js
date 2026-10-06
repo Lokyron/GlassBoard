@@ -228,6 +228,18 @@ describe('module routes', () => {
     await call('PUT', '/api/config', { config });
   });
 
+  it('serves every module\'s tile at the URL the registry imports', async () => {
+    /* public/assets/core/tiles.js builds `/modules/<id>/tile.js`; the server
+       mounts each module's client/ folder at `/modules/<id>`. The two have to
+       agree, and nothing but this says so — a mismatch is a feature that
+       silently does not load. */
+    for (const moduleId of ['weather', 'georide', 'parcels', 'note']) {
+      const response = await get(`/modules/${moduleId}/tile.js`);
+      assert.equal(response.status, 200, `/modules/${moduleId}/tile.js`);
+      assert.match(response.text, /export default/);
+    }
+  });
+
   it('serves a module\'s client folder and nothing beside it', async () => {
     // manifest.js, server.js, jobs.js and worker.js share the module folder
     // with client/. Only client/ is mounted, and this is what proves it.
