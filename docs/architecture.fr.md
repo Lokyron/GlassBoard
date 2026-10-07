@@ -299,6 +299,16 @@ Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registr
   jamais un nom de branche. C'est le script root qui fait la correspondance, depuis son propre fichier
   unit, et tout ce qu'il ne reconnaît pas installe la branche stable. Sans cela, le côté non privilégié
   choisirait la référence à installer.
+- ⚠️ **Une seule mauvaise réponse ne doit jamais faire partir la page.** `api()` quittait le
+  tableau de bord sur un `401` ou un `409` ; `/login` et `/setup` renvoient aussitôt au tableau de
+  bord un lecteur en fait connecté, qui redemande et repart — **boucle de rechargement**, sans rien
+  à l'écran pour l'expliquer. `api()` confirme désormais auprès de `/api/auth/state` (route
+  publique) avant de naviguer, et une seule navigation est possible par chargement de page. Un
+  `401` sur une session vivante devient une erreur nommée dans la console : le défaut devient
+  **visible** au lieu d'emporter la preuve avec lui.
+  ⚠️ Conséquence : `/api/auth/state` est devenue porteuse. Si elle passait derrière `requireAuth`,
+  la vérification répondrait « je ne sais pas » et une vraie déconnexion n'enverrait plus personne
+  à l'écran de connexion. Deux tests l'ancrent.
 - **Ne jamais répondre `409`** depuis une route d'API appelée par le tableau de bord : `api()` dans
   `app.js` interprète ce code comme « instance à configurer » et quitte la page pour `/setup`.
 - **Lecture de la boîte mail** (`imap.js`, client maison sans dépendance) : le piège central du protocole

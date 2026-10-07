@@ -7,6 +7,13 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **One bad answer could no longer throw you out of your own dashboard.** A
+  401 or a 409 from any route sent the page to the sign-in or setup screen,
+  which bounced a reader who was in fact signed in straight back to the
+  dashboard — which asked again, and left again. A reload loop with nothing
+  on screen to explain it. The session is now confirmed before the page goes
+  anywhere, and a route that answers 401 on a live session gets an ordinary
+  error, named in the console, instead of taking the page with it.
 - **The motorcycle sat in the corner of its own pin.** Loading Leaflet on
   demand put its stylesheet after the dashboard's instead of before it, and
   the two style the same classes with the same specificity — so Leaflet's

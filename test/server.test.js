@@ -354,6 +354,34 @@ describe('module routes', () => {
   });
 });
 
+describe('the route the dashboard checks before leaving', () => {
+  /* api() no longer trusts a single 401 or 409: it asks /api/auth/state
+     whether the session is really gone before sending the page to /login or
+     /setup, because a route answering badly used to cost the reader their
+     whole dashboard in a reload loop.
+
+     That makes this route load-bearing in a way it was not before. It has to
+     answer without a session — if it ever gained requireAuth it would 401
+     like everything else, the check would read "cannot tell", and a genuine
+     sign-out would stop sending anyone to the sign-in page. */
+  it('answers without a session, and says so', async () => {
+    const saved = new Map(jar);
+    jar.clear();
+    const response = await get('/api/auth/state');
+    assert.equal(response.status, 200, 'must be reachable with no session');
+    assert.equal(response.json.authenticated, false);
+    assert.equal(response.json.setupRequired, false);
+    saved.forEach((v, k) => jar.set(k, v));
+  });
+
+  it('reports a live session as live', async () => {
+    const response = await get('/api/auth/state');
+    assert.equal(response.status, 200);
+    assert.equal(response.json.authenticated, true);
+    assert.equal(response.json.setupRequired, false);
+  });
+});
+
 describe('doors that stay shut', () => {
   it('an unknown API path answers 404 as JSON', async () => {
     const response = await get('/api/nothing-here');
