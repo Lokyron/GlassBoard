@@ -5,6 +5,25 @@ Notable changes, newest first. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **The ride tracks are drawn on a canvas instead of one SVG path each.** A
+  month is eighty polylines; with the default renderer each is an element in
+  the document whose geometry is rewritten on every frame of every pan and
+  every flight. On a desktop this changes nothing — measured at sixty frames
+  a second either way — and it is the phone this is meant to help.
+- **Selecting a ride stopped restyling the other seventy-nine**, and the map
+  now takes its framing from the tracks' own bounding boxes rather than
+  rebuilding an array of twelve thousand coordinates on every click. Flying to
+  a ride is skipped entirely for a reader who asked for less motion.
+- **The tile proxy fetches at most six tiles from OpenStreetMap at once, and
+  never the same tile twice over.** Opening a map asks for a hundred-odd in
+  the same instant and they all used to leave together, which is what their
+  usage policy asks you not to do and what gets a burst throttled — a map
+  that fills in slowly and out of order. Cached tiles are unaffected; the
+  limit is only on going upstream. Measured: a hundred and twenty requests
+  for sixty cold tiles now take less time than sixty did unlimited.
+
 ### Fixed
 
 - **One bad answer could no longer throw you out of your own dashboard.** A

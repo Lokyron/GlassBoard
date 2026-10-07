@@ -5,7 +5,7 @@
  * GeoRide API, so opening the panel is a read and not a download. */
 import {
   id, safe, esc, svg, html, state, moduleState, api, openModal, closeModal,
-  tileElement, tileOfType,
+  tileElement, tileOfType, reducedMotion,
 } from '/assets/core/kernel.js';
 import { leaflet } from './leaflet.js';
 
@@ -354,6 +354,15 @@ function ensureTripMap() {
 
   const map = L.map(canvas, { zoomControl: true, scrollWheelZoom: true, attributionControl: true }).setView([46.6, 2.5], 5);
   L.tileLayer(MAP_TILE_URL, { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  /* One canvas for every track rather than one SVG path each.
+     A month is eighty polylines, and with the default renderer each one is a
+     <path> whose d attribute is rewritten, in the document, on every frame of
+     every pan and every flight. Drawn into a single canvas instead, panning
+     costs one redraw. It makes no difference on a desktop — measured at 60
+     frames a second either way — and a large one on a phone, which is where
+     this is actually read. The padding keeps tracks drawn a little beyond the
+     edge so they do not pop in at the border while dragging. */
+  own.trackRenderer = L.canvas({ padding: 0.4 });
   own.tripMap = map;
   own.tripLayers = new Map();
   own.tripGroup = L.layerGroup().addTo(map);
@@ -377,7 +386,9 @@ function syncTracks(trips) {
   trips.forEach((trip) => {
     const key = tripKey(trip);
     if (trip.track.length < 2 || own.tripLayers.has(key)) return;
-    const line = L.polyline(trip.track, { color: accent, weight: 3, opacity: 0.9, smoothFactor: 1.6 });
+    const line = L.polyline(trip.track, {
+      color: accent, weight: 3, opacity: 0.9, smoothFactor: 1.6, renderer: own.trackRenderer,
+    });
     own.tripGroup.addLayer(line);
     own.tripLayers.set(key, line);
   });
@@ -386,13 +397,21 @@ function syncTracks(trips) {
 function styleTracks(trips) {
   if (!own.tripMap) return;
   const selected = typeof own.selectedTrip === 'number' ? trips[own.selectedTrip] : null;
+
+  let selectedLine = null;
   trips.forEach((trip) => {
     const line = own.tripLayers.get(tripKey(trip));
     if (!line) return;
     const lit = !selected || trip === selected;
-    line.setStyle({ weight: lit ? 4 : 2, opacity: lit ? 0.95 : 0.22 });
-    if (lit && selected) line.bringToFront();
+    if (trip === selected) selectedLine = line;
+    // Only when it actually changes. Restyling all eighty on every click
+    // meant eighty redraws to alter one.
+    if (line.__lit !== lit) {
+      line.__lit = lit;
+      line.setStyle({ weight: lit ? 4 : 2, opacity: lit ? 0.95 : 0.22 });
+    }
   });
+  if (selectedLine) selectedLine.bringToFront();
 
   own.tripMarkers.clearLayers();
   if (selected && selected.track.length >= 2) {
@@ -401,8 +420,19 @@ function styleTracks(trips) {
     L.marker(selected.track[selected.track.length - 1], { icon: pin('map-pin') }).addTo(own.tripMarkers);
   }
 
-  const frame = selected ? selected.track : trips.flatMap((trip) => trip.track);
-  if (frame.length) own.tripMap.flyToBounds(frame, { padding: [26, 26], duration: 0.45 });
+  /* The frame to fly to, taken from the lines rather than from their points.
+     It used to flatten every track into one array — twelve thousand pairs,
+     rebuilt on every click — to ask for a bounding box each polyline had
+     already worked out and cached. */
+  const bounds = selectedLine
+    ? selectedLine.getBounds()
+    : [...own.tripLayers.values()].reduce((box, line) => (box ? box.extend(line.getBounds()) : L.latLngBounds(line.getBounds())), null);
+  /* The flight is the heaviest moment on the map: every track is redrawn on
+     every frame of it. Somebody who asked for less motion gets the new frame
+     at once instead — which is also the cheapest thing the map can do. */
+  if (!bounds?.isValid()) return;
+  if (reducedMotion()) own.tripMap.fitBounds(bounds, { padding: [26, 26] });
+  else own.tripMap.flyToBounds(bounds, { padding: [26, 26], duration: 0.45 });
 }
 
 async function loadGeoride() {
