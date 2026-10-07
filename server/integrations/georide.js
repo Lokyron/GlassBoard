@@ -393,11 +393,32 @@ export const isSyncDue = (userId, trackerId) => !cacheGet(syncedKey(userId, trac
 const sync = (userId, trackerId) =>
   runInWorker('georide', { task: 'sync', userId, trackerId }, syncKey(userId, trackerId));
 
+/* How long a failed sync waits before being tried again. The job runs every
+   minute, and the marker below is the only thing standing between a tracker
+   that cannot be reached and sixty calls an hour to somebody's GeoRide
+   account. Short enough that a passing failure costs little, long enough that
+   a lasting one is not a hammer. */
+const RETRY_AFTER_SECONDS = 5 * 60;
+
 /** The worker's half of a sync, exported for it to call. Nothing else should. */
 export async function syncTripsInWorker(userId, trackerId, refreshMinutes) {
-  const count = await syncTrips(userId, trackerId);
-  cacheSet(syncedKey(userId, trackerId), new Date().toISOString(), Math.max(60, refreshMinutes * 60));
-  return count;
+  try {
+    const count = await syncTrips(userId, trackerId);
+    cacheSet(syncedKey(userId, trackerId), new Date().toISOString(), Math.max(60, refreshMinutes * 60));
+    return count;
+  } catch (error) {
+    /* Mark the attempt even though it failed, so the next one waits. Without
+       this the marker is never written, isSyncDue stays true, and the job
+       retries every single minute for as long as the failure lasts.
+       The marker is shorter than a success's, so a tracker that comes back
+       is picked up quickly. */
+    cacheSet(
+      syncedKey(userId, trackerId),
+      new Date().toISOString(),
+      Math.min(RETRY_AFTER_SECONDS, Math.max(60, refreshMinutes * 60))
+    );
+    throw error;
+  }
 }
 
 /**

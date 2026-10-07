@@ -332,6 +332,14 @@ Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registr
 - **URL d'un client de module** : le serveur sert `client/` sur `/modules/<id>/`, donc le dossier
   n'apparaît pas dans l'URL. Le registre importe `/modules/<id>/tile.js`. Un test l'affirme, parce
   que rien d'autre ne le dirait — un décalage ne se voit qu'en chargeant la page.
+- ⚠️ **La feuille de style de Leaflet doit être insérée AVANT celles de l'application.**
+  Elle était dans `index.html` avant `base.css` ; en la chargeant à la demande (2.0) elle se
+  retrouvait **ajoutée après**, et comme `.leaflet-marker-icon{display:block}` et
+  `.gr-pin{display:grid}` ont la même spécificité, c'est l'ordre qui tranche : la moto s'est
+  décalée dans le coin de sa propre pastille et le fond de carte a perdu son thème.
+  `modules/georide/client/leaflet.js` insère donc le `<link>` avant la première feuille existante.
+  C'est le **troisième** avatar du même piège dans ce dépôt, après les media queries et les
+  requêtes de conteneur : *à spécificité égale, le dernier gagne*.
 - **`check:client` n'exécute rien** : il analyse et lie, donc il attrape un import cassé ou un
   export disparu, jamais une référence à une variable locale qu'un déplacement a laissée derrière.
   Après une refonte du navigateur, charger la page reste la seule vérification complète.

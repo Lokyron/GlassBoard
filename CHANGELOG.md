@@ -3,6 +3,21 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Fixed
+
+- **The motorcycle sat in the corner of its own pin.** Loading Leaflet on
+  demand put its stylesheet after the dashboard's instead of before it, and
+  the two style the same classes with the same specificity — so Leaflet's
+  `display: block` quietly beat the rule that centres the icon. The map's
+  background had lost its theme the same way.
+- **A GeoRide sync that failed was retried every minute, for as long as it
+  kept failing.** The marker that spaces attempts out was only written after a
+  success, so an unreachable tracker meant sixty calls an hour to that
+  account. A failed attempt now backs off too, more briefly than a successful
+  one so that a tracker coming back is picked up quickly.
+
 ## 2.0.0 — 2026-10-07
 
 ### Added
