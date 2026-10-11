@@ -3,6 +3,7 @@
 export default {
   id: 'parcels',
   label: 'Parcels',
+  labelKey: 'set.parcels',
   defaultEnabled: false,
   server: () => import('./server.js'),
   // Its own tab in the settings, served from client/pane.js.
@@ -13,6 +14,7 @@ export default {
   tiles: {
     parcels: {
       label: 'Parcels — delivery tracking',
+      labelKey: 'tiletype.parcels',
       singleton: true,
       settings: () => ({}),
     },

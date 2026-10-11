@@ -3,6 +3,55 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Changed
+
+- **One weather card instead of two, and the cities moved into it.** A
+  followed city used to take a card of its own beside the local one, which
+  does not scale past two and spends half the dashboard on the same four
+  numbers. The card is now always where you are; the cities you follow — up to
+  eight, added in **Settings → Weather** by searching for the name — appear as
+  a row of buttons at the top of the detailed forecast, after your current
+  position. The choice lasts as long as the panel is open. Nothing else about
+  the panel changed: the same seven days, the same drawing of the day, the
+  same reading under the pointer.
+- **The city search goes through Open-Meteo's geocoder**, server-side and
+  cached for a week like every other upstream call, and answers with the
+  region and the country — so Lyon in France and Lyon in Mississippi are told
+  apart before you pick one. Nobody types coordinates any more.
+- **The language setting now reaches the names that come from the server.**
+  Module names in the modules tab, tile-type names in the add-a-tile dialog
+  and in a tile's own settings, and the colour themes in the appearance tab
+  were all English whatever language the dashboard was set to: the server
+  names them and the server has no locale. Each now travels as its English
+  text plus the key that names it, and the interface prefers the key. A module
+  that ships without a translation still shows its English name.
+- **The configuration document is at version 2.** A `weather-secondary` tile
+  in an older document becomes the first city of
+  `integrations.weather.cities`, and the tile is removed. The migration runs
+  on every read and is idempotent, so nothing is lost and nothing is done
+  twice.
+
+### Fixed
+
+- **A button in the mail-server settings showed its own translation key.** It
+  asked for `set.save`, which no language defines; it now asks for the one
+  every other dialog uses.
+- **Four controls had an English accessible name in every language** — the
+  account and theme buttons, the bottom dock and the two dialog close
+  buttons. They are translated like the rest now, which matters to whoever
+  reads this dashboard with a screen reader.
+- **A new shortcut, folder or link was born called "Shortcut", "Folder" or
+  "Link"** whatever the language. It takes its first name from the chosen one.
+
+### Added
+
+- **`test/i18n.test.js`**, which holds the translation tables to what was
+  wrong above: the same keys in every language, the same `{placeholders}`, no
+  empty string, every key the interface asks for actually defined, and every
+  name the server sends translated.
+
 ## 2.0.1 — 2026-10-07
 
 ### Changed

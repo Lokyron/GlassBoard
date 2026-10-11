@@ -99,4 +99,93 @@ describe('migrateConfig', () => {
     const migrated = migrateConfig({ version: 1, site: { title: 'Mine' } });
     assert.equal(migrated.version, CONFIG_VERSION);
   });
+
+  /* Version 2 moved the followed city out of the tiles and into the weather
+     settings. The tile type no longer exists, so without the migration the
+     city would be dropped as an unknown type — which is the one outcome a
+     migration is there to prevent. */
+  describe('version 2: the followed city', () => {
+    const v1 = () => ({
+      version: 1,
+      links: [],
+      tiles: [
+        { id: 'tile-local', type: 'weather-local', span: 1, settings: { label: '' } },
+        {
+          id: 'tile-city',
+          type: 'weather-secondary',
+          span: 1,
+          settings: { name: 'Barcelona', latitude: 41.39, longitude: 2.16, timezone: 'Europe/Madrid' },
+        },
+      ],
+    });
+
+    it('becomes a city in the weather settings', () => {
+      const migrated = migrateConfig(v1());
+      assert.deepEqual(
+        migrated.integrations.weather.cities.map(({ name, latitude, longitude }) => ({ name, latitude, longitude })),
+        [{ name: 'Barcelona', latitude: 41.39, longitude: 2.16 }]
+      );
+    });
+
+    it('leaves the dashboard with the one weather tile', () => {
+      const migrated = migrateConfig(v1());
+      assert.deepEqual(migrated.tiles.map((tile) => tile.type), ['weather-local']);
+    });
+
+    it('survives validation, city and all', () => {
+      const { ok, value } = validateConfig(migrateConfig(v1()));
+      assert.ok(ok, 'no error on a migrated document');
+      assert.equal(value.integrations.weather.cities[0].name, 'Barcelona');
+      assert.equal(value.tiles.length, 1);
+    });
+
+    it('does not keep a tile that was never filled in', () => {
+      const migrated = migrateConfig({
+        version: 1,
+        tiles: [{ id: 't', type: 'weather-secondary', settings: { name: '', latitude: 0, longitude: 0 } }],
+      });
+      assert.deepEqual(migrated.integrations.weather.cities, []);
+      assert.deepEqual(migrated.tiles, []);
+    });
+
+    it('is idempotent, because it runs on every read', () => {
+      const once = migrateConfig(v1());
+      const twice = migrateConfig(JSON.parse(JSON.stringify(once)));
+      assert.deepEqual(twice.integrations.weather.cities, once.integrations.weather.cities);
+    });
+
+    it('leaves a document that never had one alone', () => {
+      const migrated = migrateConfig({ version: 1, tiles: [{ id: 'n', type: 'note' }] });
+      assert.equal(migrated.integrations, undefined);
+    });
+  });
+});
+
+describe('the weather cities', () => {
+  const cities = (raw) => validateConfig({ integrations: { weather: { cities: raw } } }).value.integrations.weather.cities;
+
+  it('defaults to none', () => {
+    assert.deepEqual(validateConfig({}).value.integrations.weather.cities, []);
+  });
+
+  it('keeps a well-formed entry and gives it an id', () => {
+    const [city] = cities([{ name: 'Oslo', latitude: 59.91, longitude: 10.75 }]);
+    assert.equal(city.name, 'Oslo');
+    assert.ok(city.id, 'an entry without an id is given one');
+  });
+
+  it('drops an entry with no name, since nothing could label its button', () => {
+    assert.deepEqual(cities([{ latitude: 1, longitude: 2 }]), []);
+  });
+
+  it('caps the list rather than storing a hundred forecasts', () => {
+    const many = Array.from({ length: 30 }, (unused, i) => ({ name: `City ${i}`, latitude: 1, longitude: 2 }));
+    assert.equal(cities(many).length, 8);
+  });
+
+  it('refuses a coordinate off the globe', () => {
+    const result = validateConfig({ integrations: { weather: { cities: [{ name: 'Nowhere', latitude: 999, longitude: 0 }] } } });
+    assert.equal(result.ok, false);
+    assert.equal(result.value.integrations.weather.cities[0].latitude, 90, 'clamped, and reported');
+  });
 });

@@ -24,8 +24,8 @@
   <div class="tb-l"><span class="tb-dot"></span><span id="brand-title">Dashboard</span><span class="sep" id="brand-subtitle"></span></div>
   <div class="tb-c" id="header-date-top">…</div>
   <div class="tb-r"><span class="tb-clock" id="digital-clock-top">--:--:--</span>
-    <button id="account-toggle" class="iconbtn" aria-label="Account" aria-haspopup="menu" aria-expanded="false"><svg class="i" style="font-size:18px" viewBox="0 0 256 256" fill="currentColor" data-i="user-circle"></svg></button>
-    <button id="theme-toggle-top" class="iconbtn" aria-label="Theme"><svg id="theme-icon" class="i" style="font-size:18px" viewBox="0 0 256 256" fill="currentColor" data-i="moon"></svg></button></div>
+    <button id="account-toggle" class="iconbtn" aria-label="Account" data-ta="set.account" aria-haspopup="menu" aria-expanded="false"><svg class="i" style="font-size:18px" viewBox="0 0 256 256" fill="currentColor" data-i="user-circle"></svg></button>
+    <button id="theme-toggle-top" class="iconbtn" aria-label="Theme" data-ta="aria.theme"><svg id="theme-icon" class="i" style="font-size:18px" viewBox="0 0 256 256" fill="currentColor" data-i="moon"></svg></button></div>
 </div>
 
 <div id="account-menu" class="glass" role="menu" hidden>
@@ -39,7 +39,7 @@
   <button class="menu-item" data-action="logout" role="menuitem"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="sign-out"></svg><span data-t="menu.logout">Sign out</span></button>
 </div>
 
-<nav id="dock" class="glass" aria-label="Sections"></nav>
+<nav id="dock" class="glass" aria-label="Sections" data-ta="aria.sections"></nav>
 
 <div id="editbar" class="glass" hidden>
   <span class="editbar-label"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="pencil-simple"></svg><span data-t="edit.mode">Edit mode</span></span>
@@ -81,6 +81,7 @@
   <div class="sheet glass">
     <div class="m-head"><div><h3 id="modal-city">City</h3><div class="muted" data-t="wx.detailed">Detailed forecast</div></div><div id="modal-day-selector" class="days"></div></div>
     <div class="m-body">
+      <div id="modal-place-selector" class="places" hidden></div>
       <div class="wxgrid">
         <div class="box"><div class="k" id="modal-date-label">Today</div><div class="big"><div class="t" id="modal-temp">--°</div><div class="e" id="modal-icon">☀️</div></div></div>
         <div class="mini2"><div class="box"><div class="k" data-t="wx.gusts">Wind gusts</div><div class="v"><span id="modal-wind">--</span> <small>km/h</small></div></div>
@@ -105,7 +106,7 @@
 <div id="folder-modal" class="modal">
   <div class="sheet glass" style="width:min(760px,100%)">
     <div class="m-head"><div class="tb-l"><div id="folder-modal-icon-bg" class="appic" style="width:40px;height:40px;border-radius:12px;font-size:20px"><svg id="folder-modal-icon" class="i" viewBox="0 0 256 256" fill="currentColor" data-i="folder"></svg></div><div><h3 id="folder-modal-title" style="font-size:1.2rem">Folder</h3></div></div>
-      <button class="iconbtn" id="folder-modal-close" aria-label="Close"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="x"></svg></button></div>
+      <button class="iconbtn" id="folder-modal-close" aria-label="Close" data-ta="dlg.close"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="x"></svg></button></div>
     <div class="m-body"><div id="folder-links-grid" class="links"></div></div>
   </div>
 </div>
@@ -154,7 +155,7 @@
 <div id="dialog-modal" class="modal">
   <div class="sheet glass" style="width:min(620px,100%)">
     <div class="m-head"><div><h3 id="dialog-title">…</h3><div class="muted" id="dialog-subtitle"></div></div>
-      <button class="iconbtn" id="dialog-close" aria-label="Close"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="x"></svg></button></div>
+      <button class="iconbtn" id="dialog-close" aria-label="Close" data-ta="dlg.close"><svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="x"></svg></button></div>
     <div class="m-body" id="dialog-body"></div>
   </div>
 </div>

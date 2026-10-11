@@ -5,7 +5,7 @@
 ![No build step](https://img.shields.io/badge/build%20step-none-0a84ff)
 
 A self-hosted dashboard for the services you use every day: a grid of shortcuts,
-weather tiles and optional integrations, all editable from the page itself,
+a weather card and optional integrations, all editable from the page itself,
 behind a login with two-factor authentication.
 
 ![The Glassboard dashboard in dark mode](docs/images/dashboard-dark.png)
@@ -73,8 +73,8 @@ reaches the browser, and no request goes out to a service you did not enable.
   was last used, with a button to end any of them.
 - **Optional integrations**: weather (Open-Meteo), parcel tracking (17TRACK) and
   GeoRide motorcycle tracking. Each tile opens a detail view: seven days of
-  forecast, the steps a parcel has been through, or the rides of the period on
-  an interactive map. A disabled or unconfigured integration never breaks the
+  forecast for where you are or for any city you follow, the steps a parcel has
+  been through, or the rides of the period on an interactive map. A disabled or unconfigured integration never breaks the
   page. The tile explains what is missing, and the rest of the dashboard carries
   on.
 - **Backup and restore**: a single versioned JSON file, from the interface or
@@ -289,7 +289,7 @@ Below 820 px the layout changes rather than shrinks:
   shortcuts, and the clock and year cards last;
 - navigation moves to a **bottom dock**, where a thumb reaches it; while
   editing, the **Save** / **Cancel** bar takes its place;
-- weather tiles pair up side by side, other tiles keep the full width;
+- the places in the forecast panel scroll sideways rather than wrapping;
 - shortcuts become a four-column home screen grid (three below 360 px), with
   one-line labels, and hover effects are disabled so no card stays stuck
   highlighted after a tap;
@@ -340,6 +340,12 @@ the browser's preferred language instead.
 Adding a language is one file: in `public/assets/i18n.js`, add an entry to
 `LOCALE_NAMES` and copy the `en` table. Missing keys fall back to English one by
 one, so a partial translation is perfectly usable and no key ever shows up raw.
+
+Names that come from the server — a module, a tile type, a colour theme — carry
+a translation key beside their English text, so they follow the chosen language
+like everything else. `test/i18n.test.js` holds the tables to it: same keys in
+every language, same `{placeholders}`, no empty string, every key the interface
+asks for defined, and every server-sent name translated.
 
 ## Signing in
 
@@ -473,16 +479,24 @@ server accepts any traffic.
 
 ### Weather, Open-Meteo
 
-No account, no API key. Two kinds of tile: one that follows the browser
-geolocation (with a configurable fallback position) and one for a fixed city.
-City names are resolved through OpenStreetMap Nominatim, server-side and
-cached, so your visitors' IP addresses never reach it. Disable the whole
-integration in **Settings → Weather** and both tiles disappear cleanly.
+No account, no API key. One card, and it shows where the browser says you are,
+with a configurable fallback position for when it will not say. The city name
+is resolved through OpenStreetMap Nominatim, server-side and cached, so your
+visitors' IP addresses never reach it. Disable the whole integration in
+**Settings → Weather** and the card disappears cleanly.
 
-Each tile carries the day's sunrise and sunset under the wind and the rain.
+The card carries the day's sunrise and sunset under the wind and the rain.
 
-Clicking one opens the detailed forecast: seven days to pick from, and for the
-day you pick, one drawing of the whole day. The sun's course arcs over a
+Other places are not cards. Add up to eight cities in **Settings → Weather**,
+searching by name — the search runs through the server against Open-Meteo's own
+geocoder, which answers with the region and the country, so Lyon in France and
+Lyon in Mississippi are told apart before you pick one. They then appear as a
+row of buttons at the top of the detailed forecast, after your current
+position. The choice lasts as long as the panel is open: the card is where you
+are, and reopening it is not meant to show you yesterday's curiosity.
+
+Clicking the card opens the detailed forecast: seven days to pick from, and for
+the day you pick, one drawing of the whole day. The sun's course arcs over a
 horizon, dotted ahead and solid for the part already run, with the sun itself
 sitting where it is right now; the night stretches carry the moon and a few
 stars. Below the horizon, the temperature runs as a line, the hours already

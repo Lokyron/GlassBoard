@@ -4,7 +4,7 @@ Glassboard stores its whole configuration as a single JSON document. Exports
 wrap that document with a little metadata. Both are versioned independently:
 
 - `formatVersion` — the envelope of an export file. Currently `1`.
-- `version` (inside `config`) — the configuration document itself. Currently `1`.
+- `version` (inside `config`) — the configuration document itself. Currently `2`.
 
 An instance refuses a file whose `formatVersion` is higher than it understands,
 and migrates older documents forward on import.
@@ -15,7 +15,7 @@ and migrates older documents forward on import.
 {
   "app": "glassboard",
   "formatVersion": 1,
-  "configVersion": 1,
+  "configVersion": 2,
   "exportedAt": "2026-01-31T09:12:44.081Z",
   "containsSecrets": false,
   "config": { "...": "the document below" },
@@ -46,7 +46,7 @@ An import only restores secrets when it is explicitly asked to.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "site": {
     "title": "Dashboard",
     "subtitle": "Home",
@@ -84,7 +84,10 @@ An import only restores secrets when it is explicitly asked to.
       "useBrowserGeolocation": true,
       "fallback": { "latitude": 48.8566, "longitude": 2.3522 },
       "reverseGeocoding": true,
-      "refreshMinutes": 30
+      "refreshMinutes": 30,
+      "cities": [
+        { "id": "wxc-1", "name": "Barcelona, Catalunya", "latitude": 41.39, "longitude": 2.16 }
+      ]
     },
     "georide": {
       "enabled": false,
@@ -125,9 +128,16 @@ as wide as one with `span: 1`. Accepted range: `0.4` to `4`.
 | `type` | Singleton | `settings` |
 |---|---|---|
 | `weather-local` | yes | `label` |
-| `weather-secondary` | yes | `name`, `latitude`, `longitude`, `timezone` |
 | `georide` | yes | — (configured under `integrations.georide`) |
 | `note` | no | `heading`, `body` |
+| `parcels` | yes | — (configured under `integrations.parcels`) |
+
+There is one weather tile, and it shows where the browser says it is. The other
+places are not tiles: they are `integrations.weather.cities`, at most eight of
+them, and the tile's detailed panel offers them as a row of buttons. A document
+written before version 2 carried a second tile type, `weather-secondary`, for a
+single followed city; the migration turns that tile into the first entry of
+`cities` and removes it from `tiles`.
 
 `site.locale` selects the interface language and the date/time formatting:
 `en`, `fr`, `es`, `de`, `it`, `pt` or `nl`. An unknown value falls back to `en`.

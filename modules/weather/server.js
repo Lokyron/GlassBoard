@@ -5,7 +5,7 @@
  * cached for the account's refresh interval, and the coordinates come from the
  * browser, so there is nothing a job could have fetched in advance. Nothing is
  * parsed here that could hold the event loop. */
-import { getForecast, reverseGeocode } from '../../server/integrations/weather.js';
+import { getForecast, reverseGeocode, searchPlaces } from '../../server/integrations/weather.js';
 import { getConfig } from '../../server/store.js';
 
 const coord = (value, limit) => {
@@ -22,6 +22,19 @@ export function routes(router) {
     try {
       const forecast = await getForecast(latitude, longitude, Math.max(300, weather.refreshMinutes * 60));
       res.json({ ok: true, latitude, longitude, forecast });
+    } catch (error) {
+      res.status(502).json({ ok: false, error: error.message });
+    }
+  });
+
+  /* The city picker in the settings. Searching is reading: it writes nothing
+     and it answers the same list to everybody, which is why the result can be
+     cached across accounts. */
+  router.get('/search', async (req, res) => {
+    const locale = getConfig(req.user.id).site.locale;
+    try {
+      const results = await searchPlaces(req.query.q, locale);
+      res.json({ ok: true, results });
     } catch (error) {
       res.status(502).json({ ok: false, error: error.message });
     }

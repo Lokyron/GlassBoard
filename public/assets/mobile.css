@@ -234,10 +234,16 @@
   .gr-trips#pc-list { max-height: none; }
   /* The seven days fit on one line instead of scrolling out of sight. */
   #modal-day-selector { width: 100%; gap: 5px; }
+  /* The places do the opposite: they keep their width and scroll sideways,
+     because a city name does not shrink to a column the way a weekday does. */
+  #modal-place-selector { margin: 0 -16px; padding: 0 16px 2px; }
   .day-btn { flex: 1 1 0; min-width: 0; padding: 8px 0; border-radius: 13px; }
   .day-btn .dn { font-size: .58rem; letter-spacing: 0; }
   .day-btn .dd { font-size: 1rem; }
   .box { padding: 14px 16px; }
+  /* The row keeps the name and its buttons; the coordinates are reference,
+     not something anyone reads on a phone. */
+  .wx-coords { display: none; }
   #toast { bottom: calc(var(--safe-b) + var(--dock-h) + 24px); max-width: calc(100% - 32px); }
 
   /* While editing, the edit bar takes the dock's place: nothing to navigate to,

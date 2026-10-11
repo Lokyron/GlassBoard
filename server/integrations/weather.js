@@ -6,6 +6,7 @@ import { OSM_CONTACT } from '../env.js';
 
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/reverse';
+const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 
 const FORECAST_PARAMS = new URLSearchParams({
   current: 'temperature_2m,weather_code,wind_speed_10m',
@@ -65,6 +66,48 @@ export async function getForecast(latitude, longitude, ttlSeconds = 900) {
   } catch (error) {
     const stale = cacheGetStale(key);
     if (stale) return { ...stale.value, cached: true, stale: true, error: error.message };
+    throw error;
+  }
+}
+
+/**
+ * Places matching a name, for the city picker in the settings.
+ *
+ * Open-Meteo's own geocoder rather than Nominatim: it answers with exactly
+ * what the picker has to show — the place, its region, its country and its
+ * coordinates — and it is the same service the forecast comes from, so a
+ * result found here is a result the forecast can be asked for.
+ *
+ * Cached by query: typing a city name produces a search per keystroke, and
+ * most of them are prefixes of each other.
+ */
+export async function searchPlaces(query, locale = 'en') {
+  const name = String(query ?? '').trim().slice(0, 80);
+  if (name.length < 2) return [];
+  const language = /^[a-z]{2}$/.test(locale) ? locale : 'en';
+  const key = `weather:search:${language}:${name.toLowerCase()}`;
+
+  const cached = cacheGet(key);
+  if (cached) return cached;
+
+  const params = new URLSearchParams({ name, count: '8', language, format: 'json' });
+  try {
+    const data = await fetchJson(`${GEOCODING_URL}?${params}`, 8000);
+    const places = (Array.isArray(data?.results) ? data.results : []).map((place) => ({
+      name: String(place.name ?? ''),
+      // admin1 is the region or département; it is what separates two places
+      // of the same name in the same country.
+      region: String(place.admin1 ?? ''),
+      country: String(place.country ?? ''),
+      countryCode: String(place.country_code ?? ''),
+      latitude: round(place.latitude),
+      longitude: round(place.longitude),
+    })).filter((place) => place.name && Number.isFinite(place.latitude) && Number.isFinite(place.longitude));
+    cacheSet(key, places, 7 * 24 * 3600);
+    return places;
+  } catch (error) {
+    const stale = cacheGetStale(key);
+    if (stale) return stale.value;
     throw error;
   }
 }

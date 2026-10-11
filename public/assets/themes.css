@@ -119,6 +119,7 @@
 .brand { box-shadow: 0 10px 24px rgba(var(--glow), .45), inset 0 1px 0 rgba(255, 255, 255, .4); }
 .prog > div { box-shadow: 0 0 10px rgba(var(--glow), .5); }
 .day-btn.active { box-shadow: 0 8px 20px rgba(var(--glow), .4); }
+.place-btn.active { box-shadow: 0 8px 20px rgba(var(--glow), .4); }
 .box.alert { border-color: rgba(var(--glow), .4); }
 .btn.primary { box-shadow: 0 8px 20px rgba(var(--glow), .35); }
 .gr-pin { box-shadow: 0 6px 16px rgba(var(--glow), .55), inset 0 1px 0 rgba(255, 255, 255, .4); }

@@ -12,7 +12,7 @@
 ## 1. Vue d'ensemble
 
 - **Rôle & description** : tableau de bord auto-hébergé pour ses services : grille de raccourcis
-  (avec dossiers), tuiles météo, suivi de moto GeoRide, recherche rapide. Tout s'édite directement
+  (avec dossiers), carte météo, suivi de moto GeoRide, recherche rapide. Tout s'édite directement
   sur la page, derrière une authentification en deux temps (mot de passe puis TOTP).
   La configuration vit côté serveur (un document JSON unique, 20 révisions conservées) et s'exporte
   ou se restaure en un fichier. Projet **open source (licence MIT)** pensé pour être publié :
@@ -195,7 +195,7 @@ Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registr
 | `GET /api/health` | Santé + indicateur `setupRequired` |
 | `/api/auth` | `GET /invite` et `POST /invite` (publics), `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
-| `/api/m/weather` | `GET /forecast`, `/place` |
+| `/api/m/weather` | `GET /forecast`, `/place`, `/search` |
 | `/api/m/georide` | `GET /status\|trackers\|summary\|trips`, `POST /login\|logout`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/m/parcels` | `GET /`, `/status`, `/suggestions`, `POST /`, `/refresh`, `/import`, `/suggestions/:id/accept\|ignore`, `/mail/scan\|test`, `PUT/DELETE /key`, `/mail/password`, `DELETE /:id` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start`, `GET /news`, `POST /news/seen` |

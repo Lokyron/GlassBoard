@@ -388,7 +388,7 @@ function startResize(event, index) {
 
 function removeTile(index) {
   const tile = state.config.tiles[index];
-  if (!confirm(t('edit.confirmRemove', { name: state.tileTypes[tile.type]?.label || tile.type }))) return;
+  if (!confirm(t('edit.confirmRemove', { name: labelOf(state.tileTypes[tile.type]) || tile.type }))) return;
   state.config.tiles.splice(index, 1);
   renderTiles();
   refreshData();
@@ -396,6 +396,21 @@ function removeTile(index) {
 
 /** The icon each tile type is offered with; anything new falls back to weather. */
 const TILE_ICONS = { georide: 'motorcycle', note: 'notebook', parcels: 'package' };
+
+/* A name the server sent — a module, a tile type, a theme — shown in the
+   reader's language. The server has no locale, so it sends the English text
+   and the key that names it; t() hands back the key itself when there is no
+   translation, which is how a module that ships without one still gets a
+   readable name. Everything the dashboard draws from the server's metadata
+   goes through here; that is what it took for the language setting to reach
+   the last corners of the interface. */
+export function labelOf(meta) {
+  if (!meta) return '';
+  const key = meta.labelKey;
+  if (!key) return meta.label ?? '';
+  const translated = t(key);
+  return translated === key ? (meta.label ?? key) : translated;
+}
 
 function openAddTileDialog() {
   const used = new Set(state.config.tiles.map((tile) => tile.type));
@@ -408,7 +423,7 @@ function openAddTileDialog() {
     el('div', { class: 'tile-choices' }, available.map(([type, meta]) =>
       el('button', {
         class: 'tile-choice', type: 'button',
-        html: `${svg(TILE_ICONS[type] ?? 'cloud-sun', 'font-size:22px')}<span>${esc(meta.label)}</span>`,
+        html: `${svg(TILE_ICONS[type] ?? 'cloud-sun', 'font-size:22px')}<span>${esc(labelOf(meta))}</span>`,
         onclick: () => { addTile(type); closeDialog(); },
       })
     )),
@@ -420,7 +435,6 @@ function openAddTileDialog() {
 function addTile(type) {
   const tile = { id: uid('tile'), type, span: 1, settings: {} };
   if (type === 'note') tile.settings = { heading: t('note.heading'), body: '' };
-  if (type === 'weather-secondary') tile.settings = { name: '', latitude: 0, longitude: 0, timezone: 'Europe/Paris' };
   if (type === 'weather-local') tile.settings = { label: '' };
   state.config.tiles.push(tile);
   renderTiles();
@@ -436,12 +450,14 @@ function openTileDialog(index) {
     const area = el('textarea', { class: 'inp', rows: '4', oninput: (e) => { tile.settings.body = e.target.value; } });
     area.value = tile.settings.body || '';
     body.appendChild(field(t('dlg.text'), area));
-  } else if (tile.type === 'weather-secondary') {
-    body.appendChild(field(t('dlg.name'), textInput(tile.settings.name, { oninput: (e) => { tile.settings.name = e.target.value; } })));
-    body.appendChild(field('Latitude', textInput(tile.settings.latitude, { type: 'number', step: '0.0001', oninput: (e) => { tile.settings.latitude = Number(e.target.value); } })));
-    body.appendChild(field('Longitude', textInput(tile.settings.longitude, { type: 'number', step: '0.0001', oninput: (e) => { tile.settings.longitude = Number(e.target.value); } })));
   } else if (tile.type === 'weather-local') {
     body.appendChild(field(t('dlg.title'), textInput(tile.settings.label, { oninput: (e) => { tile.settings.label = e.target.value; } })));
+    /* The cities the panel offers are not this tile's business: they belong to
+       the account, and the module's own tab is where they are managed. */
+    body.appendChild(el('button', {
+      class: 'btn ghost', type: 'button', text: t('set.cities'),
+      onclick: () => { closeDialog(); openSettings('weather'); },
+    }));
   } else if (tile.type === 'georide') {
     body.appendChild(el('p', { class: 'fld-h', text: t('set.georide') }));
     body.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('set.title'), onclick: () => { closeDialog(); openSettings('georide'); } }));
@@ -453,7 +469,7 @@ function openTileDialog(index) {
     renderTiles();
     refreshData();
   }));
-  openDialog({ title: t('edit.settings'), subtitle: state.tileTypes[tile.type]?.label ?? '', body });
+  openDialog({ title: t('edit.settings'), subtitle: labelOf(state.tileTypes[tile.type]), body });
 }
 
 /* --------------------------- links in edit mode -------------------------- */
@@ -494,8 +510,8 @@ export function decorateLinksForEditing() {
 
 function addLink(isFolder) {
   const link = isFolder
-    ? { id: uid('lnk'), title: 'Folder', color: '#0a84ff', icon: 'folder', items: [] }
-    : { id: uid('lnk'), title: 'Shortcut', url: 'https://example.org/', color: '#0a84ff', icon: 'link' };
+    ? { id: uid('lnk'), title: t('edit.newFolder'), color: '#0a84ff', icon: 'folder', items: [] }
+    : { id: uid('lnk'), title: t('edit.newShortcut'), url: 'https://example.org/', color: '#0a84ff', icon: 'link' };
   state.config.links.push(link);
   renderLinks();
   openLinkDialog(state.config.links.length - 1, null, { isNew: true });
@@ -558,7 +574,7 @@ function openLinkDialog(index, folderIndex = null, { draft: kept = null, isNew =
         ]));
       });
       list.appendChild(el('button', { class: 'btn ghost', type: 'button', text: t('edit.addItem'), onclick: () => {
-        draft.items.push({ id: uid('sub'), title: 'Link', url: 'https://example.org/', color: draft.color, icon: 'link' });
+        draft.items.push({ id: uid('sub'), title: t('edit.newLink'), url: 'https://example.org/', color: draft.color, icon: 'link' });
         openSubItemDialog(draft, draft.items.length - 1, reopen, { isNew: true });
       } }));
     };
@@ -622,7 +638,7 @@ export function decorateFolderForEditing(folderIndex) {
   });
   grid.appendChild(el('button', { class: 'app app-add', html: `${svg('plus', 'font-size:22px')}<span>${esc(t('edit.addItem'))}</span>`, onclick: () => {
     const items = state.config.links[folderIndex].items;
-    items.push({ id: uid('sub'), title: 'Link', url: 'https://example.org/', color: state.config.links[folderIndex].color, icon: 'link' });
+    items.push({ id: uid('sub'), title: t('edit.newLink'), url: 'https://example.org/', color: state.config.links[folderIndex].color, icon: 'link' });
     openFolder(folderIndex);
     renderLinks();
     openLinkDialog(items.length - 1, folderIndex, { isNew: true });
@@ -1095,7 +1111,7 @@ function smtpPane() {
       },
     }),
     el('button', {
-      class: 'btn primary', type: 'button', text: t('set.save'),
+      class: 'btn primary', type: 'button', text: t('dlg.save'),
       onclick: async () => {
         try {
           await api('/api/admin/smtp', { method: 'PUT', body: onScreen() });
@@ -1153,11 +1169,7 @@ export async function openSettings(section = 'general') {
   for (const [moduleId, meta] of Object.entries(state.modules)) {
     if (!meta.hasPane || draft.modules?.[moduleId]?.enabled !== true) continue;
     sections[moduleId] = () => modulePanes.get(moduleId)?.(draft) ?? el('div', { class: 'pane' });
-    /* t() hands back the key itself when there is none, so a module with no
-       translation falls back to the label its manifest gave. */
-    const key = `set.${moduleId}`;
-    const translated = t(key);
-    labels[moduleId] = translated === key ? meta.label : translated;
+    labels[moduleId] = labelOf(meta);
   }
 
   Object.assign(sections, {
@@ -1236,7 +1248,7 @@ function modulesPane(draft) {
   pane.appendChild(el('p', { class: 'fld-h', text: t('set.modulesHint') }));
   for (const [moduleId, meta] of Object.entries(state.modules)) {
     draft.modules[moduleId] ??= { enabled: false };
-    pane.appendChild(checkbox(meta.label, draft.modules[moduleId].enabled, (value) => {
+    pane.appendChild(checkbox(labelOf(meta), draft.modules[moduleId].enabled, (value) => {
       draft.modules[moduleId].enabled = value;
     }));
   }
@@ -1280,7 +1292,7 @@ function appearancePane(draft) {
   Object.entries(state.themePresets).forEach(([key, meta]) => {
     themes.appendChild(el('button', {
       class: 'theme', type: 'button', 'data-preset': key,
-      html: `<span class="theme-dots">${meta.swatch.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span>${esc(meta.label)}</span>`,
+      html: `<span class="theme-dots">${meta.swatch.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span>${esc(labelOf(meta))}</span>`,
       onclick: () => { appearance.preset = key; paint(); previewFaded(); },
     }));
   });

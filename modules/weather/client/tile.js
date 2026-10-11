@@ -1,19 +1,30 @@
-/* Weather — the two tiles, the detailed panel and the curve of the day.
+/* Weather — the card, the detailed panel and the curve of the day.
  *
  * Open-Meteo is reached through this module's own route; the browser never
  * talks to it directly. Everything the module remembers lives in its own bag
- * of state, which no other module can see. */
+ * of state, which no other module can see.
+ *
+ * There is one card, and it is always the current position. The cities the
+ * account follows are offered inside the panel instead of each taking a card
+ * of their own — so a forecast is one tap away, and the dashboard does not
+ * grow a column every time somebody has family somewhere else. */
 import {
   id, safe, esc, svg, state, moduleState, api, openModal, closeModal,
   tileElement, localDayKey, clockOf,
 } from '/assets/core/kernel.js';
 
+/* Forecasts are kept per place and not per tile: the panel shows places the
+   dashboard has no tile for, and the same coordinates asked for twice must
+   not be fetched twice. The key is the rounded coordinate pair, which is what
+   the server caches on too. */
+const placeKey = (latitude, longitude) => `${latitude.toFixed(2)},${longitude.toFixed(2)}`;
+
 const own = moduleState('weather');
 Object.assign(own, {
-  forecasts: own.forecasts ?? {},   // tileId -> Open-Meteo payload
-  places: own.places ?? {},         // tileId -> resolved city name
-  coords: own.coords ?? {},         // tileId -> { latitude, longitude }
-  modalTile: own.modalTile ?? null,
+  forecasts: own.forecasts ?? {},   // place key -> Open-Meteo payload
+  local: own.local ?? null,         // { latitude, longitude, name } once resolved
+  shownKey: own.shownKey ?? null,   // the place the panel is showing
+  shownName: own.shownName ?? '',
   selectedDay: own.selectedDay ?? 0,
   curve: own.curve ?? null,         // the selected day, folded for the curve
   curveNodes: own.curveNodes ?? null,
@@ -24,16 +35,14 @@ Object.assign(own, {
 const weatherEmoji = (code, day = true) =>
   (code <= 1 ? (day ? '☀️' : '🌙') : code <= 3 ? (day ? '⛅' : '☁️') : code <= 67 ? '🌧️' : '⛈️');
 
-function weatherTileMarkup(tile, index, { local }) {
+/** The cities the account follows, as the panel offers them. */
+const followedCities = () => state.config.integrations.weather.cities ?? [];
+
+function weatherTileMarkup(tile, index) {
   const delay = `animation-delay:.${String(5 * (index + 1)).padStart(2, '0')}s`;
-  const label = local
-    ? esc(tile.settings.label || t('tile.localPosition'))
-    : esc(tile.settings.name || t('tile.followedCity'));
-  const heading = local
-    ? `<h3 data-role="place">${esc(t('tile.searching'))}</h3>`
-    : `<h3>${esc(t('tile.followedCity'))} <span data-role="clock" class="muted" style="font-weight:600"></span></h3>`;
+  const label = esc(tile.settings.label || t('tile.localPosition'));
   return `<article class="card glass wx rise" style="${delay}" data-tile="${tile.id}" data-type="${tile.type}">
-        <div class="wtop"><div><div class="lbl">${label}</div>${heading}</div><div data-role="emoji" class="emoji">${local ? '🧭' : '🏙️'}</div></div>
+        <div class="wtop"><div><div class="lbl">${label}</div><h3 data-role="place">${esc(t('tile.searching'))}</h3></div><div data-role="emoji" class="emoji">🧭</div></div>
         <div class="wmain"><div data-role="temp" class="temp">--°</div><div class="wstats"><span>${esc(t('tile.wind'))} <strong data-role="wind">--</strong> km/h</span><span>${esc(t('tile.rain'))} <strong data-role="rain">--</strong>%</span><span class="wsun" data-role="sun"></span></div></div>
         <div class="spark"><canvas id="spark-${tile.id}"></canvas></div></article>`;
 }
@@ -93,7 +102,7 @@ function drawSpark(canvasId, data, color) {
 
 function updateWeatherTile(tile) {
   const article = tileElement(tile.id);
-  const data = own.forecasts[tile.id];
+  const data = own.local ? own.forecasts[placeKey(own.local.latitude, own.local.longitude)] : null;
   if (!article || !data?.current || !data?.daily) return;
   const current = data.current;
   const daily = data.daily;
@@ -113,43 +122,41 @@ function updateWeatherTile(tile) {
       : '';
   }
   if (data.hourly?.temperature_2m) {
-    drawSpark(`spark-${tile.id}`, data.hourly.temperature_2m.slice(0, 24), tile.type === 'weather-local' ? '#0a84ff' : '#a78bff');
+    drawSpark(`spark-${tile.id}`, data.hourly.temperature_2m.slice(0, 24), '#0a84ff');
   }
-  if (tile.type === 'weather-local') {
-    const place = own.places[tile.id];
-    if (place) safe(el('place'), place);
-  }
+  if (own.local?.name) safe(el('place'), own.local.name);
 }
 
-async function loadWeatherTile(tile) {
+/** Fetch a place's forecast into the cache, or reuse what is already there. */
+async function forecastFor(latitude, longitude, { force = false } = {}) {
+  const key = placeKey(latitude, longitude);
+  if (!force && own.forecasts[key]) return own.forecasts[key];
+  const payload = await api(`/api/m/weather/forecast?latitude=${latitude}&longitude=${longitude}`);
+  own.forecasts[key] = payload.forecast;
+  return payload.forecast;
+}
+
+/** Where we are, what it is called, and what the weather is doing there. */
+async function loadLocal(tile) {
   const weather = state.config.integrations.weather;
-  let latitude;
-  let longitude;
-
-  if (tile.type === 'weather-secondary') {
-    latitude = tile.settings.latitude;
-    longitude = tile.settings.longitude;
-  } else {
-    const position = await currentPosition(weather);
-    latitude = position.latitude;
-    longitude = position.longitude;
-    if (weather.reverseGeocoding) {
-      try {
-        const place = await api(`/api/m/weather/place?latitude=${latitude}&longitude=${longitude}`);
-        own.places[tile.id] = place.name || t('tile.localPosition');
-      } catch {
-        own.places[tile.id] = t('tile.localPosition');
-      }
-    }
+  const position = await currentPosition(weather);
+  const { latitude, longitude } = position;
+  // Without reverse geocoding, or when it fails, the card says where it is
+  // rather than keeping "Locating…" on screen for good.
+  let name = t('tile.localPosition');
+  if (weather.reverseGeocoding) {
+    try {
+      const place = await api(`/api/m/weather/place?latitude=${latitude}&longitude=${longitude}`);
+      name = place.name || name;
+    } catch { /* the generic name stands */ }
   }
+  own.local = { latitude, longitude, name };
 
-  own.coords[tile.id] = { latitude, longitude };
   try {
-    const payload = await api(`/api/m/weather/forecast?latitude=${latitude}&longitude=${longitude}`);
-    own.forecasts[tile.id] = payload.forecast;
-    updateWeatherTile(tile);
+    await forecastFor(latitude, longitude, { force: true });
+    if (tile) updateWeatherTile(tile);
   } catch {
-    const article = tileElement(tile.id);
+    const article = tile ? tileElement(tile.id) : null;
     if (article) safe(article.querySelector('[data-role="place"]'), t('wx.unavailable'));
   }
 }
@@ -167,17 +174,29 @@ function currentPosition(weather) {
   });
 }
 
-function loadWeather() {
-  state.config.tiles
-    .filter((tile) => tile.type === 'weather-local' || tile.type === 'weather-secondary')
-    .forEach((tile) => loadWeatherTile(tile));
+/* A refresh reloads the card, and the panel's place when it is open on a
+   city — leaving a stale forecast on screen because it is not the card's
+   would be the one case where the dashboard lies about its own freshness. */
+async function loadWeather() {
+  const tile = state.config.tiles.find((item) => item.type === 'weather-local');
+  await loadLocal(tile);
+  const open = id('weather-modal')?.classList.contains('open');
+  const city = followedCities().find((item) => placeKey(item.latitude, item.longitude) === own.shownKey);
+  if (open && city) {
+    try {
+      await forecastFor(city.latitude, city.longitude, { force: true });
+      updateWeatherModal();
+    } catch { /* the panel keeps what it has; the next refresh will try again */ }
+  } else if (open) {
+    showPlace(localPlace());
+  }
 }
 
 /* ----------------------------- weather modal ----------------------------- */
 
 function renderDays() {
   const container = id('modal-day-selector');
-  const data = own.forecasts[own.modalTile];
+  const data = own.forecasts[own.shownKey];
   if (!data?.daily?.time) return;
   container.innerHTML = '';
   const today = localDayKey();
@@ -196,7 +215,7 @@ function renderDays() {
 }
 
 function updateWeatherModal() {
-  const data = own.forecasts[own.modalTile];
+  const data = own.forecasts[own.shownKey];
   const daily = data?.daily;
   const i = own.selectedDay;
   if (!daily?.temperature_2m_max?.length) return;
@@ -219,20 +238,83 @@ function updateWeatherModal() {
   renderDayCurve();
 }
 
-function openWeatherModal(tileId, origin = null) {
-  if (!own.forecasts[tileId]) return;
-  const tile = state.config.tiles.find((item) => item.id === tileId);
-  own.modalTile = tileId;
+/* ----------------------------- places in the panel ----------------------- */
+/* The current position first, then the followed cities in the order the
+   settings list them. The choice lasts as long as the panel is open: the card
+   is the local forecast, and reopening it should not show somebody else's
+   weather because of a tap made yesterday. */
+
+const localPlace = () => ({
+  key: own.local ? placeKey(own.local.latitude, own.local.longitude) : null,
+  name: own.local?.name || t('tile.localPosition'),
+  local: true,
+  latitude: own.local?.latitude,
+  longitude: own.local?.longitude,
+});
+
+const panelPlaces = () => [
+  localPlace(),
+  ...followedCities().map((city) => ({
+    key: placeKey(city.latitude, city.longitude),
+    name: city.name,
+    local: false,
+    latitude: city.latitude,
+    longitude: city.longitude,
+  })),
+];
+
+function renderPlaces() {
+  const container = id('modal-place-selector');
+  if (!container) return;
+  const places = panelPlaces();
+  // One place and nothing to choose between: the row would be a label.
+  container.hidden = places.length < 2;
+  container.innerHTML = '';
+  places.forEach((place) => {
+    /* Built the same way the day buttons above are, with createElement rather
+       than the core's el(): updateWeatherTile keeps a local el() of its own
+       for its data-role lookups, and one name for two things in one file is
+       one too many. */
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `place-btn${place.key === own.shownKey ? ' active' : ''}`;
+    button.innerHTML = `${svg(place.local ? 'navigation-arrow' : 'buildings')}<span>${esc(place.name)}</span>`;
+    button.addEventListener('click', () => showPlace(place));
+    container.appendChild(button);
+  });
+}
+
+/** Show a place in the open panel, fetching its forecast if this is the first
+ *  time it is asked for. */
+async function showPlace(place) {
+  if (!place?.key) return;
+  own.shownKey = place.key;
+  own.shownName = place.name;
   own.selectedDay = 0;
-  safe(
-    id('modal-city'),
-    tile.type === 'weather-local'
-      ? own.places[tileId] || t('tile.localPosition')
-      : tile.settings.name || t('tile.followedCity')
-  );
-  openModal('weather-modal', origin ?? tileElement(tileId));
+  safe(id('modal-city'), place.name);
+  renderPlaces();
+
+  if (!own.forecasts[place.key]) {
+    safe(id('modal-date-label'), t('wx.loading'));
+    try {
+      await forecastFor(place.latitude, place.longitude);
+    } catch {
+      safe(id('modal-date-label'), t('wx.unavailable'));
+      return;
+    }
+    // Another place may have been picked while this one was in the air.
+    if (own.shownKey !== place.key) return;
+  }
   renderDays();
   updateWeatherModal();
+}
+
+function openWeatherModal(origin = null) {
+  const place = localPlace();
+  if (!place.key || !own.forecasts[place.key]) return;
+  const tile = state.config.tiles.find((item) => item.type === 'weather-local');
+  openModal('weather-modal', origin ?? (tile ? tileElement(tile.id) : null));
+  showPlace(place);
 }
 
 /* --------------------------- weather: day curve --------------------------- */
@@ -301,7 +383,7 @@ function smoothPath(points) {
 
 /** The selected day, folded into one object the renderer and the cursor share. */
 function dayCurveModel() {
-  const data = own.forecasts[own.modalTile];
+  const data = own.forecasts[own.shownKey];
   const hourly = data?.hourly;
   const daily = data?.daily;
   if (!hourly?.time || !daily?.time) return null;
@@ -726,12 +808,8 @@ export default {
 
   tiles: {
     'weather-local': {
-      markup: (tile, index) => weatherTileMarkup(tile, index, { local: true }),
-      open: (article) => openWeatherModal(article.dataset.tile, article),
-    },
-    'weather-secondary': {
-      markup: (tile, index) => weatherTileMarkup(tile, index, { local: false }),
-      open: (article) => openWeatherModal(article.dataset.tile, article),
+      markup: weatherTileMarkup,
+      open: (article) => openWeatherModal(article),
     },
   },
 
@@ -750,21 +828,18 @@ export default {
 
   refresh: loadWeather,
 
-  /* One side-navigation entry per weather tile, which is what the original
-     page did and what makes a followed city reachable without scrolling. */
+  /* One entry, because there is one card. A followed city used to need its
+     own entry to be reachable without scrolling; it is now one tap inside the
+     panel this entry opens. */
   navEntries: () =>
     state.config.tiles
-      .filter((tile) => tile.type === 'weather-local' || tile.type === 'weather-secondary')
-      .map((tile) => {
-        const local = tile.type === 'weather-local';
-        const label = local ? t('nav.localWeather') : tile.settings.name || t('tile.followedCity');
-        return {
-          icon: local ? 'navigation-arrow' : 'buildings',
-          label,
-          short: local ? t('dock.weather') : label,
-          run: () => openWeatherModal(tile.id),
-        };
-      }),
+      .filter((tile) => tile.type === 'weather-local')
+      .map(() => ({
+        icon: 'navigation-arrow',
+        label: t('nav.localWeather'),
+        short: t('dock.weather'),
+        run: () => openWeatherModal(),
+      })),
 
   onResize() {
     document.querySelectorAll('.spark canvas').forEach((canvas) => {

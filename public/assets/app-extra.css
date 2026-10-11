@@ -602,7 +602,7 @@ a.btn{text-decoration:none}
    most of what makes an interface feel attached to you. */
 .app,.wx,.card.georide,.card.parcels{transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
 .app:active,.wx:active,.card.georide:active,.card.parcels:active{transform:scale(.975);transition-duration:.1s}
-.day-btn:active,.gr-period .day-btn:active{transform:scale(.94);transition-duration:.08s}
+.day-btn:active,.gr-period .day-btn:active,.place-btn:active{transform:scale(.94);transition-duration:.08s}
 .iconbtn:active,.btn:active{transform:scale(.95);transition-duration:.08s}
 .menu-item:active{transform:scale(.985);transition-duration:.08s}
 
@@ -614,5 +614,18 @@ a.btn{text-decoration:none}
   .modal,.modal.closing{transition:none}
   .sheet.fly-in,.sheet.fly-out,#folder-links-grid .app.in{animation:none!important}
   .app:active,.wx:active,.card.georide:active,.card.parcels:active,
-  .day-btn:active,.iconbtn:active,.btn:active,.menu-item:active{transform:none}
+  .day-btn:active,.place-btn:active,.iconbtn:active,.btn:active,.menu-item:active{transform:none}
 }
+
+/* ------------------------- weather: the city list ------------------------- */
+/* The search results sit between the field and the list, as a short stack
+   rather than a floating menu: a dialog that is already scrolling is no place
+   for something positioned over it. */
+.wx-results{display:grid;gap:6px}
+.wx-result{display:flex;align-items:baseline;gap:8px;text-align:left;padding:9px 12px;border-radius:12px;
+  border:1px solid var(--border);background:var(--surface-soft);color:var(--text);cursor:pointer;
+  font-family:inherit;font-size:.88rem;transition:background .2s var(--ease)}
+.wx-result:hover{background:var(--surface)}
+.wx-result-name{font-weight:650}
+.wx-result-where{color:var(--muted);font-size:.78rem}
+.wx-coords{color:var(--muted);font-size:.76rem;font-variant-numeric:tabular-nums;flex:none}

@@ -59,6 +59,9 @@ export function defaultConfig() {
         fallback: { latitude: 48.8566, longitude: 2.3522 },
         reverseGeocoding: true,
         refreshMinutes: 30,
+        // The panel offers the current position and nothing else until
+        // somebody adds a city in the settings.
+        cities: [],
       },
       georide: {
         enabled: false,

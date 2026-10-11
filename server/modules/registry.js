@@ -29,6 +29,12 @@ export const TILE_TYPES = Object.fromEntries(
       type,
       {
         label: tile.label,
+        /* The server has no locale — the browser does. So a label travels as
+           the English text plus the key that names it, and the interface
+           prefers the key. Without this the tile and module names were the
+           one corner of the dashboard that stayed in English whatever the
+           language was set to. */
+        labelKey: tile.labelKey ?? null,
         singleton: Boolean(tile.singleton),
         module: module.id,
         // Kept under its old name: this is what the editor reads to decide
@@ -112,7 +118,7 @@ export const isModuleEnabled = (config, moduleId) =>
 export const moduleSummary = () =>
   Object.fromEntries(MODULES.map((module) => [
     module.id,
-    { label: module.label, hasPane: Boolean(module.hasPane) },
+    { label: module.label, labelKey: module.labelKey ?? null, hasPane: Boolean(module.hasPane) },
   ]));
 
 /** A tile's own settings, validated by the module that declares the type. */

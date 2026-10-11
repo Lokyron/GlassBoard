@@ -4,6 +4,7 @@
 export default {
   id: 'georide',
   label: 'GeoRide',
+  labelKey: 'set.georide',
   defaultEnabled: false,
   server: () => import('./server.js'),
   // Its own tab in the settings, served from client/pane.js.
@@ -14,6 +15,7 @@ export default {
   tiles: {
     georide: {
       label: 'GeoRide — weekly stats and map',
+      labelKey: 'tiletype.georide',
       singleton: true,
       // Everything this tile shows is governed by the integration settings,
       // which are per account rather than per tile.

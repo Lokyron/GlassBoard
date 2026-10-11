@@ -4,7 +4,7 @@
 
 import { TILE_TYPES, validateIntegrations, validateTileSettings, validateModules } from './modules/registry.js';
 
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 
 /* Tile types and the integrations block are no longer listed here: each module
    declares its own, and the registry composes them. Re-exported so that every
@@ -12,14 +12,16 @@ export const CONFIG_VERSION = 1;
    conceptually even now that they are assembled elsewhere. */
 export { TILE_TYPES };
 
-/** Colour presets. The ids match the [data-preset] rules in public/assets/themes.css. */
+/** Colour presets. The ids match the [data-preset] rules in public/assets/themes.css.
+ *  Each carries a translation key beside its English label, for the same reason
+ *  the module labels do: the server has no locale, the browser has. */
 export const THEME_PRESETS = {
-  default: { label: 'Glass blue', swatch: ['#0a84ff', '#5e5ce6', '#64d2ff'] },
-  ember: { label: 'Ember', swatch: ['#ff7a18', '#f54e2e', '#ffb648'] },
-  forest: { label: 'Forest', swatch: ['#15a06a', '#0e7c86', '#6fd39b'] },
-  violet: { label: 'Violet', swatch: ['#8b5cf6', '#c026d3', '#a78bfa'] },
-  rose: { label: 'Rose', swatch: ['#f43f5e', '#c2185b', '#fb7185'] },
-  slate: { label: 'Slate', swatch: ['#64748b', '#475569', '#94a3b8'] },
+  default: { label: 'Glass blue', labelKey: 'theme.default', swatch: ['#0a84ff', '#5e5ce6', '#64d2ff'] },
+  ember: { label: 'Ember', labelKey: 'theme.ember', swatch: ['#ff7a18', '#f54e2e', '#ffb648'] },
+  forest: { label: 'Forest', labelKey: 'theme.forest', swatch: ['#15a06a', '#0e7c86', '#6fd39b'] },
+  violet: { label: 'Violet', labelKey: 'theme.violet', swatch: ['#8b5cf6', '#c026d3', '#a78bfa'] },
+  rose: { label: 'Rose', labelKey: 'theme.rose', swatch: ['#f43f5e', '#c2185b', '#fb7185'] },
+  slate: { label: 'Slate', labelKey: 'theme.slate', swatch: ['#64748b', '#475569', '#94a3b8'] },
 };
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -233,7 +235,43 @@ export function migrateConfig(raw) {
       `This file was produced by a newer Glassboard (config version ${from}, this instance supports ${CONFIG_VERSION}). Upgrade before importing.`
     );
   }
-  // No migration steps yet — version 1 is the initial format.
+  if (from < 2) doc = toVersion2(doc);
   doc.version = CONFIG_VERSION;
   return doc;
+}
+
+/**
+ * Version 2: the followed-city tile becomes a city in the weather settings.
+ *
+ * Dropping the tile type without this would have made `weather-secondary` an
+ * unknown type, and an unknown type is dropped with an error — so the city
+ * somebody had been following would vanish along with its tile. Moving it
+ * keeps it, one step to the left: it is now one of the places the detailed
+ * panel offers.
+ */
+function toVersion2(doc) {
+  if (!Array.isArray(doc.tiles)) return doc;
+  const followed = doc.tiles.filter((tile) => tile?.type === 'weather-secondary');
+  if (followed.length === 0) return doc;
+
+  const integrations = { ...(doc.integrations ?? {}) };
+  const weather = { ...(integrations.weather ?? {}) };
+  const cities = Array.isArray(weather.cities) ? [...weather.cities] : [];
+  for (const tile of followed) {
+    const name = typeof tile.settings?.name === 'string' ? tile.settings.name.trim() : '';
+    const latitude = Number(tile.settings?.latitude);
+    const longitude = Number(tile.settings?.longitude);
+    // A tile that was never filled in carries no city worth keeping.
+    if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    if (cities.some((city) => city.name === name)) continue;
+    cities.push({ id: `wxc-${cities.length + 1}`, name, latitude, longitude });
+  }
+
+  weather.cities = cities;
+  integrations.weather = weather;
+  return {
+    ...doc,
+    integrations,
+    tiles: doc.tiles.filter((tile) => tile?.type !== 'weather-secondary'),
+  };
 }

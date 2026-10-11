@@ -145,6 +145,18 @@ body{min-height:100vh;color:var(--text);overflow-x:hidden;letter-spacing:-.012em
 .day-btn.active{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 8px 20px rgba(10,132,255,.4)}
 .day-btn.active .dd{color:#fff}
 .m-body{display:grid;gap:16px;position:relative;z-index:2}
+/* The place picker in the weather panel: the current position, then the
+   followed cities. One row that scrolls sideways rather than wrapping, so the
+   panel's height never depends on how many cities somebody follows. */
+.places{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.places::-webkit-scrollbar{display:none}
+.place-btn{display:flex;align-items:center;gap:7px;flex:none;padding:8px 14px;border-radius:14px;
+  border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;
+  font-family:inherit;font-size:.86rem;font-weight:620;transition:all .25s var(--ease)}
+.place-btn .i{font-size:15px;opacity:.85}
+.place-btn:hover{transform:translateY(-2px);color:var(--text)}
+.place-btn.active{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 8px 20px rgba(10,132,255,.4)}
+.place-btn.active .i{opacity:1}
 .wxgrid{display:grid;gap:16px;grid-template-columns:1.2fr .8fr}
 .box{border:1px solid var(--border);border-radius:var(--rlg);background:var(--surface);padding:18px;box-shadow:var(--shadow-soft)}
 .box .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}

@@ -232,7 +232,7 @@ describe('module switches', () => {
 
   it('shut the whole module\'s routes, not one handler', async () => {
     await setModule('weather', false);
-    for (const route of ['/api/m/weather/forecast', '/api/m/weather/place?latitude=48&longitude=2']) {
+    for (const route of ['/api/m/weather/forecast', '/api/m/weather/place?latitude=48&longitude=2', '/api/m/weather/search?q=paris']) {
       const response = await get(route);
       assert.equal(response.status, 404, route);
       assert.equal(response.json.code, 'module_disabled');
@@ -287,6 +287,15 @@ describe('module routes', () => {
     const place = await get('/api/m/weather/place?latitude=48&longitude=2');
     assert.equal(place.status, 200);
     assert.equal(place.json.name, '');
+  });
+
+  it('answers a city search too short to be one without leaving the machine', async () => {
+    /* Under two characters the geocoder is not called at all, which is what
+       makes this assertable offline — and what keeps a search field from
+       firing a request on the first keystroke. */
+    const response = await get('/api/m/weather/search?q=a');
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json.results, []);
   });
 
   it('serves every module\'s tile at the URL the registry imports', async () => {

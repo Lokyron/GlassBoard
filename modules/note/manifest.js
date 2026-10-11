@@ -3,11 +3,13 @@
 export default {
   id: 'note',
   label: 'Note',
+  labelKey: 'set.note',
   defaultEnabled: true,
 
   tiles: {
     note: {
       label: 'Note',
+      labelKey: 'tiletype.note',
       singleton: false,
       settings: (v, s, path) => ({
         heading: v.str(s.heading, `${path}.heading`, { max: 80, fallback: 'Note' }),
