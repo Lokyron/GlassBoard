@@ -395,6 +395,62 @@ function ensureAnAdminExists() {
 
 migrateToAccounts();
 
+/* ------------------------ one ride, one row ------------------------------
+   A ride used to be keyed by the API's numeric id when it had one and by its
+   start time when it did not — and GeoRide gives a ride its id only once the
+   ride is over. So a ride seen while it was being ridden was written down
+   under its start time, then written down a second time under its id, and the
+   second copy arrived after the ride had settled, with no positions: no track,
+   and a top speed of zero. The month's distance counted both.
+
+   The key is the start instant now. This collapses what the old scheme left
+   behind: for each ride, the row with a track wins, and it is rekeyed. Driven
+   off the shape of the data rather than a version number, so running it twice
+   does nothing the second time. */
+export function migrateTripKeys() {
+  if (!tableExists('georide_trips')) return;
+  const stale = db
+    .prepare('SELECT COUNT(*) AS n FROM georide_trips WHERE trip_key <> CAST(started_at AS TEXT)')
+    .get().n;
+  if (stale === 0) return;
+
+  const rows = db
+    .prepare('SELECT rowid, user_id, tracker_id, trip_key, started_at, top_kmh, trip FROM georide_trips')
+    .all();
+  /* The best row for a ride is the one that still has its track; between two
+     with a track, the longer one. A row with no track is only ever kept when
+     it is all there is. */
+  const score = (row) => {
+    try {
+      return (JSON.parse(row.trip).track ?? []).length;
+    } catch {
+      return -1;
+    }
+  };
+  const best = new Map();
+  for (const row of rows) {
+    const id = `${row.user_id}|${row.tracker_id}|${row.started_at}`;
+    const current = best.get(id);
+    if (!current || score(row) > score(current)) best.set(id, row);
+  }
+
+  const keep = new Set([...best.values()].map((row) => row.rowid));
+  db.exec('BEGIN');
+  try {
+    const drop = db.prepare('DELETE FROM georide_trips WHERE rowid = ?');
+    for (const row of rows) if (!keep.has(row.rowid)) drop.run(row.rowid);
+    db.prepare('UPDATE georide_trips SET trip_key = CAST(started_at AS TEXT) WHERE trip_key <> CAST(started_at AS TEXT)').run();
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  const removed = rows.length - keep.size;
+  console.log(`[glassboard] georide: ${stale} ride(s) rekeyed${removed ? `, ${removed} duplicate(s) removed` : ''}`);
+}
+
+migrateTripKeys();
+
 /* Indexes on the per-account column, created once the column is certain to be
    there — which is only true after the migration, never before it. */
 db.exec(`
@@ -622,7 +678,20 @@ export function latestTripRow(userId, trackerId) {
  * the one already on record: a ride that was still in progress last time
  * simply replaces itself, rather than arriving twice or staying truncated.
  */
+/**
+ * Write rides down, and never lose a track doing it.
+ *
+ * A ride that has settled comes back from the API without positions — they
+ * are outside the window the sync asked for — so an update would otherwise
+ * replace a real track with an empty one and a top speed with zero. The
+ * scalars are taken from the new answer, which is the finished ride's own
+ * account of itself; the track and the top speed are kept from what is
+ * already on record when the new answer has none.
+ */
 export function saveTripRows(userId, trackerId, rows, { pruneBefore = null } = {}) {
+  const priorOf = db.prepare(
+    'SELECT trip, top_kmh FROM georide_trips WHERE user_id = ? AND tracker_id = ? AND trip_key = ?'
+  );
   const insert = db.prepare(
     `INSERT INTO georide_trips
        (user_id, tracker_id, trip_key, started_at, ended_at,
@@ -640,17 +709,32 @@ export function saveTripRows(userId, trackerId, rows, { pruneBefore = null } = {
   db.exec('BEGIN');
   try {
     for (const row of rows) {
+      let trip = row.trip;
+      let topKmh = Math.round(Number(trip.topSpeedKmh) || 0);
+      if (!trip.track?.length) {
+        const prior = priorOf.get(Number(userId), Number(trackerId), String(row.key));
+        let kept = null;
+        try {
+          kept = prior ? JSON.parse(prior.trip) : null;
+        } catch {
+          kept = null;
+        }
+        if (kept?.track?.length) {
+          topKmh = Math.max(topKmh, Math.round(Number(prior.top_kmh) || 0));
+          trip = { ...trip, track: kept.track, topSpeedKmh: topKmh };
+        }
+      }
       insert.run(
         Number(userId),
         Number(trackerId),
         String(row.key),
         Math.round(row.startedAt),
         Math.round(row.endedAt),
-        Number(row.trip.distanceKm) || 0,
-        Math.round(Number(row.trip.durationMinutes) || 0),
-        Math.round(Number(row.trip.averageSpeedKmh) || 0),
-        Math.round(Number(row.trip.topSpeedKmh) || 0),
-        JSON.stringify(row.trip)
+        Number(trip.distanceKm) || 0,
+        Math.round(Number(trip.durationMinutes) || 0),
+        Math.round(Number(trip.averageSpeedKmh) || 0),
+        topKmh,
+        JSON.stringify(trip)
       );
     }
     if (pruneBefore !== null) {

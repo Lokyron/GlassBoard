@@ -84,6 +84,25 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **Some rides had no track and a top speed of zero, and the month's distance
+  counted them twice.** GeoRide gives a ride its numeric id only once the ride
+  is over: while it is being ridden, `/trips` returns it without one. A ride
+  was keyed by that id when it had one and by its start time when it did not,
+  so a ride seen while it was being ridden changed identity halfway through
+  its life and was written down a second time — and the second copy, arriving
+  after the ride had settled, came with no positions at all. The reader saw
+  the ride listed twice, once with a track and a real top speed and once with
+  neither, and the totals summed both.
+
+  A ride is keyed by the instant it started now, which is the one thing that
+  does not change and which one tracker cannot have two of. Two further
+  changes make that hold: a ride that comes back without positions is written
+  down rather than dropped, and the store refuses to replace a track with
+  nothing — so a ride that ends between two syncs gets its final distance and
+  duration without losing the track gathered while it was being ridden. The
+  rides the old scheme left behind are collapsed on start-up, keeping the copy
+  that still has its track.
+
 - **A button in the mail-server settings showed its own translation key.** It
   asked for `set.save`, which no language defines; it now asks for the one
   every other dialog uses.

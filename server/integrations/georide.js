@@ -15,7 +15,7 @@
 // much to ask for on a cache expiry — see `georide_trips` in server/db.js.
 import {
   getSecret, setSecret, cacheGet, cacheGetStale, cacheSet, cacheDeletePrefix, getMeta, setMeta,
-  listTripRows, tripTotals, latestTripRow, listTripKeys, saveTripRows, deleteTripRows, deleteTripsBefore,
+  listTripRows, tripTotals, latestTripRow, saveTripRows, deleteTripRows, deleteTripsBefore,
 } from '../db.js';
 import { encrypt, decrypt } from '../crypto.js';
 import { runInWorker } from '../modules/workers.js';
@@ -273,8 +273,9 @@ function rememberTracker(userId, trackerId, picked) {
   return value;
 }
 
-/** One ride, as it is stored and as the browser receives it. */
-function buildTrip(raw, positions) {
+/** One ride, as it is stored and as the browser receives it.
+ *  Exported for the test that holds its key to being stable. */
+export function buildTrip(raw, positions) {
   const startedAt = new Date(raw.startTime).getTime();
   const endedAt = new Date(raw.endTime).getTime();
   if (!Number.isFinite(startedAt)) return null;
@@ -283,9 +284,19 @@ function buildTrip(raw, positions) {
     : [];
   const topKnots = own.reduce((max, p) => Math.max(max, p.speed), 0);
   return {
-    // The API's own id when there is one. Failing that, the instant it started,
-    // which one tracker cannot have two of.
-    key: String(raw.id ?? raw.startTime ?? startedAt),
+    /* The instant it started, and never the API's id.
+     *
+     * GeoRide hands a ride its numeric id only once the ride is over: while it
+     * is in progress `/trips` returns it without one. Keying on the id meant a
+     * ride changed identity halfway through its life and was written down
+     * twice — once under its start time, once under the id — and the second
+     * copy, arriving after the ride had settled, came with no positions at
+     * all. That is where the rides with no track and a top speed of zero came
+     * from, and why a month's distance was being over-counted.
+     *
+     * The start instant is the one thing that does not change, and one tracker
+     * cannot be on two rides at the same millisecond. */
+    key: String(startedAt),
     startedAt,
     endedAt: Number.isFinite(endedAt) ? endedAt : startedAt,
     trip: {
@@ -356,15 +367,15 @@ async function syncTrips(userId, trackerId) {
     .filter((p) => Number.isFinite(p.at) && Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
     .sort((a, b) => a.at - b.at);
 
-  /* A ride that is already on record and comes back with no positions is not a
-     ride with no track: its positions were simply outside what was asked for.
-     Left alone rather than overwritten, which is also what keeps this honest
-     if the API ever answers with rides that merely overlap the window instead
-     of starting inside it. */
-  const known = listTripKeys(userId, trackerId);
+  /* A ride that comes back with no positions is not a ride with no track: once
+     it has settled its positions are simply outside what was asked for. Such a
+     ride used to be dropped here; it is written down now, and the store is
+     what refuses to replace a track with nothing — so a ride that ends between
+     two syncs gets its final distance and duration without losing the track
+     gathered while it was still being ridden. */
   const rows = asList(tripsPayload, 'trips')
     .map((raw) => buildTrip(raw, positions))
-    .filter((row) => row && !(row.trip.track.length === 0 && known.has(row.key)));
+    .filter(Boolean);
 
   saveTripRows(userId, trackerId, rows, {
     pruneBefore: periodStart(RETENTION_DAYS).getTime(),

@@ -266,7 +266,16 @@ Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registr
     du dernier passage est stocké à moitié, et repartir de sa fin le laisserait tronqué pour toujours ;
   - sauf s'il est **terminé depuis plus de `SETTLED_MINUTES`** : ses positions ne sont alors plus
     demandées du tout, sinon une moto garée coûte un trajet entier de GPS toutes les cinq minutes ;
-  - un trajet **déjà stocké qui revient sans positions** n'est pas réécrit (sa trace serait effacée) ;
+  - un trajet **qui revient sans positions** est bien réécrit, mais `saveTripRows` **refuse de
+    remplacer une trace par du vide** : les chiffres sont pris de la nouvelle réponse, la trace et la
+    vitesse maximale sont gardées de l'ancienne. (Avant, la ligne était simplement ignorée, et un
+    trajet terminé entre deux synchronisations restait figé sur ses chiffres de mi-parcours.) ;
+  - ⚠️ **la clé d'un trajet est l'instant de son départ, jamais l'identifiant de l'API** : GeoRide ne
+    donne son numéro à un trajet **qu'une fois le trajet terminé**, donc une clé tirée de
+    l'identifiant change au milieu de la vie du trajet. Le trajet était alors écrit deux fois — une
+    fois sous son heure de départ, une fois sous son numéro — et la seconde copie, arrivée après
+    `SETTLED_MINUTES`, n'avait aucune position : ni trace, ni vitesse maximale, et la distance du mois
+    comptée deux fois ;
   - **une seule synchronisation à la fois** par traceur (`syncing`), sinon la tuile et le mois, demandés
     au même instant à chaque chargement de page, rapatrient tous les deux le mois complet.
   `refreshMinutes` ne veut plus dire « durée de vie d'une réponse en cache » mais « fréquence d'appel
