@@ -5,7 +5,39 @@ Notable changes, newest first. The format follows
 
 ## Unreleased
 
+### Added
+
+- **A Proxmox VE card, read-only.** One node: its processor, its memory, its
+  system disk and how long it has been up, with the number of guests running
+  under them. Opening it lists every virtual machine and container with its
+  state, its processor and its memory, and the storages with how full each
+  one is — amber past four fifths, red past nine tenths. Set up in
+  **Settings → Proxmox** with the host, the port and an API token (make it
+  with the `PVEAuditor` role); the token secret is encrypted with
+  `APP_SECRET` and never comes back to the browser.
+
+  Read-only is a property of the module and not an omission: an audit token
+  cannot change anything, every call is a GET, and there is no route here that
+  could start or stop a guest. A dashboard left open on a phone cannot turn a
+  homelab off by being sat on.
+
+  Two things are worth knowing. A Proxmox host normally presents a certificate
+  it signed itself, and Glassboard refuses it like any other unverifiable
+  certificate until you tick **accept a self-signed certificate** — the test
+  button says in so many words that this is what failed, so nobody turns it on
+  without knowing. And this is the one integration that does not go through
+  `fetch`: `node:https` is what takes an agent, and an agent is what it takes
+  to accept that certificate deliberately and per account.
+
 ### Changed
+
+- **The settings tabs run in a sensible order, and Account is one tab.**
+  General, Appearance and Modules, then one tab per switched-on module, then
+  Account, then what belongs to the instance rather than to the dashboard: the
+  mail server, the backups, About. "Account" and "Accounts" used to be
+  separate tabs at opposite ends of the row, which is a reading puzzle nobody
+  should have to solve; your own account and, for an administrator, the
+  instance's accounts are now one tab, yours first.
 
 - **One weather card instead of two, and the cities moved into it.** A
   followed city used to take a card of its own beside the local one, which

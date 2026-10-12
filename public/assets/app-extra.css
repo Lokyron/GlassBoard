@@ -600,8 +600,8 @@ a.btn{text-decoration:none}
 
 /* Press feedback. A card that answers the finger before the panel arrives is
    most of what makes an interface feel attached to you. */
-.app,.wx,.card.georide,.card.parcels{transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
-.app:active,.wx:active,.card.georide:active,.card.parcels:active{transform:scale(.975);transition-duration:.1s}
+.app,.wx,.card.georide,.card.parcels,.card.pve{transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
+.app:active,.wx:active,.card.georide:active,.card.parcels:active,.card.pve:active{transform:scale(.975);transition-duration:.1s}
 .day-btn:active,.gr-period .day-btn:active,.place-btn:active{transform:scale(.94);transition-duration:.08s}
 .iconbtn:active,.btn:active{transform:scale(.95);transition-duration:.08s}
 .menu-item:active{transform:scale(.985);transition-duration:.08s}
@@ -613,7 +613,7 @@ a.btn{text-decoration:none}
 @media(prefers-reduced-motion:reduce){
   .modal,.modal.closing{transition:none}
   .sheet.fly-in,.sheet.fly-out,#folder-links-grid .app.in{animation:none!important}
-  .app:active,.wx:active,.card.georide:active,.card.parcels:active,
+  .app:active,.wx:active,.card.georide:active,.card.parcels:active,.card.pve:active,
   .day-btn:active,.place-btn:active,.iconbtn:active,.btn:active,.menu-item:active{transform:none}
 }
 
@@ -629,3 +629,60 @@ a.btn{text-decoration:none}
 .wx-result-name{font-weight:650}
 .wx-result-where{color:var(--muted);font-size:.78rem}
 .wx-coords{color:var(--muted);font-size:.76rem;font-variant-numeric:tabular-nums;flex:none}
+
+/* ----------------------------- Proxmox tile ------------------------------ */
+/* The card reuses the GeoRide stat grid, so the two insight cards read the
+   same way. What is its own is the warning tone: past four fifths of a disk
+   or a memory a homelab is a weekend away from a problem, and the figure
+   should say so before the reader has to do the division. */
+.card.pve{container-type:inline-size}
+.gr-stat .v.warn{color:#eab308}
+.gr-stat .v.bad{color:#ff453a}
+/* Two columns, never four. GeoRide's four fit because its figures are a number
+   and a two-letter unit; here each cell carries "43%" over "40 GB / 94 GB",
+   and a quarter of a card is not enough for the second line. Written after the
+   container query it overrides — and with a class more, since a container
+   query adds no specificity of its own. */
+.pve .gr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pve .gr-stat .s{font-size:.68rem;color:var(--muted);font-variant-numeric:tabular-nums;
+  margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body:not(.editing) .pve.pve-clickable{cursor:pointer}
+
+/* Proxmox detail view: the nodes, then every guest, then the storages. */
+.pve-nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.pve-node{display:grid;gap:9px}
+.pve-node-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pve-node-name{font-weight:700;font-size:1.02rem}
+.pve-pill{padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:700;color:var(--muted);
+  background:var(--surface-soft);border:1px solid var(--border)}
+.pve-pill.on{color:#34c759;border-color:rgba(52,199,89,.4)}
+/* Label, figure, bar, detail — four rows that line up down the card whatever
+   the numbers are, which is what makes three meters comparable at a glance. */
+.pve-meter{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:baseline}
+.pve-meter span{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.pve-meter strong{font-size:.95rem;font-weight:750;font-variant-numeric:tabular-nums}
+.pve-meter small{grid-column:1/-1;color:var(--muted);font-size:.74rem;font-variant-numeric:tabular-nums}
+.pve-bar{grid-column:1/-1;height:6px;border-radius:999px;background:var(--surface-soft);
+  border:1px solid var(--border);overflow:hidden}
+.pve-bar>div{height:100%;background:var(--accent);border-radius:999px;transition:width .4s var(--ease)}
+.pve-bar.warn>div{background:#eab308}
+.pve-bar.bad>div{background:#ff453a}
+
+.pve-guests-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.pve-guests{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;
+  max-height:46vh;overflow:auto;padding-right:4px;scrollbar-width:thin}
+/* A guest is a reading, not a button: no pointer, no hover lift. */
+.pve-guest{cursor:default}
+.pve-guest:hover{border-color:var(--border)}
+.pve-guest.off .pve-guest-name{color:var(--muted)}
+.pve-guest-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pve-kind{padding:1px 7px;border-radius:999px;font-size:.62rem;font-weight:750;letter-spacing:.04em;
+  color:var(--muted);background:var(--surface-soft);border:1px solid var(--border);flex:none}
+.pve-vmid{margin-left:auto;color:var(--muted);font-size:.74rem;font-variant-numeric:tabular-nums;flex:none}
+
+.pve-storages{display:grid;gap:10px}
+.pve-storages-head{font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.pve-storage{display:grid;gap:5px}
+.pve-storage-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:.88rem;font-weight:650}
+.pve-storage-head small{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}

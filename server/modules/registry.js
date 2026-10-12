@@ -11,9 +11,12 @@
 import weather from '../../modules/weather/manifest.js';
 import georide from '../../modules/georide/manifest.js';
 import parcels from '../../modules/parcels/manifest.js';
+import pve from '../../modules/pve/manifest.js';
 import note from '../../modules/note/manifest.js';
 
-export const MODULES = [weather, georide, parcels, note];
+/* The order is the order the settings dialog lists the module tabs in, which
+   is why it is not alphabetical: it follows how often a reader opens them. */
+export const MODULES = [weather, georide, parcels, pve, note];
 
 const byId = new Map(MODULES.map((module) => [module.id, module]));
 export const getModule = (id) => byId.get(id) ?? null;

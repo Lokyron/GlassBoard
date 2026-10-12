@@ -89,6 +89,13 @@ An import only restores secrets when it is explicitly asked to.
         { "id": "wxc-1", "name": "Barcelona, Catalunya", "latitude": 41.39, "longitude": 2.16 }
       ]
     },
+    "pve": {
+      "host": "",
+      "port": 8006,
+      "allowSelfSigned": false,
+      "node": "",
+      "refreshMinutes": 2
+    },
     "georide": {
       "enabled": false,
       "trackerId": null,
@@ -131,6 +138,7 @@ as wide as one with `span: 1`. Accepted range: `0.4` to `4`.
 | `georide` | yes | — (configured under `integrations.georide`) |
 | `note` | no | `heading`, `body` |
 | `parcels` | yes | — (configured under `integrations.parcels`) |
+| `pve` | yes | — (configured under `integrations.pve`) |
 
 There is one weather tile, and it shows where the browser says it is. The other
 places are not tiles: they are `integrations.weather.cities`, at most eight of
@@ -158,6 +166,17 @@ An entry is either a **shortcut** (it has `url`) or a **folder** (it has
 generic link icon. `color` must be `#rrggbb`.
 
 `url` must be absolute and use `http:` or `https:`. Anything else is refused.
+
+### Proxmox
+
+`host` is a name or an address on its own — no scheme, no port and no path;
+the port is its own field. `allowSelfSigned` is off by default: a Proxmox host
+normally presents a certificate it signed itself, and turning this on is how
+you say that this particular certificate is yours. `node` names the node the
+card shows, and empty means the first one, which is the right answer for a
+standalone host. The API token is **not** in this document: like every other
+credential it lives encrypted in the data directory, and an export carries it
+only when explicitly asked to.
 
 ## Validation
 

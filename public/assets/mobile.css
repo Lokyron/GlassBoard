@@ -241,6 +241,9 @@
   .day-btn .dn { font-size: .58rem; letter-spacing: 0; }
   .day-btn .dd { font-size: 1rem; }
   .box { padding: 14px 16px; }
+  /* One guest per line: two columns of truncated names tell you nothing. */
+  .pve-guests { grid-template-columns: 1fr; max-height: none; }
+  .pve-nodes { grid-template-columns: 1fr; }
   /* The row keeps the name and its buttons; the coordinates are reference,
      not something anyone reads on a phone. */
   .wx-coords { display: none; }

@@ -69,11 +69,12 @@ Glassboard/
 │   │   ├── workers.js      # pool de worker_threads : le travail lourd hors de la boucle
 │   │   └── worker-host.js  # l'autre moitié, importée par un worker.js de module
 │   ├── routes/             # auth.js, config.js, appearance.js, update.js, admin.js
-│   └── integrations/       # weather.js, georide.js, parcels.js, mailbox.js, imap.js, map-tiles.js
+│   └── integrations/       # weather.js, georide.js, parcels.js, pve.js, mailbox.js, imap.js, map-tiles.js
 ├── modules/                # une fonctionnalité = un dossier (voir modules/README.md)
 │   ├── weather/            # manifest.js, server.js, client/{tile,pane}.js
 │   ├── georide/            # + jobs.js, worker.js, client/leaflet.js
 │   ├── parcels/            # + jobs.js, worker.js
+│   ├── pve/                # + jobs.js ; lecture seule d'un hyperviseur Proxmox
 │   └── note/               # le plus petit : un manifeste et un rendu, rien d'autre
 ├── public/
 │   ├── index.html          # charge /assets/main.js en <script type="module">
@@ -196,6 +197,7 @@ Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registr
 | `/api/auth` | `GET /invite` et `POST /invite` (publics), `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
 | `/api/m/weather` | `GET /forecast`, `/place`, `/search` |
+| `/api/m/pve` | `GET /status\|snapshot`, `POST /test`, `PUT/DELETE /token` — **aucune écriture vers Proxmox** |
 | `/api/m/georide` | `GET /status\|trackers\|summary\|trips`, `POST /login\|logout`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/m/parcels` | `GET /`, `/status`, `/suggestions`, `POST /`, `/refresh`, `/import`, `/suggestions/:id/accept\|ignore`, `/mail/scan\|test`, `PUT/DELETE /key`, `/mail/password`, `DELETE /:id` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start`, `GET /news`, `POST /news/seen` |

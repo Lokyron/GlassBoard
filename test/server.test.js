@@ -228,6 +228,7 @@ describe('module switches', () => {
     assert.equal(config.modules.note.enabled, true);
     assert.equal(config.modules.georide.enabled, false, 'nothing to connect to yet');
     assert.equal(config.modules.parcels.enabled, false);
+    assert.equal(config.modules.pve.enabled, false);
   });
 
   it('shut the whole module\'s routes, not one handler', async () => {
@@ -289,6 +290,36 @@ describe('module routes', () => {
     assert.equal(place.json.name, '');
   });
 
+  it('says Proxmox is not set up rather than reaching for a host', async () => {
+    /* No token and no host, so the snapshot route answers without opening a
+       socket — which is what makes this assertable offline, and what keeps a
+       fresh dashboard from waiting on a timeout it was never going to win. */
+    await setModule('pve', true);
+    const response = await get('/api/m/pve/snapshot');
+    assert.equal(response.status, 200);
+    assert.equal(response.json.configured, false);
+    const status = await get('/api/m/pve/status');
+    assert.equal(status.json.configured, false);
+    assert.equal(status.json.tokenId, '');
+    await setModule('pve', false);
+  });
+
+  it('refuses a malformed Proxmox token id instead of putting it in a header', async () => {
+    await setModule('pve', true);
+    const response = await call('PUT', '/api/m/pve/token', { tokenId: 'nope', tokenSecret: 'x' });
+    assert.equal(response.status, 400);
+    await setModule('pve', false);
+  });
+
+  it('shuts the Proxmox routes with the module', async () => {
+    await setModule('pve', false);
+    for (const route of ['/api/m/pve/snapshot', '/api/m/pve/status']) {
+      const response = await get(route);
+      assert.equal(response.status, 404, route);
+      assert.equal(response.json.code, 'module_disabled');
+    }
+  });
+
   it('answers a city search too short to be one without leaving the machine', async () => {
     /* Under two characters the geocoder is not called at all, which is what
        makes this assertable offline — and what keeps a search field from
@@ -303,7 +334,7 @@ describe('module routes', () => {
        mounts each module's client/ folder at `/modules/<id>`. The two have to
        agree, and nothing but this says so — a mismatch is a feature that
        silently does not load. */
-    for (const moduleId of ['weather', 'georide', 'parcels', 'note']) {
+    for (const moduleId of ['weather', 'georide', 'parcels', 'pve', 'note']) {
       const response = await get(`/modules/${moduleId}/tile.js`);
       assert.equal(response.status, 200, `/modules/${moduleId}/tile.js`);
       assert.match(response.text, /export default/);

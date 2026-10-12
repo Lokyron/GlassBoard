@@ -152,6 +152,20 @@
   </div>
 </div>
 
+<div id="pve-modal" class="modal">
+  <div class="sheet glass" style="width:min(1040px,100%)">
+    <div class="m-head"><div><h3 id="pve-modal-title">Proxmox</h3><div class="muted" id="pve-modal-sub"></div></div>
+      <div class="muted" id="pve-fetched"></div></div>
+    <div class="m-body">
+      <div class="pve-nodes" id="pve-nodes"></div>
+      <div class="pve-guests-head"><span data-t="pve.guests">Virtual machines and containers</span>
+        <span class="muted" id="pve-guests-count"></span></div>
+      <div class="pve-guests" id="pve-guests"></div>
+      <div class="pve-storages" id="pve-storages" hidden></div>
+    </div>
+  </div>
+</div>
+
 <div id="dialog-modal" class="modal">
   <div class="sheet glass" style="width:min(620px,100%)">
     <div class="m-head"><div><h3 id="dialog-title">…</h3><div class="muted" id="dialog-subtitle"></div></div>

@@ -847,8 +847,13 @@ function untilLabel(iso) {
   return t('adm.inDays', { n: Math.round(minutes / 1440) });
 }
 
-function accountsPane() {
+/* The instance's accounts. Lives at the bottom of the Account tab rather than
+   in a tab of its own, so "your account" and "the accounts" are one place.
+   `heading` is what tells it it is the second half of somebody else's pane
+   and should announce itself with a rule across the width. */
+function accountsPane({ heading = false } = {}) {
   const pane = el('div', { class: 'pane' });
+  if (heading) pane.appendChild(el('h4', { class: 'pane-title', text: t('adm.tab') }));
   const list = el('div', { class: 'adm-list' });
   const invites = el('div', { class: 'adm-list' });
   const invitesTitle = el('div', { class: 'fld-l', text: t('adm.pending'), hidden: true });
@@ -1152,6 +1157,10 @@ export async function openSettings(section = 'general') {
   const tabs = el('div', { class: 'tabs' });
   const panes = el('div', { class: 'panes' });
 
+  /* The tabs are built in the order they are read, and insertion order is
+     what a plain object preserves — so this block *is* the running order:
+     what the dashboard looks like, then what it is made of, then each
+     switched-on module, then you, then the instance. */
   const sections = {
     general: () => generalPane(draft),
     appearance: () => appearancePane(draft),
@@ -1172,14 +1181,32 @@ export async function openSettings(section = 'general') {
     labels[moduleId] = labelOf(meta);
   }
 
+  /* One "Account" tab, not two. Your own account and, for an administrator,
+     the instance's accounts were separate tabs sitting at opposite ends of
+     the row, and "Account" next to "Accounts" is a reading puzzle nobody
+     should have to solve. They are one tab now, yours first.
+
+     The administration panes exist only for an administrator. Hiding them is
+     a courtesy to everyone else, not the control: every route behind them
+     refuses a standard account on its own. */
+  const admin = Boolean(state.me?.admin);
+  sections.account = () => {
+    const pane = accountPane();
+    if (admin) pane.appendChild(accountsPane({ heading: true }));
+    return pane;
+  };
+  labels.account = t('set.account');
+
+  if (admin) {
+    sections.smtp = () => smtpPane();
+    labels.smtp = t('smtp.tab');
+  }
+
   Object.assign(sections, {
-    account: () => accountPane(),
     data: () => dataPane(),
     about: () => aboutPane(),
   });
-  Object.assign(labels, {
-    account: t('set.account'), data: t('set.data'), about: t('set.about'),
-  });
+  Object.assign(labels, { data: t('set.data'), about: t('set.about') });
 
   /* Fetched before the dialog opens, so switching tab never shows a blank
      pane while a file is in the air. Only the modules that are on. */
@@ -1196,16 +1223,6 @@ export async function openSettings(section = 'general') {
         }
       })
   );
-
-  /* The two administration tabs exist only for an administrator. Hiding them
-     is a courtesy to everyone else, not the control: every route behind them
-     refuses a standard account on its own. */
-  if (state.me?.admin) {
-    sections.accounts = () => accountsPane();
-    sections.smtp = () => smtpPane();
-    labels.accounts = t('adm.tab');
-    labels.smtp = t('smtp.tab');
-  }
 
   const show = (name) => {
     panes.innerHTML = '';

@@ -71,10 +71,12 @@ reaches the browser, and no request goes out to a service you did not enable.
   address and how long ago, and both screens show the same short code to
   compare. Settings list every open session, how each was opened and when it
   was last used, with a button to end any of them.
-- **Optional integrations**: weather (Open-Meteo), parcel tracking (17TRACK) and
-  GeoRide motorcycle tracking. Each tile opens a detail view: seven days of
-  forecast for where you are or for any city you follow, the steps a parcel has
-  been through, or the rides of the period on an interactive map. A disabled or unconfigured integration never breaks the
+- **Optional integrations**: weather (Open-Meteo), parcel tracking (17TRACK),
+  GeoRide motorcycle tracking and a read-only view of a Proxmox VE host. Each
+  tile opens a detail view: seven days of forecast for where you are or for any
+  city you follow, the steps a parcel has been through, the rides of the period
+  on an interactive map, or every virtual machine and container on the
+  hypervisor. A disabled or unconfigured integration never breaks the
   page. The tile explains what is missing, and the rest of the dashboard carries
   on.
 - **Backup and restore**: a single versioned JSON file, from the interface or
@@ -256,6 +258,13 @@ Nothing is written to the server until you press **Save**.
 Everything that is not a tile lives in **Settings**, reachable from the same
 menu: the dashboard name, the language, the clocks, the search engine, the
 integrations, the appearance, the account and the backups.
+
+The tabs run in the order you would reach for them: General, Appearance and
+Modules, then one tab per switched-on module, then Account, and then what
+belongs to the instance rather than to the dashboard — the mail server, the
+backups and About. **Account** is one tab, not two: your own password, your
+second factor and your open sessions, and under them, for an administrator,
+the accounts of the instance.
 
 ![The settings dialog](docs/images/settings.png)
 
@@ -511,6 +520,31 @@ tab to it and the arrow keys walk the hours, Escape drops the reading.
 ![The detailed forecast](docs/images/forecast.png)
 
 <sub>The screenshot above predates this drawing and will be retaken.</sub>
+
+### Proxmox VE, read-only
+
+The card shows one node: its processor, its memory, its system disk and how
+long it has been up, with the number of guests running under them. Opening it
+lists every virtual machine and container with its state, its processor and
+its memory, and the storages with how full each one is. Past four fifths, a
+figure turns amber; past nine tenths, red.
+
+Set it up in **Settings → Proxmox**: the host on its own (no `https://`, no
+path), the port, and an **API token**. Make the token in Proxmox under
+*Datacenter → Permissions → API Tokens → Add*, then give it a role under
+*Datacenter → Permissions → Add → API Token Permission* with path `/` and role
+`PVEAuditor`. Proxmox shows the secret once. It is stored encrypted with
+`APP_SECRET` in your data directory and never comes back to the browser.
+
+A Proxmox host normally presents a certificate it signed itself, which is
+refused like any other unverifiable certificate until you tick **accept a
+self-signed certificate**. Left unticked, the test button tells you that is
+what failed, so nobody turns it on without knowing they did.
+
+**Read-only, and not merely by omission**: an audit token cannot change
+anything, every call is a GET, and there is no route in this module that could
+start or stop a guest. A dashboard left open on a phone cannot turn a homelab
+off by being sat on.
 
 ### GeoRide, motorcycle tracker
 
