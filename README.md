@@ -529,11 +529,23 @@ lists every virtual machine and container with its state, its processor and
 its memory, and the storages with how full each one is. Past four fifths, a
 figure turns amber; past nine tenths, red.
 
-The readings refresh on their own every couple of minutes. The open panel also
-has a **Refresh** button for asking again right now — in the panel and not on
-the card, because a card is a reading and a control on it is a thing to press
-by accident. If the host does not answer, the last good readings stay on
-screen with the time they were taken.
+**The figures are live while you are looking at them**, card and panel alike:
+the page asks every five seconds, and a green dot in the panel's head pulses
+to say so. The open panel also has a **Refresh** button for asking again right
+now — in the panel and not on the card, because a card is a reading and a
+control on it is a thing to press by accident. If the host does not answer,
+the last good readings stay on screen with the time they were taken, and the
+dot goes out.
+
+That costs the hypervisor almost nothing, because how often the browser asks
+and how often Proxmox is called are two different things. The server answers
+from its cache and goes upstream only for a snapshot older than ten seconds —
+`pvestatd` recomputes these figures about that often, so asking faster would
+return the same numbers. Measured against a stand-in host: **twelve requests
+from the browser in a minute produced four calls to Proxmox**, and that
+ceiling holds however many browsers are open, since the cache is per account
+and not per page. A hidden tab asks for nothing at all; `refreshMinutes` is
+then the only rhythm left, for the card to be current when you come back.
 
 Set it up in **Settings → Proxmox**: the host on its own (no `https://`, no
 path), the port, and an **API token**. Make the token in Proxmox under

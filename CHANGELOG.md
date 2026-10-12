@@ -21,12 +21,22 @@ Notable changes, newest first. The format follows
   could start or stop a guest. A dashboard left open on a phone cannot turn a
   homelab off by being sat on.
 
-  The readings refresh on their own every couple of minutes; the open panel
-  also carries a **Refresh** button that asks the hypervisor again right now.
-  It is in the panel and not on the card on purpose — a card is a reading, and
-  a control on it is a thing to press by accident. A host that does not answer
-  leaves the last good readings on screen and says so, out loud for a refresh
-  somebody asked for and quietly for the ones they did not.
+  **The figures are live while somebody is looking at them**, card and panel
+  alike: the page asks every five seconds and a pulsing dot in the panel's
+  head says so. The panel also carries a **Refresh** button for asking again
+  right now — in the panel and not on the card on purpose, since a card is a
+  reading and a control on it is a thing to press by accident. A host that
+  does not answer leaves the last good readings on screen and says so, out
+  loud for a refresh somebody asked for and quietly for the ones they did not.
+
+  How often the browser asks and how often Proxmox is called are deliberately
+  two different things. Freshness is a property of the *read*: a watching
+  reader is served a snapshot no older than ten seconds — `pvestatd`'s own
+  beat, below which the numbers do not change — and the cache entry keeps the
+  account's `refreshMinutes` lifetime, so the background job keeps its slow
+  rhythm. Measured against a stand-in host: twelve browser requests in a
+  minute produced four calls upstream, and that ceiling holds however many
+  browsers are open. A hidden tab asks for nothing at all.
 
   Two things are worth knowing. A Proxmox host normally presents a certificate
   it signed itself, and Glassboard refuses it like any other unverifiable

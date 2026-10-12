@@ -174,7 +174,11 @@ the port is its own field. `allowSelfSigned` is off by default: a Proxmox host
 normally presents a certificate it signed itself, and turning this on is how
 you say that this particular certificate is yours. `node` names the node the
 card shows, and empty means the first one, which is the right answer for a
-standalone host. The API token is **not** in this document: like every other
+standalone host. `refreshMinutes` is the **background** rhythm, the one that
+keeps the card current for a dashboard nobody is looking at; a dashboard that
+is open asks every few seconds instead, and the ceiling on how often Proxmox
+is actually called is a ten-second floor in the integration, not this
+setting. The API token is **not** in this document: like every other
 credential it lives encrypted in the data directory, and an export carries it
 only when explicitly asked to.
 

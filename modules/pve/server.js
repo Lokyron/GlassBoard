@@ -65,13 +65,17 @@ export function routes(router) {
     }
   });
 
+  /* `live=1` says a reader has the dashboard in front of them and wants
+     figures of the moment. It asks for a stricter freshness, not for a
+     fetch: the ceiling on how often Proxmox is actually called lives in the
+     integration, so this parameter cannot be used to hammer anything. */
   router.get('/snapshot', async (req, res) => {
     const settings = getConfig(req.user.id).integrations.pve;
     if (!pve.isConfigured(req.user.id) || !settings.host) {
       return res.json({ ok: true, configured: false });
     }
     try {
-      const snapshot = await pve.getSnapshot(req.user.id, settings);
+      const snapshot = await pve.getSnapshot(req.user.id, settings, { live: req.query.live === '1' });
       res.json({ ok: true, configured: true, snapshot });
     } catch (error) {
       res.status(502).json({ ok: false, configured: true, error: error.message });

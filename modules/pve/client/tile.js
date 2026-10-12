@@ -10,11 +10,25 @@ import {
   id, safe, esc, svg, state, moduleState, api, toast, openModal, closeModal, tileElement,
 } from '/assets/core/kernel.js';
 
+/* How often the page asks while somebody is in front of it.
+ *
+ * Five seconds, and it is not what decides the load on the hypervisor: the
+ * server answers from its cache and only goes upstream for a snapshot older
+ * than ten seconds, so this rate costs at most six calls a minute however
+ * many browsers are open. What it does decide is how fresh the figures look,
+ * and under ten seconds there is nothing left to gain — `pvestatd` recomputes
+ * them about that often.
+ *
+ * It stops dead when the tab is hidden. A dashboard nobody is looking at is
+ * not worth a single request, on a phone least of all. */
+const LIVE_SECONDS = 5;
+
 const own = moduleState('pve');
 Object.assign(own, {
   snapshot: own.snapshot ?? null,
   error: own.error ?? '',
   configured: own.configured ?? false,
+  timer: own.timer ?? null,
 });
 
 /* -------------------------------- figures -------------------------------- */
@@ -127,9 +141,9 @@ const when = (iso) => {
     : date.toLocaleTimeString(state.config.site.locale, { hour: '2-digit', minute: '2-digit' });
 };
 
-async function loadPve() {
+async function loadPve({ live = false } = {}) {
   try {
-    const payload = await api('/api/m/pve/snapshot');
+    const payload = await api(`/api/m/pve/snapshot${live ? '?live=1' : ''}`);
     own.configured = payload.configured === true;
     own.snapshot = payload.snapshot ?? null;
     own.error = '';
@@ -142,6 +156,23 @@ async function loadPve() {
   const tile = state.config.tiles.find((item) => item.type === 'pve');
   if (tile) renderPveTile(tile);
   if (id('pve-modal')?.classList.contains('open')) renderPveModal();
+}
+
+/* ---------------------------------- live --------------------------------- */
+
+const hasTile = () => state.config.tiles.some((tile) => tile.type === 'pve');
+
+function stopLive() {
+  if (own.timer) clearInterval(own.timer);
+  own.timer = null;
+}
+
+/** Start, restart or decline to start the live tick, depending on whether
+ *  there is anything to show and anyone to show it to. */
+function startLive() {
+  stopLive();
+  if (document.hidden || !hasTile()) return;
+  own.timer = setInterval(() => loadPve({ live: true }), LIVE_SECONDS * 1000);
 }
 
 /* --------------------------------- panel --------------------------------- */
@@ -211,6 +242,7 @@ function renderPveModal() {
     ? `<div class="pve-storages-head">${esc(t('pve.storage'))}</div>${storages.map(storageRow).join('')}`
     : '';
 
+  id('pve-live')?.classList.toggle('off', Boolean(snapshot?.stale) || !snapshot);
   safe(id('pve-fetched'), snapshot?.fetchedAt
     ? t(snapshot.stale ? 'pve.stale' : 'pve.fetched', { when: when(snapshot.fetchedAt) })
     : '');
@@ -267,8 +299,20 @@ export default {
   },
 
   mounted() {
+    /* The tick is restarted on every render, because a render may have added
+       or removed the tile. The listeners below are wired once. */
+    startLive();
     if (own.wired) return;
     own.wired = true;
+    /* The core stops its own timers when the tab goes away but has no way to
+       tell a module to stop its, so the module listens for itself. Coming
+       back asks at once rather than waiting out an interval: the figures on
+       screen are as old as the time spent in another tab. */
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return stopLive();
+      loadPve({ live: true });
+      startLive();
+    });
     id('pve-modal').addEventListener('click', (event) => {
       if (event.target === id('pve-modal')) closeModal('pve-modal');
     });
@@ -288,4 +332,8 @@ export default {
       })),
 
   closeViews: () => closeModal('pve-modal'),
+
+  /* A re-render throws the tile away; the tick that feeds it goes too, and
+     mounted() starts a new one if there is still a tile to feed. */
+  unmount: stopLive,
 };

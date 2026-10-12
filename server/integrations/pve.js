@@ -24,6 +24,15 @@ import http from 'node:http';
 import { cacheGet, cacheGetStale, cacheSet, cacheDeletePrefix, getSecret, setSecret } from '../db.js';
 import { encrypt, decrypt } from '../crypto.js';
 
+/* How old a snapshot may be and still answer a reader who is watching.
+ *
+ * Ten seconds because that is `pvestatd`'s own beat: Proxmox recomputes these
+ * figures about that often, so asking faster returns the same numbers twice.
+ * It is a *freshness requirement on the read*, not a shorter cache: the entry
+ * is still stored for the account's refresh interval, so the background job
+ * keeps its own slow rhythm for a dashboard nobody is looking at. */
+const LIVE_MAX_AGE_MS = 10_000;
+
 const SECRET_TOKEN_ID = 'pve.tokenId';
 const SECRET_TOKEN_SECRET = 'pve.tokenSecret';
 
@@ -278,12 +287,17 @@ export function shapeSnapshot(resources, version) {
  *
  * A host that has gone down does not blank the card: the last good snapshot is
  * served with `stale` set, and the card says when it was taken.
+ *
+ * `live` is a reader with the dashboard in front of them: they get a snapshot
+ * no older than LIVE_MAX_AGE_MS, which is what caps the upstream rate however
+ * fast the browser asks, and however many browsers are open. Nobody watching
+ * means nothing fetched beyond the background job's own beat.
  */
-export async function getSnapshot(userId, settings, { force = false } = {}) {
+export async function getSnapshot(userId, settings, { force = false, live = false } = {}) {
   const key = snapshotKey(userId);
   if (!force) {
     const fresh = cacheGet(key);
-    if (fresh) return { ...fresh, cached: true };
+    if (fresh && !(live && olderThan(fresh.fetchedAt, LIVE_MAX_AGE_MS))) return { ...fresh, cached: true };
   }
 
   const where = connection(userId, settings);
@@ -303,6 +317,13 @@ export async function getSnapshot(userId, settings, { force = false } = {}) {
     if (stale) return { ...stale.value, cached: true, stale: true, error: error.message };
     throw error;
   }
+}
+
+/** Age of a snapshot, from the timestamp it carries. A missing or unreadable
+ *  one counts as old: better one call too many than a figure frozen for good. */
+function olderThan(fetchedAt, maxAgeMs) {
+  const taken = new Date(fetchedAt ?? 0).getTime();
+  return !Number.isFinite(taken) || Date.now() - taken > maxAgeMs;
 }
 
 /** Is the cached snapshot old enough that the job should fetch another? */

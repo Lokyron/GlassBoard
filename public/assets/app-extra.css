@@ -671,7 +671,14 @@ body:not(.editing) .pve.pve-clickable{cursor:pointer}
 /* The time of the reading and the button that renews it, together on the
    right of the panel's head — the button lives here and nowhere else, because
    a card is a reading and not a control. */
-.pve-head-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.pve-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+/* The figures renew themselves while you watch; this is how you can tell,
+   without a word for it. It goes out when the host stops answering, which is
+   the same moment the heading starts saying "last reached at". */
+.pve-live{width:7px;height:7px;border-radius:50%;background:#34c759;flex:none;animation:pve-pulse 2.4s var(--ease) infinite}
+.pve-live.off{background:var(--muted);animation:none}
+@keyframes pve-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(52,199,89,.45)}50%{opacity:.45;box-shadow:0 0 0 5px rgba(52,199,89,0)}}
+@media(prefers-reduced-motion:reduce){.pve-live{animation:none}}
 .pve-head-right .btn{padding:7px 14px;font-size:.84rem}
 .pve-guests-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
   font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
