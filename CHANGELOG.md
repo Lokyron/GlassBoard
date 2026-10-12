@@ -21,6 +21,13 @@ Notable changes, newest first. The format follows
   could start or stop a guest. A dashboard left open on a phone cannot turn a
   homelab off by being sat on.
 
+  The readings refresh on their own every couple of minutes; the open panel
+  also carries a **Refresh** button that asks the hypervisor again right now.
+  It is in the panel and not on the card on purpose — a card is a reading, and
+  a control on it is a thing to press by accident. A host that does not answer
+  leaves the last good readings on screen and says so, out loud for a refresh
+  somebody asked for and quietly for the ones they did not.
+
   Two things are worth knowing. A Proxmox host normally presents a certificate
   it signed itself, and Glassboard refuses it like any other unverifiable
   certificate until you tick **accept a self-signed certificate** — the test

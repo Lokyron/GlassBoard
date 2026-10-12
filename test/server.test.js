@@ -304,6 +304,16 @@ describe('module routes', () => {
     await setModule('pve', false);
   });
 
+  it('offers a forced refresh, and it says the same thing when nothing is set up', async () => {
+    /* The panel's refresh button. Like the snapshot it answers without a host
+       rather than reaching for one, so this stays assertable offline. */
+    await setModule('pve', true);
+    const response = await call('POST', '/api/m/pve/refresh');
+    assert.equal(response.status, 200);
+    assert.equal(response.json.configured, false);
+    await setModule('pve', false);
+  });
+
   it('refuses a malformed Proxmox token id instead of putting it in a header', async () => {
     await setModule('pve', true);
     const response = await call('PUT', '/api/m/pve/token', { tokenId: 'nope', tokenSecret: 'x' });

@@ -668,6 +668,11 @@ body:not(.editing) .pve.pve-clickable{cursor:pointer}
 .pve-bar.warn>div{background:#eab308}
 .pve-bar.bad>div{background:#ff453a}
 
+/* The time of the reading and the button that renews it, together on the
+   right of the panel's head — the button lives here and nowhere else, because
+   a card is a reading and not a control. */
+.pve-head-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.pve-head-right .btn{padding:7px 14px;font-size:.84rem}
 .pve-guests-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
   font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .pve-guests{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;

@@ -49,6 +49,22 @@ export function routes(router) {
     }
   });
 
+  /* The refresh button in the open panel. A POST and not a query parameter on
+     the read: this one deliberately goes upstream, and a route that reaches
+     the network should not be reachable by a reload or a prefetch. */
+  router.post('/refresh', async (req, res) => {
+    const settings = getConfig(req.user.id).integrations.pve;
+    if (!pve.isConfigured(req.user.id) || !settings.host) {
+      return res.json({ ok: true, configured: false });
+    }
+    try {
+      const snapshot = await pve.getSnapshot(req.user.id, settings, { force: true });
+      res.json({ ok: true, configured: true, snapshot });
+    } catch (error) {
+      res.status(502).json({ ok: false, configured: true, error: error.message });
+    }
+  });
+
   router.get('/snapshot', async (req, res) => {
     const settings = getConfig(req.user.id).integrations.pve;
     if (!pve.isConfigured(req.user.id) || !settings.host) {

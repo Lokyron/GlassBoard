@@ -7,7 +7,7 @@
  * Read-only all the way down. There is no button here that could start or
  * stop anything, because there is no route behind one. */
 import {
-  id, safe, esc, svg, state, moduleState, api, openModal, closeModal, tileElement,
+  id, safe, esc, svg, state, moduleState, api, toast, openModal, closeModal, tileElement,
 } from '/assets/core/kernel.js';
 
 const own = moduleState('pve');
@@ -216,6 +216,37 @@ function renderPveModal() {
     : '');
 }
 
+/* Asking the hypervisor again, now.
+ *
+ * The button is in the panel's head and nowhere else: the card is a reading,
+ * and a control on it would be a thing to press by accident every time the
+ * card is opened. Here it is a deliberate click on an open panel.
+ *
+ * Disabled while the request is in the air, which is both the feedback and
+ * the guard — a held-down button cannot become a queue of calls to Proxmox. */
+async function forceRefresh(button) {
+  button.disabled = true;
+  try {
+    const payload = await api('/api/m/pve/refresh', { method: 'POST' });
+    own.configured = payload.configured === true;
+    own.snapshot = payload.snapshot ?? own.snapshot;
+    own.error = '';
+    const tile = state.config.tiles.find((item) => item.type === 'pve');
+    if (tile) renderPveTile(tile);
+    renderPveModal();
+    /* A host that did not answer gives back the last good snapshot rather than
+       nothing, which is right for the refresh nobody asked for — but this one
+       was asked for, and "dernier contact à…" replacing "à…" in small grey
+       text is not an answer to a button press. */
+    if (payload.snapshot?.stale) toast(payload.snapshot.error || t('pve.unavailable'), 'error');
+  } catch (error) {
+    // The panel keeps the snapshot it had; the toast says why it is still it.
+    toast(error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function openPveModal(origin = null) {
   if (!own.configured || !own.snapshot) return;
   const tile = state.config.tiles.find((item) => item.type === 'pve');
@@ -241,6 +272,7 @@ export default {
     id('pve-modal').addEventListener('click', (event) => {
       if (event.target === id('pve-modal')) closeModal('pve-modal');
     });
+    id('pve-refresh')?.addEventListener('click', (event) => forceRefresh(event.currentTarget));
   },
 
   refresh: loadPve,

@@ -197,7 +197,7 @@ Les routes d'un module vivent sous `/api/m/<id>` et sont montées par le registr
 | `/api/auth` | `GET /invite` et `POST /invite` (publics), `GET /state`, `POST /setup`, `/totp/start`, `/totp/confirm`, `/login`, `/login/verify`, `/login/cancel`, `/logout`, `GET /me`, `POST /password`, `/recovery-codes` |
 | `/api/config` | `GET/PUT /`, `GET /revisions`, `POST /revisions/:id/restore`, `GET /export`, `POST /import`, `POST /backup` |
 | `/api/m/weather` | `GET /forecast`, `/place`, `/search` |
-| `/api/m/pve` | `GET /status\|snapshot`, `POST /test`, `PUT/DELETE /token` — **aucune écriture vers Proxmox** |
+| `/api/m/pve` | `GET /status\|snapshot`, `POST /test\|refresh`, `PUT/DELETE /token` — **aucune écriture vers Proxmox** |
 | `/api/m/georide` | `GET /status\|trackers\|summary\|trips`, `POST /login\|logout`, `GET /map/tile/:z/:x/:y.png` |
 | `/api/m/parcels` | `GET /`, `/status`, `/suggestions`, `POST /`, `/refresh`, `/import`, `/suggestions/:id/accept\|ignore`, `/mail/scan\|test`, `PUT/DELETE /key`, `/mail/password`, `DELETE /:id` |
 | `/api/update` | `GET /` (version installée, tête du canal, état), `POST /channel`, `POST /start`, `GET /news`, `POST /news/seen` |
