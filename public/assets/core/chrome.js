@@ -114,6 +114,11 @@ export function openFolder(index, origin = null) {
         `<div><div class="app-tt">${esc(item.title)}</div><div class="app-sub">${esc(t('apps.direct'))}</div></div></a>`
     )
     .join('');
+  // A link opens in a new tab: the folder closes behind it, so coming back to
+  // the dashboard does not mean dismissing a sheet before the next click.
+  id('folder-links-grid').querySelectorAll('[data-item]').forEach((node) => {
+    node.addEventListener('click', () => { if (!state.editing) closeFolder(); });
+  });
   decorate('folder', index);
   openModal('folder-modal', origin ?? document.querySelector(`[data-folder][data-link="${index}"]`));
 }
