@@ -3,6 +3,22 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Changed
+
+- **The screenshots were all retaken**, from a demo instance holding nothing
+  but invented data and a stand-in Proxmox host, and the README gained the
+  ones it was missing: the Proxmox card and panel, edit mode, a folder, the
+  appearance tab, the phone layout, and the accounts panel it had been
+  pointing at without the file existing. The weather screenshot shows the row
+  of followed cities, and the settings one the tab order of 2.1.0.
+- **The README says what the application now does**: modules and their
+  per-account switches, invitations and the mail server, in-app updates on two
+  channels, and the revisions kept for a rollback. Two places still described
+  the settings as having a separate **Accounts** tab, which 2.1.0 merged into
+  **Account**.
+
 ## 2.1.0 — 2026-10-19
 
 ### Added

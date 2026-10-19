@@ -10,9 +10,11 @@ behind a login with two-factor authentication.
 
 ![The Glassboard dashboard in dark mode](docs/images/dashboard-dark.png)
 
-<sub>Screenshots come either from a real instance with the names and places
-blurred out, or from a demo instance holding nothing but invented data. There is
-no public demo: Glassboard is meant to run on your own machine.</sub>
+<sub>Screenshots come from a demo instance holding nothing but invented data —
+invented shortcuts, a stand-in Proxmox host, a city nobody lives in — except the
+GeoRide and parcel ones, which are from a real instance with the names and
+places blurred out. There is no public demo: Glassboard is meant to run on your
+own machine.</sub>
 
 Glassboard keeps a strict line between **the software** (this repository) and
 **your data** (a directory you own). A fresh install starts empty, with a
@@ -54,7 +56,8 @@ reaches the browser, and no request goes out to a service you did not enable.
 ## Features
 
 - **Live editing**: add, edit, reorder, resize and remove tiles and shortcuts
-  directly on the page. Folders group shortcuts behind a modal.
+  directly on the page, the way a phone home screen rearranges. Folders group
+  shortcuts behind a sheet, which closes itself behind the link you follow.
 - **Server-side configuration**: the same dashboard on every device. Nothing
   lives in browser storage except your light/dark preference.
 - **Several accounts, each with its own dashboard**: shortcuts, tiles,
@@ -79,8 +82,15 @@ reaches the browser, and no request goes out to a service you did not enable.
   hypervisor. A disabled or unconfigured integration never breaks the
   page. The tile explains what is missing, and the rest of the dashboard carries
   on.
+- **Every feature is a module, with a switch of its own**: weather, notes,
+  Proxmox, GeoRide and parcels each live in one folder, declare their own
+  tiles, settings tab, routes and background work, and are turned on per
+  account. Switched off means no tile, no route, no background work, and no
+  code fetched by the browser — and switching one back on gives the dashboard
+  back as it was.
 - **Backup and restore**: a single versioned JSON file, from the interface or
-  from the command line, with automatic snapshots before every import.
+  from the command line, with automatic snapshots before every import, and the
+  last twenty revisions kept for a rollback from the page itself.
 - **Themes and wallpapers**: six colour presets, light and dark, plus your own
   background image with adjustable dimming and blur. Shuffle picks one at
   random and cross-fades the whole page into it. Everything is a CSS variable,
@@ -94,6 +104,16 @@ reaches the browser, and no request goes out to a service you did not enable.
   settings, the sign-in screens follow the browser.
 - **Installable**: a Progressive Web App, with its own window and icon on a
   phone or a computer.
+- **Invitations and a mail server of your own**: add someone outright, or send
+  a single-use link good for 48 hours so their first password never passes
+  through you. An instance with no SMTP works just as well — the link is always
+  shown to you.
+- **Updates from inside the dashboard**: **Settings → About** says which
+  version is installed and what the repository has, on a stable or a beta
+  channel, and the first time you open a new version it tells you what changed.
+  The application never rewrites its own code: it asks, and a root updater
+  installed separately does the work and rolls back if the service does not
+  come up.
 - **Light footprint**: no front-end framework, no build step, no CDN. Two
   vendored libraries, four runtime dependencies, one SQLite file.
 
@@ -253,6 +273,14 @@ link released outside the folder goes back to the main grid.
 
 Nothing is written to the server until you press **Save**.
 
+![The dashboard in edit mode](docs/images/editing.png)
+
+A folder opens as a sheet over the dashboard, in reading as in editing. Follow
+one of its links and the sheet closes behind you, so coming back to the
+dashboard leaves you one click from the next shortcut.
+
+![A folder of shortcuts](docs/images/folder.png)
+
 ### Settings
 
 Everything that is not a tile lives in **Settings**, reachable from the same
@@ -288,6 +316,8 @@ instance gives back the same dashboard, image included. An image larger than
 A new preset is one block in `public/assets/themes.css` plus one entry in
 `THEME_PRESETS` (`server/config-schema.js`).
 
+![The appearance tab](docs/images/appearance.png)
+
 ![The same dashboard in light mode](docs/images/dashboard-light.png)
 
 ### On a phone
@@ -312,6 +342,8 @@ Below 820 px the layout changes rather than shrinks:
 Backdrop blur is the expensive part of this design on a phone GPU, so it is
 lightened on small screens, one of the background orbs is dropped, and the
 parallax runs only on a device with a real pointer.
+
+<img src="docs/images/phone.png" alt="The dashboard on a phone" width="320">
 
 ### Installing it as an app
 
@@ -426,15 +458,17 @@ API both enforce: the last administrator cannot step down or be deleted. An
 instance with no administrator could never be administered again, and nothing
 in the interface could undo it.
 
-An administrator sees two extra tabs in the settings, **Accounts** and **Mail
-server**. Everyone else sees neither, and every route behind them refuses a
-standard account on its own — the hidden tabs are a courtesy, not the control.
+An administrator sees two things nobody else does: the instance's accounts, at
+the bottom of the **Account** tab under their own password and sessions, and a
+**Mail server** tab. Everyone else sees neither, and every route behind them
+refuses a standard account on its own — hiding them is a courtesy, not the
+control.
 
 ![The accounts panel](docs/images/accounts.png)
 
 ### Adding someone
 
-Two ways, in **Settings → Accounts**.
+Two ways, at the bottom of **Settings → Account**.
 
 **Create the account outright.** You choose a username and a first password and
 pass them on however you like. The person enrols their own second factor the
@@ -517,9 +551,7 @@ under the cursor: the time, the sky, the temperature, what it feels like, the
 chance of rain and the wind. It answers to a finger and to the keyboard too —
 tab to it and the arrow keys walk the hours, Escape drops the reading.
 
-![The detailed forecast](docs/images/forecast.png)
-
-<sub>The screenshot above predates this drawing and will be retaken.</sub>
+![The detailed forecast, on one of the followed cities](docs/images/forecast.png)
 
 ### Proxmox VE, read-only
 
@@ -528,6 +560,8 @@ long it has been up, with the number of guests running under them. Opening it
 lists every virtual machine and container with its state, its processor and
 its memory, and the storages with how full each one is. Past four fifths, a
 figure turns amber; past nine tenths, red.
+
+![The Proxmox card on the dashboard](docs/images/proxmox-tile.jpg)
 
 **The figures are live while you are looking at them**, card and panel alike:
 the page asks every five seconds, and a green dot in the panel's head pulses
@@ -563,6 +597,8 @@ what failed, so nobody turns it on without knowing they did.
 anything, every call is a GET, and there is no route in this module that could
 start or stop a guest. A dashboard left open on a phone cannot turn a homelab
 off by being sat on.
+
+![The Proxmox panel: the node, its guests and its storages](docs/images/proxmox.png)
 
 ### GeoRide, motorcycle tracker
 
@@ -886,6 +922,7 @@ Found a hole? Please report it privately: see [SECURITY.md](SECURITY.md).
 ```
 glassboard/
 ├── server/            HTTP server, storage, auth, integrations
+├── modules/           one folder per feature: weather, note, pve, georide, parcels
 ├── public/            the dashboard itself (HTML/CSS/JS, no build)
 ├── scripts/           export and import CLI
 ├── deploy/            updater script and systemd units
@@ -914,8 +951,15 @@ In the browser, the clock and the polling stop while the tab is hidden and pick
 up again when it comes back. A dashboard left open on a phone all day should
 not cost battery.
 
+Every feature above the bare dashboard is a module: a folder under `modules/`
+declaring its tiles, its settings, its routes and its background work, with a
+switch of its own per account. The kernel knows none of them by name, which is
+why adding one changes nothing elsewhere — see
+[adding your own](#adding-your-own).
+
 The architecture notes, in French, are in
-[docs/architecture.fr.md](docs/architecture.fr.md).
+[docs/architecture.fr.md](docs/architecture.fr.md). What changed in each
+version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
