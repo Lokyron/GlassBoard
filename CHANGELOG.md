@@ -3,7 +3,7 @@
 Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## Unreleased
+## 2.1.0 — 2026-10-19
 
 ### Added
 
@@ -45,6 +45,11 @@ Notable changes, newest first. The format follows
   without knowing. And this is the one integration that does not go through
   `fetch`: `node:https` is what takes an agent, and an agent is what it takes
   to accept that certificate deliberately and per account.
+
+- **`test/i18n.test.js`**, which holds the translation tables to what the
+  language fixes below put right: the same keys in every language, the same
+  `{placeholders}`, no empty string, every key the interface asks for actually
+  defined, and every name the server sends translated.
 
 ### Changed
 
@@ -103,6 +108,11 @@ Notable changes, newest first. The format follows
   rides the old scheme left behind are collapsed on start-up, keeping the copy
   that still has its track.
 
+- **A folder stayed open behind the link you had just followed.** The link
+  opens in a tab of its own, so coming back to the dashboard meant dismissing
+  the sheet before reaching for the next shortcut. The folder closes itself
+  now — except in edit mode, where a click on a shortcut is how you edit it
+  and the sheet has to hold still.
 - **A button in the mail-server settings showed its own translation key.** It
   asked for `set.save`, which no language defines; it now asks for the one
   every other dialog uses.
@@ -112,13 +122,6 @@ Notable changes, newest first. The format follows
   reads this dashboard with a screen reader.
 - **A new shortcut, folder or link was born called "Shortcut", "Folder" or
   "Link"** whatever the language. It takes its first name from the chosen one.
-
-### Added
-
-- **`test/i18n.test.js`**, which holds the translation tables to what was
-  wrong above: the same keys in every language, the same `{placeholders}`, no
-  empty string, every key the interface asks for actually defined, and every
-  name the server sends translated.
 
 ## 2.0.1 — 2026-10-07
 
