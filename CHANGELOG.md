@@ -5,6 +5,17 @@ Notable changes, newest first. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **A folder reopened after following one of its links stays open.** Clicking a
+  link closes the folder behind it, but the link also opens a new tab: the
+  closing animation never ends in a backgrounded tab and its backup timer is
+  throttled, so the teardown was still waiting when the dashboard came back.
+  Opening the folder again played its own animation, the old teardown took that
+  as its cue, and the folder shut at once. A close that has not finished is now
+  called off when the panel is opened again, and only the panel's own animation
+  — not one of the links animating in under it — ends the exit.
+
 ### Changed
 
 - **The screenshots were all retaken**, from a demo instance holding nothing

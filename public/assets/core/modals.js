@@ -19,6 +19,15 @@ const MODAL_CLOSE_MS = 220;
 /** What opened each panel, so closing can send it back there. */
 const modalOrigins = new WeakMap();
 
+/** Closes that are still playing their exit animation, so reopening a panel can
+ *  call the teardown off. The case that matters is a close started just as the
+ *  tab goes to the background — following a link opens a new tab, and the
+ *  folder closes behind it: there the exit animation never ends and the backup
+ *  timer is throttled, so the teardown is often still armed when the dashboard
+ *  comes back and the folder is opened again. Left alone it would fire on the
+ *  fresh panel and shut it the instant it appeared. */
+const pendingCloses = new WeakMap();
+
 /** The tile of a given type, for the paths that open a panel without a click —
  *  the side navigation, mostly. */
 export const tileOfType = (type) => document.querySelector(`[data-type="${type}"]`);
@@ -52,6 +61,8 @@ const clearSheet = (sheet) => {
 export function openModal(modalId, origin = null) {
   const modal = id(modalId);
   if (!modal) return;
+  // Opening wins over a close that has not finished: drop its teardown.
+  pendingCloses.get(modal)?.cancel();
   const sheet = modal.querySelector('.sheet');
   modal.classList.remove('closing');
   modal.classList.add('open');
@@ -77,6 +88,7 @@ export function closeModal(modalId) {
   modalOrigins.delete(modal);
 
   const finish = () => {
+    pendingCloses.delete(modal);
     modal.classList.remove('open', 'closing');
     if (sheet) clearSheet(sheet);
   };
@@ -90,12 +102,25 @@ export function closeModal(modalId) {
   sheet.classList.add('fly-out');
   modal.classList.add('closing');
   return new Promise((resolve) => {
+    const abort = new AbortController();
     // A timer and not animationend alone: an animation in a hidden tab never
     // fires, and a panel that cannot close is worse than one that closes
     // without its animation.
-    const done = () => { finish(); resolve(); };
+    const done = () => { clearTimeout(timer); abort.abort(); finish(); resolve(); };
     const timer = setTimeout(done, MODAL_CLOSE_MS + 60);
-    sheet.addEventListener('animationend', () => { clearTimeout(timer); done(); }, { once: true });
+    // animationend bubbles, and the panel's own contents animate in: only the
+    // sheet's own animation says the exit is over.
+    sheet.addEventListener('animationend', (event) => {
+      if (event.target === sheet) done();
+    }, { signal: abort.signal });
+    pendingCloses.set(modal, {
+      cancel: () => {
+        clearTimeout(timer);
+        abort.abort();
+        pendingCloses.delete(modal);
+        resolve();
+      },
+    });
   });
 }
 
