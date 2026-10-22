@@ -18,6 +18,12 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **Licence : MIT devient AGPL-3.0-or-later.** Faire tourner une copie non
+  modifiee pour soi ne change rien. Ce qui change : qui fait tourner une version
+  MODIFIEE et en laisse d'autres personnes se servir a travers un reseau doit
+  leur proposer le code source correspondant. Les versions deja publiees sous
+  MIT le restent — une relicence ne vaut que pour la suite.
+
 - **The screenshots were all retaken**, from a demo instance holding nothing
   but invented data and a stand-in Proxmox host, and the README gained the
   ones it was missing: the Proxmox card and panel, edit mode, a folder, the

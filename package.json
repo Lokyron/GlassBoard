@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/Lokyron/GlassBoard/issues"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "author": "Lokyron (https://github.com/Lokyron)",
   "type": "module",
   "engines": {

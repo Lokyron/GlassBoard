@@ -1,6 +1,6 @@
 # Glassboard
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![License: AGPL--3.0--or--later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
 ![Node 24+](https://img.shields.io/badge/node-%E2%89%A5%2024-5e5ce6)
 ![No build step](https://img.shields.io/badge/build%20step-none-0a84ff)
 
@@ -980,4 +980,9 @@ an issue.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Copyright holders are the Glassboard contributors.
+GNU Affero General Public License v3.0 or later, see [LICENSE](LICENSE).
+Copyright holders are the Glassboard contributors.
+
+The AGPL adds one duty a permissive licence does not have: if you run a
+modified version and let other people use it over a network, you must offer
+them its source. Running an unmodified copy for yourself changes nothing.

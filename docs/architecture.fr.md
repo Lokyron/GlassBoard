@@ -15,7 +15,7 @@
   (avec dossiers), carte météo, suivi de moto GeoRide, recherche rapide. Tout s'édite directement
   sur la page, derrière une authentification en deux temps (mot de passe puis TOTP).
   La configuration vit côté serveur (un document JSON unique, 20 révisions conservées) et s'exporte
-  ou se restaure en un fichier. Projet **open source (licence MIT)** pensé pour être publié :
+  ou se restaure en un fichier. Projet **open source (licence AGPL-3.0-or-later)** pensé pour être publié :
   séparation stricte entre le logiciel et les données de l'utilisateur.
 - **Cas d'usage** : page d'accueil du navigateur sur poste fixe et téléphone (PWA, vue mobile dédiée).
 - **Statut du projet** : **Production**. Déploiement type : service systemd sur `127.0.0.1:3000`
