@@ -26,8 +26,12 @@ Notable changes, newest first. The format follows
   there is no "our" Google project for a self-hosted application to put a
   shared credential in. The client ID, the client secret and the refresh token
   are encrypted with `APP_SECRET` and live outside the configuration document,
-  so an exported configuration carries no credential. The README has the four
-  steps in the Google Cloud console.
+  so an exported configuration carries no credential. The README has the steps
+  in the Google Cloud console — including **pressing Publish app**, because
+  Google expires the refresh token of an app left in *Testing* after seven
+  days, which would have the calendar ask to be reconnected every week for
+  ever. Publishing is not being verified: an unverified app in production
+  works, is capped at a hundred users, and shows one warning screen.
 
   **Which redirect URI you register depends on how you reach the dashboard,
   and the settings tell you which.** An instance with a hostname over HTTPS

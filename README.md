@@ -600,15 +600,26 @@ In the [Google Cloud console](https://console.cloud.google.com/), once:
 
 1. Create a project — any name.
 2. **APIs & Services → Library**, find **Google Calendar API**, enable it.
-3. **APIs & Services → OAuth consent screen**: external, fill in the name and
-   your address. Leave it in *Testing* and add your own Google address under
-   **Test users**. A testing app is not reviewed by Google and does not need
-   to be; it simply means nobody but your test users can authorise it, which
-   for a personal dashboard is the point.
-4. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
-   type **Web application**. Add the redirect URI that **Settings → Calendar**
-   shows you — the pane has a button that fills in each of the two below — and
-   copy the client ID and the client secret into that pane.
+3. **Google Auth Platform → Branding** (older consoles: *APIs & Services →
+   OAuth consent screen*): fill in the application name and your address.
+4. **Google Auth Platform → Audience**: user type **External**, then press
+   **Publish app** so the status reads *In production*.
+
+   > **Do not leave it in *Testing*.** Google expires the refresh token of a
+   > testing app [after seven days][testing-expiry], so the calendar would
+   > stop a week after you connected it and ask to be reconnected, for ever.
+   > Publishing is not the same as being verified: an unverified app in
+   > production works, is capped at 100 users, and shows a "Google hasn't
+   > verified this app" screen once, where you take **Advanced → Go to …**.
+   > Verification only exists to remove that screen for strangers, and a
+   > dashboard you built for yourself has none.
+
+5. **Google Auth Platform → Clients → Create client**, type **Web
+   application**. Add the redirect URI that **Settings → Calendar** shows you
+   — the pane has a button that fills in each of the two below — and copy the
+   client ID and the client secret into that pane.
+
+[testing-expiry]: https://developers.google.com/identity/protocols/oauth2#expiration
 
 Then **Connect a Google account**. Which of the two redirect URIs you use
 depends on how you reach the dashboard, and the pane says which applies:
