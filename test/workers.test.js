@@ -74,7 +74,7 @@ describe('runInWorker', () => {
      that graph that cannot load there — a browser-only global, a missing
      environment variable, a top-level await that never settles — shows up
      here and nowhere else until the feature is used in anger. */
-  for (const moduleId of ['georide', 'parcels']) {
+  for (const moduleId of ['georide', 'parcels', 'calendar']) {
     it(`starts the ${moduleId} worker`, async () => {
       await assert.rejects(
         () => runInWorker(moduleId, { task: 'no-such-task' }),

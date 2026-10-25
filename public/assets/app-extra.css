@@ -698,3 +698,123 @@ body:not(.editing) .pve.pve-clickable{cursor:pointer}
 .pve-storage{display:grid;gap:5px}
 .pve-storage-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:.88rem;font-weight:650}
 .pve-storage-head small{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* The slot a module puts a sidebar card in.
+   It steps aside rather than being a box of its own, so a card inside it is a
+   child of the sidebar's own grid: it gets the sidebar's gap, and on a phone
+   it can be ordered along with the cards the core owns. Without this, one
+   wrapper div sits in the layout where the cards should be. */
+#side-extra{display:contents}
+
+/* --------------------------------- calendar -------------------------------
+   The sidebar card and the month behind it.
+
+   The card stands where the year-progress card stood, so it keeps that
+   card's width and padding (.wcard-s) and adds only what it needs. It is a
+   button in everything but name, which is why the whole card lifts under the
+   pointer rather than some control inside it: the target is the card.
+
+   The month grid is six fixed rows. A grid that is five rows one month and
+   six the next makes the panel jump every time it is paged, and the days from
+   either side are worth seeing anyway. */
+.cal-card{cursor:pointer;display:grid;gap:11px;transition:transform .3s var(--ease),border-color .3s var(--ease)}
+.cal-card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
+.cal-card:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+.cal-card-date{display:flex;align-items:center;gap:12px}
+.cal-card-num{font-size:2.1rem;font-weight:760;letter-spacing:-.05em;line-height:.95;
+  background:var(--accent);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.cal-card-when{display:grid;line-height:1.25;min-width:0}
+.cal-card-when strong{font-size:.95rem;font-weight:680;text-transform:capitalize;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-card-when span{font-size:.78rem;color:var(--muted);text-transform:capitalize}
+
+/* The compact month: shape and nothing else. There is no room for a title on
+   a sidebar card, so a day with something on it gets a dot and the panel is
+   one click away. */
+.cal-mini{display:grid;gap:4px}
+.cal-mini-week,.cal-mini-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-mini-week span{text-align:center;font-size:.6rem;font-weight:750;letter-spacing:.04em;
+  color:var(--muted);text-transform:uppercase}
+.cal-mini-day{position:relative;aspect-ratio:1;display:grid;place-items:center;border-radius:7px;
+  font-size:.7rem;font-weight:620;font-variant-numeric:tabular-nums;color:var(--text)}
+.cal-mini-day.out{color:var(--muted);opacity:.38}
+.cal-mini-day.today{background:var(--accent);color:#fff;font-weight:750}
+.cal-mini-dot{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  width:3px;height:3px;border-radius:50%;background:var(--primary)}
+.cal-mini-day.today .cal-mini-dot{background:#fff}
+
+.cal-card-next{display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:620;min-width:0;
+  padding-top:9px;border-top:1px solid var(--border)}
+.cal-card-next.muted{color:var(--muted);font-weight:600}
+.cal-card-next-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cal-card-next-when{margin-left:auto;color:var(--muted);font-size:.76rem;flex:none;font-variant-numeric:tabular-nums}
+.cal-dot{width:8px;height:8px;border-radius:50%;flex:none}
+
+/* What the card it replaced was for, kept as the thin line along the bottom. */
+.cal-card-year{display:grid;gap:5px}
+.cal-card-year .prog{height:5px}
+.cal-card-year-sub{font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* ------------------------------- the panel -------------------------------- */
+
+.cal-head-right{display:flex;align-items:center;gap:8px}
+.cal-head-right .btn{padding:7px 14px;font-size:.84rem}
+.cal-head-right .iconbtn{width:34px;height:34px;font-size:13px}
+.cal-body{grid-template-columns:minmax(0,1fr) 300px;align-items:start}
+.cal-month{display:grid;gap:6px;min-width:0}
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-weekdays div{text-align:center;font-size:.68rem;font-weight:750;letter-spacing:.07em;
+  color:var(--muted);text-transform:uppercase}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(84px,1fr);gap:6px}
+.cal-cell{display:grid;grid-template-rows:auto 1fr;gap:3px;padding:6px;border-radius:13px;min-width:0;
+  border:1px solid var(--border);background:var(--surface-soft);cursor:pointer;
+  transition:border-color .2s var(--ease),background .2s var(--ease)}
+.cal-cell:hover{border-color:var(--border-strong)}
+.cal-cell.out{opacity:.45}
+.cal-cell.sel{border-color:var(--primary);background:var(--primary-soft)}
+.cal-cell-num{font-size:.78rem;font-weight:680;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.cal-cell.today .cal-cell-num{color:#fff;background:var(--accent);border-radius:999px;
+  width:21px;height:21px;display:grid;place-items:center;margin-left:auto;font-weight:760}
+.cal-cell-events{display:grid;gap:2px;align-content:start;min-width:0}
+
+/* A chip is the event at the width a seventh of the panel allows: a time, a
+   title, and the calendar's colour down its left edge. */
+.cal-chip{display:flex;align-items:baseline;gap:5px;min-width:0;width:100%;text-align:left;cursor:pointer;
+  padding:2px 6px;border-radius:6px;border:0;border-left:3px solid var(--chip,var(--primary));
+  background:color-mix(in srgb,var(--chip,var(--primary)) 14%,transparent);
+  color:var(--text);font-size:.72rem;font-weight:620;font-family:inherit;
+  transition:background .2s var(--ease)}
+.cal-chip:hover{background:color-mix(in srgb,var(--chip,var(--primary)) 28%,transparent)}
+.cal-chip.all-day{background:var(--chip,var(--primary));color:#fff;border-left-color:transparent}
+.cal-chip-time{color:var(--muted);font-variant-numeric:tabular-nums;flex:none;font-size:.68rem}
+.cal-chip.all-day .cal-chip-time{color:rgba(255,255,255,.8)}
+.cal-chip-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cal-more{font-size:.66rem;font-weight:700;color:var(--muted);padding-left:3px}
+
+/* ------------------------------ the day column ---------------------------- */
+
+.cal-aside{display:grid;gap:9px;align-content:start;min-width:0}
+.cal-aside-head{font-size:.74rem;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cal-day,.cal-upcoming{display:grid;gap:6px;min-width:0}
+.cal-upcoming{max-height:30vh;overflow:auto;scrollbar-width:thin}
+.cal-row{display:flex;align-items:flex-start;gap:9px;text-align:left;cursor:pointer;min-width:0;
+  padding:9px 11px;border-radius:13px;border:1px solid var(--border);background:var(--surface-soft);
+  color:var(--text);font-family:inherit;transition:border-color .2s var(--ease)}
+.cal-row:hover{border-color:var(--primary)}
+.cal-row .cal-dot{margin-top:5px}
+.cal-row-main{display:grid;gap:2px;min-width:0;flex:1}
+.cal-row-title{font-size:.88rem;font-weight:660;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-row-meta{display:flex;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:.76rem}
+.cal-row-day{font-weight:700;text-transform:capitalize}
+.cal-empty{color:var(--muted);font-size:.86rem;padding:10px 2px}
+.cal-legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding-top:9px;border-top:1px solid var(--border)}
+.cal-legend-item{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted)}
+
+/* ------------------------------- the editor ------------------------------- */
+
+.cal-times{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cal-editor .cal-danger{margin-right:auto;color:#ff453a}
+.cal-list{display:grid;gap:8px}
+.cal-list-row{display:grid;gap:6px;padding:10px 12px;border-radius:13px;
+  border:1px solid var(--border);background:var(--surface-soft)}
+.cal-paste{display:grid;gap:10px}

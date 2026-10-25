@@ -14,10 +14,20 @@ describe('the module list', () => {
     assert.equal(new Set(ids).size, ids.length);
   });
 
-  it('declares at least one tile per module', () => {
+  it('gives every module somewhere to draw', () => {
+    /* A tile, or a declared piece of the page around the tiles. Both are a
+       way of being on the dashboard; a module with neither is code nobody can
+       reach, which is the thing worth failing on. */
     for (const module of registry.MODULES) {
-      assert.ok(Object.keys(module.tiles ?? {}).length > 0, `${module.id} declares a tile`);
+      const tiles = Object.keys(module.tiles ?? {}).length;
+      assert.ok(tiles > 0 || module.chrome === true, `${module.id} draws a tile or declares chrome`);
     }
+  });
+
+  it('tells the browser which modules it needs without a tile', () => {
+    const summary = registry.moduleSummary();
+    assert.equal(summary.calendar.chrome, true, 'the calendar card is not in the grid');
+    assert.equal(summary.weather.chrome, false);
   });
 
   it('does not let two modules claim the same tile type', () => {

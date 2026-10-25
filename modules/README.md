@@ -56,6 +56,10 @@ export default {
     },
   },
 
+  // It draws part of the page around the tiles rather than a tile. See
+  // "Drawing outside the grid" below; calendar/ is the one that does.
+  chrome: false,
+
   // The integrations.<id> block of the configuration. Omit it entirely for a
   // module with nothing to configure — see note/.
   settings: (v, raw, path) => ({
@@ -96,6 +100,34 @@ export default {
 Everything but `tiles` is optional; `modules/note/` has nothing else at all.
 `/assets/core/kernel.js` is the whole surface the core promises — anything
 not re-exported there is the core's own business and may change.
+
+## Drawing outside the grid
+
+A tile is the usual way to be on the dashboard, and not the only one. A
+calendar is read beside the dashboard rather than as one card among eight, so
+the sidebar has a slot a module may fill:
+
+```js
+export default {
+  id: 'example',
+  tiles: {},                      // none, and the manifest says `chrome: true`
+  sidebarCards: () => [{
+    primary: true,                // stands in for the core's own year card
+    render: () => buildCard(),    // an element, drawn from what is in hand
+  }],
+};
+```
+
+Two things follow from having no tile. The browser normally fetches a module
+because the dashboard has one of its tiles, so a module like this declares
+`chrome: true` in its manifest and is fetched whenever it is switched on
+instead. And `render()` is called on every full render, so it must draw from
+what the module already has and ask for the rest afterwards — a sidebar that
+waits on the network is a sidebar that is blank on every page load.
+
+`primary` says the card stands in for the card the core draws itself. The
+core's own is hidden rather than removed, so switching the module off gives
+the sidebar straight back.
 
 ## What is served
 

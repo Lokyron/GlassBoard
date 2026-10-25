@@ -330,6 +330,50 @@ describe('module routes', () => {
     }
   });
 
+  it('says the calendar has no Google client rather than reaching for Google', async () => {
+    /* No client id, no grant, so every one of these answers off the database
+       — which is what makes them assertable offline, and what keeps a fresh
+       dashboard from waiting on a timeout it was never going to win. */
+    await setModule('calendar', true);
+    const status = await get('/api/m/calendar/status');
+    assert.equal(status.status, 200);
+    assert.equal(status.json.configured, false);
+    assert.equal(status.json.connected, false);
+    assert.equal(status.json.clientId, '');
+    // The paste flow, because a test host is reached by an address Google
+    // would not redirect to either.
+    assert.equal(status.json.mode, 'paste');
+    assert.deepEqual(status.json.calendars, []);
+
+    // A month with nobody connected is an empty month, not a failure.
+    const month = await get('/api/m/calendar/month/2026-10');
+    assert.equal(month.status, 200);
+    assert.equal(month.json.connected, false);
+    assert.deepEqual(month.json.events, []);
+
+    // And a sign-in cannot be started without a client to authorise against.
+    const connect = await call('POST', '/api/m/calendar/connect');
+    assert.equal(connect.status, 400);
+    await setModule('calendar', false);
+  });
+
+  it('refuses a month that is not one, before anything is cached or fetched', async () => {
+    await setModule('calendar', true);
+    for (const bad of ['2026-13', 'nonsense', '..%2f..%2fetc']) {
+      assert.equal((await get(`/api/m/calendar/month/${bad}`)).status, 400, bad);
+    }
+    await setModule('calendar', false);
+  });
+
+  it('shuts the calendar routes with the module', async () => {
+    await setModule('calendar', false);
+    for (const route of ['/api/m/calendar/status', '/api/m/calendar/month/2026-10', '/api/m/calendar/calendars']) {
+      const response = await get(route);
+      assert.equal(response.status, 404, route);
+      assert.equal(response.json.code, 'module_disabled');
+    }
+  });
+
   it('answers a city search too short to be one without leaving the machine', async () => {
     /* Under two characters the geocoder is not called at all, which is what
        makes this assertable offline — and what keeps a search field from

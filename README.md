@@ -44,7 +44,7 @@ reaches the browser, and no request goes out to a service you did not enable.
 - [Using Glassboard](#using-glassboard) — [editing](#editing-the-dashboard), [settings](#settings), [themes](#themes-and-wallpaper), [on a phone](#on-a-phone), [installing it as an app](#installing-it-as-an-app), [languages](#languages)
 - [Signing in](#signing-in) — [with your phone](#signing-in-with-your-phone), [open sessions](#open-sessions)
 - [Accounts](#accounts) — [adding someone](#adding-someone), [the administrator](#the-administrator), [sending invitations](#sending-invitations)
-- [Integrations](#integrations)
+- [Integrations](#integrations) — [weather](#weather-open-meteo), [calendar](#calendar-google), [Proxmox](#proxmox-ve-read-only), [GeoRide](#georide-motorcycle-tracker), [parcels](#parcels-17track), [your own](#adding-your-own)
 - [Backup and restore](#backup-and-restore)
 - [Behind a reverse proxy](#behind-a-reverse-proxy)
 - [Configuration reference](#configuration-reference)
@@ -74,18 +74,27 @@ reaches the browser, and no request goes out to a service you did not enable.
   address and how long ago, and both screens show the same short code to
   compare. Settings list every open session, how each was opened and when it
   was last used, with a button to end any of them.
-- **Optional integrations**: weather (Open-Meteo), parcel tracking (17TRACK),
-  GeoRide motorcycle tracking and a read-only view of a Proxmox VE host. Each
+- **A calendar, in the place a percentage used to be**: the sidebar card
+  shows today's date, the month at a glance with a dot under every day that
+  has something on it, and what is coming up next. Clicking it opens a month
+  you can page through, with the day you pick and the next few events beside
+  it, and you can add, edit and delete events from there. It connects to a
+  Google account through an OAuth client of your own, and the year progress
+  the card replaced is still there as the thin line along its bottom.
+- **Optional integrations**: weather (Open-Meteo), a Google calendar, parcel
+  tracking (17TRACK), GeoRide motorcycle tracking and a read-only view of a
+  Proxmox VE host. Each
   tile opens a detail view: seven days of forecast for where you are or for any
   city you follow, the steps a parcel has been through, the rides of the period
   on an interactive map, or every virtual machine and container on the
   hypervisor. A disabled or unconfigured integration never breaks the
   page. The tile explains what is missing, and the rest of the dashboard carries
   on.
-- **Every feature is a module, with a switch of its own**: weather, notes,
-  Proxmox, GeoRide and parcels each live in one folder, declare their own
-  tiles, settings tab, routes and background work, and are turned on per
-  account. Switched off means no tile, no route, no background work, and no
+- **Every feature is a module, with a switch of its own**: weather, the
+  calendar, notes, Proxmox, GeoRide and parcels each live in one folder,
+  declare their own tiles — or, for the calendar, their card in the sidebar —
+  along with their settings tab, routes and background work, and are turned on
+  per account. Switched off means no tile, no route, no background work, and no
   code fetched by the browser — and switching one back on gives the dashboard
   back as it was.
 - **Backup and restore**: a single versioned JSON file, from the interface or
@@ -552,6 +561,98 @@ chance of rain and the wind. It answers to a finger and to the keyboard too —
 tab to it and the arrow keys walk the hours, Escape drops the reading.
 
 ![The detailed forecast, on one of the followed cities](docs/images/forecast.png)
+
+### Calendar, Google
+
+The sidebar card that showed how far through the year we were now shows the
+date, the month at a glance, and what is coming up. A percentage answers
+"what is today"; it never answers "what is today *for*". The year is still
+there, as the thin line along the bottom of the card, and it can be turned off
+in **Settings → Calendar** by anyone who would rather have the room.
+
+Clicking the card opens the month. Page through it with the arrows or come
+back with **Today**, pick a day to see what is on it beside the grid, and read
+the next few events under **Coming up**. Click an event to open it, click
+**New event** — or double-click a day — to add one. Title, all day or a time,
+where it is, a note, and which calendar it goes in; saving sends it to Google
+and the month redraws.
+
+Two things are deliberately shown and not edited. One occurrence of a
+repeating event opens read-only, with a link to Google Calendar: changing it
+here would move that one Tuesday and leave the series alone, which is not what
+anybody means by moving an event, and Google's own interface is where you get
+asked which you meant. A calendar shared with you to read is the same story,
+for the obvious reason.
+
+An edit made here touches the title, the time, the place and the note, and
+nothing else. Your attendees, reminders and conferencing links are not sent
+back and so cannot be lost — an editor that round-trips fields it does not
+show is an editor that quietly drops them.
+
+#### Connecting a Google account
+
+Glassboard talks to Google through an OAuth client **of your own**. There is
+no "our" Google project for a self-hosted application to put a shared
+credential in, and a credential shared across installations would be one quota
+and one thing to revoke for everybody at once.
+
+In the [Google Cloud console](https://console.cloud.google.com/), once:
+
+1. Create a project — any name.
+2. **APIs & Services → Library**, find **Google Calendar API**, enable it.
+3. **APIs & Services → OAuth consent screen**: external, fill in the name and
+   your address. Leave it in *Testing* and add your own Google address under
+   **Test users**. A testing app is not reviewed by Google and does not need
+   to be; it simply means nobody but your test users can authorise it, which
+   for a personal dashboard is the point.
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
+   type **Web application**. Add the redirect URI that **Settings → Calendar**
+   shows you — the pane has a button that fills in each of the two below — and
+   copy the client ID and the client secret into that pane.
+
+Then **Connect a Google account**. Which of the two redirect URIs you use
+depends on how you reach the dashboard, and the pane says which applies:
+
+- **A hostname over HTTPS** — `https://dashboard.example.com` — register
+  `https://…/api/m/calendar/oauth/callback`. Google sends you straight back to
+  the dashboard; there is nothing to copy. A hostname that resolves to a
+  private address is fine: your browser follows the redirect, not Google.
+- **An IP address** — `https://192.168.1.50`, which is the normal case on a
+  homelab — register `http://127.0.0.1:33333/`, the value the pane starts
+  with. Google [refuses a redirect URI whose host is a raw IP
+  address](https://support.google.com/cloud/answer/15549257) and requires
+  HTTPS for everything but localhost, so it cannot send you back here at all.
+  You authorise in the tab that opens, land on a page that does not load —
+  expected, nothing is listening there — and paste that page's address back
+  into the pane. The address carries the authorization code; the paste is a
+  one-off.
+
+Once connected, **Read my calendars again** lists what the account can see.
+Tick the ones the dashboard should draw and give each a colour; untick a
+holiday feed you would rather not see under every date. **New events go in**
+picks where an event added from a day lands.
+
+#### What is stored, and where
+
+The client ID, the client secret and the refresh token are encrypted with
+`APP_SECRET` and kept per account in the database. None of them is in the
+configuration document, so an exported configuration — a file people mail each
+other — carries no credential. The browser never talks to Google: it reads
+months the server has already fetched, which is what keeps the grant on the
+server.
+
+The scope asked for is read **and** write on your calendars, because the panel
+creates and edits events, plus your address so the settings can say which
+account is connected. **Disconnect** tells Google to revoke the token as well
+as dropping it here.
+
+A month is fetched once and filed under its own label. The month before, the
+current one and the two after are kept warm by a background job on the
+interval you set, so opening the card is a read off disk and never a wait on
+Google; a month you page back to outside that window is fetched once and
+cached like the others. When Google cannot be reached, the last month that
+could be read is shown with a word in the panel's heading saying so, rather
+than an empty grid.
 
 ### Proxmox VE, read-only
 

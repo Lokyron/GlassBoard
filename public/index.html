@@ -61,10 +61,13 @@
     <div class="wcard-s"><div class="lbl" data-t="side.realtime">Real time</div>
       <div class="minirow"><div class="minik" data-t="side.time">Time</div><div class="miniv" id="digital-clock">--:--:--</div></div>
       <div class="minirow" id="alt-clock-row"><div class="minik" id="alt-clock-label"></div><div class="miniv" id="alt-clock">--:--</div></div></div>
-    <div class="wcard-s"><div class="lbl" data-t="side.year">Year progress</div>
+    <div class="wcard-s" id="year-card"><div class="lbl" data-t="side.year">Year progress</div>
       <div class="year-big" id="year-percent">--%</div>
       <div class="year-sub"><span data-t="side.day">Day</span> <span id="day-count">--</span> / <span id="total-days">365</span></div>
       <div class="prog"><div id="year-progress-bar"></div></div></div>
+    <!-- Where a module puts a card of its own. Empty on a dashboard with no
+         module that draws one; the core never looks inside it. -->
+    <div id="side-extra"></div>
   </aside>
 
   <section class="stack" id="overview">
@@ -164,6 +167,35 @@
         <span class="muted" id="pve-guests-count"></span></div>
       <div class="pve-guests" id="pve-guests"></div>
       <div class="pve-storages" id="pve-storages" hidden></div>
+    </div>
+  </div>
+</div>
+
+<div id="calendar-modal" class="modal">
+  <div class="sheet glass" style="width:min(1180px,100%)">
+    <div class="m-head">
+      <div><h3 id="cal-title">Calendar</h3><div class="muted" id="cal-sub"></div></div>
+      <div class="cal-head-right">
+        <button class="iconbtn" type="button" id="cal-prev" data-ta="cal.previous">
+          <svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="caret-right" style="transform:rotate(180deg)"></svg></button>
+        <button class="btn ghost" type="button" id="cal-today" data-t="cal.today">Today</button>
+        <button class="iconbtn" type="button" id="cal-next" data-ta="cal.next">
+          <svg class="i" viewBox="0 0 256 256" fill="currentColor" data-i="caret-right"></svg></button>
+        <button class="btn primary" type="button" id="cal-add" data-t="cal.newEvent">New event</button>
+      </div>
+    </div>
+    <div class="m-body cal-body">
+      <div class="cal-month">
+        <div class="cal-weekdays" id="cal-weekdays"></div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+      <div class="cal-aside">
+        <div class="cal-aside-head" id="cal-day-title">…</div>
+        <div class="cal-day" id="cal-day"></div>
+        <div class="cal-aside-head" data-t="cal.upcoming">Coming up</div>
+        <div class="cal-upcoming" id="cal-upcoming"></div>
+        <div class="cal-legend" id="cal-legend"></div>
+      </div>
     </div>
   </div>
 </div>

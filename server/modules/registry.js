@@ -9,6 +9,7 @@
  * with Glassboard, so there is nothing to discover at runtime, and a static
  * import list is one that a reader (and the module resolver) can follow. */
 import weather from '../../modules/weather/manifest.js';
+import calendar from '../../modules/calendar/manifest.js';
 import georide from '../../modules/georide/manifest.js';
 import parcels from '../../modules/parcels/manifest.js';
 import pve from '../../modules/pve/manifest.js';
@@ -16,7 +17,7 @@ import note from '../../modules/note/manifest.js';
 
 /* The order is the order the settings dialog lists the module tabs in, which
    is why it is not alphabetical: it follows how often a reader opens them. */
-export const MODULES = [weather, georide, parcels, pve, note];
+export const MODULES = [weather, calendar, georide, parcels, pve, note];
 
 const byId = new Map(MODULES.map((module) => [module.id, module]));
 export const getModule = (id) => byId.get(id) ?? null;
@@ -117,11 +118,22 @@ function inferEnabled(module, input) {
 export const isModuleEnabled = (config, moduleId) =>
   config?.modules?.[moduleId]?.enabled === true;
 
-/** What the browser is told about the modules: enough to draw the settings. */
+/** What the browser is told about the modules: enough to draw the settings,
+ *  and to know which of them the page needs even without a tile.
+ *
+ *  `chrome` is that second part. A module is normally fetched by the browser
+ *  because the dashboard has one of its tiles; a module that draws part of the
+ *  page around the tiles instead — the calendar card in the sidebar — has no
+ *  tile to be found by, so it says so here and is fetched whenever it is on. */
 export const moduleSummary = () =>
   Object.fromEntries(MODULES.map((module) => [
     module.id,
-    { label: module.label, labelKey: module.labelKey ?? null, hasPane: Boolean(module.hasPane) },
+    {
+      label: module.label,
+      labelKey: module.labelKey ?? null,
+      hasPane: Boolean(module.hasPane),
+      chrome: Boolean(module.chrome),
+    },
   ]));
 
 /** A tile's own settings, validated by the module that declares the type. */

@@ -12,7 +12,7 @@ export { api, toast } from './api.js';
 export { state, moduleState } from './state.js';
 export { openModal, closeModal, closeAllModals, tileOfType } from './modals.js';
 export { onThemeChange, withTransition } from './theme.js';
-export { goTo } from './chrome.js';
+export { goTo, yearProgress, onClockTick } from './chrome.js';
 export { openDialog, closeDialog } from './dialogs.js';
 export { tileElement } from './tiles.js';
 export { field, textInput, checkbox, colourPicker, iconPicker, slider, dialogFooter, uid } from './forms.js';

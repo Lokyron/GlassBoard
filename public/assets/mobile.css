@@ -62,7 +62,7 @@
   #search-card { grid-column: 1 / -1; order: 2; }
   .wgrid { grid-column: 1 / -1; order: 3; }
   #apps-section { grid-column: 1 / -1; order: 4; }
-  .sidebar > .wcard-s:not(#search-card) { order: 5; }
+  .sidebar > .wcard-s:not(#search-card), #side-extra > .wcard-s { order: 5; }
   #apps-section, .wgrid { scroll-margin-top: calc(var(--safe-t) + 68px); }
 
   .brand { width: 40px; height: 40px; border-radius: 13px; font-size: 19px; }
@@ -318,4 +318,30 @@
    there is none, so the crosshair means nothing. */
 @media(max-width:820px){
   .wc-plot { cursor: default; }
+}
+
+/* The calendar on a phone.
+   The panel's day column cannot sit beside a seven-column month at this
+   width, so it goes underneath it, and the month keeps the whole width it
+   has. The cells lose their chips' titles well before they lose the chips:
+   knowing a day is busy, and how busy, is most of what the grid is for. */
+@media(max-width:820px){
+  .cal-body { grid-template-columns: 1fr; }
+  .cal-grid { grid-auto-rows: minmax(62px, 1fr); gap: 4px; }
+  .cal-cell { padding: 4px; border-radius: 10px; }
+  .cal-chip { padding: 1px 4px; font-size: .64rem; }
+  .cal-chip-time { display: none; }
+  .cal-upcoming { max-height: none; }
+  .cal-head-right .btn { padding: 6px 11px; font-size: .8rem; }
+  .cal-times { grid-template-columns: 1fr; }
+}
+
+/* Narrower still, a chip is a bar: the title has no room left and the colour
+   plus the count is the honest reading. */
+@media(max-width:520px){
+  .cal-chip-title { display: none; }
+  .cal-chip { height: 5px; border-radius: 3px; padding: 0; border-left-width: 0;
+    background: var(--chip, var(--primary)); }
+  .cal-cell-events { gap: 3px; }
+  .cal-card-num { font-size: 1.8rem; }
 }

@@ -5,6 +5,52 @@ Notable changes, newest first. The format follows
 
 ## Unreleased
 
+### Added
+
+- **A calendar, where the year-progress card used to be.** That card said how
+  far through the year we were and nothing else: a percentage answers "what is
+  today" and never answers "what is today *for*". In its place the sidebar now
+  carries the date, the month at a glance with a dot under every day that has
+  something on it, and the next event. The year is still there — as the thin
+  line along the bottom of the card, and switchable off in **Settings →
+  Calendar** for anyone who would rather have the room.
+
+  **Clicking the card opens the month.** Page through it with the arrows or
+  come back with **Today**; pick a day and its events are listed beside the
+  grid, with the next few under **Coming up** and a key to the colours when
+  more than one calendar is drawn. Click an event to open it, **New event** or
+  a double-click on a day to add one: title, all day or a time, where it is, a
+  note, and which calendar it goes in.
+
+  **It connects to a Google account** through an OAuth client of your own —
+  there is no "our" Google project for a self-hosted application to put a
+  shared credential in. The client ID, the client secret and the refresh token
+  are encrypted with `APP_SECRET` and live outside the configuration document,
+  so an exported configuration carries no credential. The README has the four
+  steps in the Google Cloud console.
+
+  **Which redirect URI you register depends on how you reach the dashboard,
+  and the settings tell you which.** An instance with a hostname over HTTPS
+  gets its own callback and one click. An instance reached at an IP address —
+  the normal case on a homelab — uses a loopback address and a paste, because
+  Google refuses a redirect URI whose host is a raw IP and requires HTTPS
+  outside localhost. That is a rule at Google's end, not something the
+  dashboard could code its way around, so the settings say so plainly instead
+  of failing at the fourth click.
+
+  **An edit made here touches the title, the time, the place and the note, and
+  nothing else.** Attendees, reminders and conferencing links are never sent
+  back and so cannot be lost. One occurrence of a repeating event, and a
+  calendar shared with you to read, open read-only with a link to Google
+  Calendar: changing an occurrence here would move that one Tuesday and leave
+  the series alone, which is not what anybody means by moving an event.
+
+  **The months are kept warm by a background job**, the one before and the two
+  after along with this one, so opening the card is a read off disk rather
+  than a wait on Google; a month paged back to outside that window is fetched
+  once and cached like the rest. When Google cannot be reached, the last month
+  that could be read is shown with a word saying so, instead of an empty grid.
+
 ### Fixed
 
 - **A folder reopened after following one of its links stays open.** Clicking a
@@ -17,6 +63,15 @@ Notable changes, newest first. The format follows
   — not one of the links animating in under it — ends the exit.
 
 ### Changed
+
+- **A module may now draw part of the page around the tiles, not only a
+  tile.** The sidebar gained one slot and the core still knows nothing about
+  what goes in it: a module declares `chrome: true`, returns `sidebarCards()`,
+  and is fetched by the browser whenever it is switched on rather than when
+  the dashboard happens to have one of its tiles. A card marked `primary`
+  stands in for the core's own year card, which is hidden and not removed — so
+  switching the module off gives the sidebar straight back. `modules/README.md`
+  has the contract.
 
 - **Licence : MIT devient AGPL-3.0-or-later.** Faire tourner une copie non
   modifiee pour soi ne change rien. Ce qui change : qui fait tourner une version

@@ -20,7 +20,7 @@
  * Everything but `tiles` is optional. */
 import { id, esc } from './dom.js';
 import { state } from './state.js';
-import { decorate, setModuleNavEntries } from './chrome.js';
+import { decorate, setModuleNavEntries, setSidebarCards } from './chrome.js';
 import { onThemeChange } from './theme.js';
 
 /** module id -> its loaded client. */
@@ -39,9 +39,20 @@ export const isModuleEnabled = (moduleId) => state.config?.modules?.[moduleId]?.
 export const visibleTiles = () =>
   (state.config?.tiles ?? []).filter((tile) => isModuleEnabled(moduleIdOf(tile.type)));
 
+/* A module that draws part of the page around the tiles rather than a tile.
+   It has no tile to be found by, so the page needs it whenever it is on — the
+   server says which modules those are in the summary it sends. */
+const chromeModules = () =>
+  Object.entries(state.modules ?? {})
+    .filter(([moduleId, meta]) => meta.chrome && isModuleEnabled(moduleId))
+    .map(([moduleId]) => moduleId);
+
 /** The module clients the current configuration needs, loaded once each. */
 export async function loadModulesForConfig() {
-  const wanted = new Set(visibleTiles().map((tile) => moduleIdOf(tile.type)).filter(Boolean));
+  const wanted = new Set([
+    ...visibleTiles().map((tile) => moduleIdOf(tile.type)).filter(Boolean),
+    ...chromeModules(),
+  ]);
   await Promise.all(
     [...wanted]
       .filter((moduleId) => !loaded.has(moduleId))
@@ -60,9 +71,18 @@ export async function loadModulesForConfig() {
       })
   );
   setModuleNavEntries(() =>
-    [...loaded.values()].flatMap((client) => (client.navEntries ? client.navEntries() : []))
+    enabledClients().flatMap((client) => (client.navEntries ? client.navEntries() : []))
+  );
+  setSidebarCards(() =>
+    enabledClients().flatMap((client) => (client.sidebarCards ? client.sidebarCards() : []))
   );
 }
+
+/* A module switched off while the page was open stays in memory — there is no
+   unloading an ES module — so every list the core composes out of the loaded
+   clients has to ask the switch rather than assume it. */
+const enabledClients = () =>
+  [...loaded].filter(([moduleId]) => isModuleEnabled(moduleId)).map(([, client]) => client);
 
 const clientFor = (type) => loaded.get(moduleIdOf(type)) ?? null;
 const tileSpecFor = (type) => clientFor(type)?.tiles?.[type] ?? null;

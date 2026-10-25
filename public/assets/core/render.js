@@ -3,13 +3,14 @@
  * Its own file rather than part of the boot, because the editor calls both of
  * these after a change and the boot calls into the editor to wire it up —
  * leaving them together made the two files import each other. */
-import { renderChrome, renderNav, renderLinks, updateTime } from './chrome.js';
+import { renderChrome, renderNav, renderLinks, renderSidebar, updateTime } from './chrome.js';
 import { renderTiles, refreshModules } from './tiles.js';
 
 export function renderAll() {
   renderChrome();
   renderNav();
   renderTiles();
+  renderSidebar();
   renderLinks();
   updateTime();
 }

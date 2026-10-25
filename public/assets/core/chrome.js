@@ -1,6 +1,6 @@
 /* The page around the tiles: navigation, shortcuts, folders, the clock and
    the header. None of it knows which features the instance has. */
-import { id, safe, esc, svg, iconName } from './dom.js';
+import { id, safe, esc, svg, iconName, hydrateIcons } from './dom.js';
 import { state } from './state.js';
 import { openModal, closeModal } from './modals.js';
 import { applyAppearance } from './theme.js';
@@ -11,6 +11,52 @@ import { applyAppearance } from './theme.js';
 const decorators = { links: null, folder: null, tiles: null };
 export const setEditDecorators = (next) => Object.assign(decorators, next);
 export const decorate = (what, ...args) => { if (state.editing) decorators[what]?.(...args); };
+
+/* ---------------------------- the sidebar slot ---------------------------- */
+/* A module may put a card in the sidebar.
+ *
+ * Until now everything a module drew was a tile in the grid, and the sidebar
+ * was the core's alone. A calendar does not belong in the grid — it is read
+ * beside the dashboard, not as one card among eight — so the sidebar gained a
+ * slot, and the core still knows nothing about what goes in it.
+ *
+ * A card that calls itself `primary` stands in for the core's own year card:
+ * the one card the sidebar had was a percentage, and a module offering the
+ * date, what is on today and the year as a thin bar says everything that one
+ * said and more. The core's card is hidden rather than removed, so switching
+ * the module off gives the sidebar straight back. */
+let sidebarCards = () => [];
+export const setSidebarCards = (fn) => { sidebarCards = fn; };
+
+export function renderSidebar() {
+  const slot = id('side-extra');
+  if (!slot) return;
+  slot.innerHTML = '';
+  let standsIn = false;
+  for (const card of sidebarCards()) {
+    let node = null;
+    try {
+      node = card.render?.();
+    } catch (error) {
+      // One module's card is not the sidebar.
+      console.error('[glassboard] a sidebar card did not draw', error);
+    }
+    if (!node) continue;
+    slot.appendChild(node);
+    hydrateIcons(node);
+    if (card.primary) standsIn = true;
+  }
+  const year = id('year-card');
+  if (year) year.hidden = standsIn;
+}
+
+/* Something that wants to know when the clock moved.
+ *
+ * The core ticks once a second anyway. A module that shows today's date needs
+ * to hear about midnight and nothing else, and a second timer per module to
+ * find out is a timer per module too many. */
+const clockListeners = new Set();
+export const onClockTick = (fn) => { clockListeners.add(fn); return () => clockListeners.delete(fn); };
 
 /* The account menu lives in the shell, but the phone dock has to reach it. */
 let openAccountMenu = () => {};
@@ -153,17 +199,35 @@ export function updateTime() {
   const greeting = now.getHours() >= 18 ? t('greeting.evening') : t('greeting.morning');
   safe(id('greeting'), greetingName ? `${greeting} ${greetingName}` : greeting);
 
-  const year = now.getFullYear();
-  const yearStart = new Date(year, 0, 0);
-  const diff = now - yearStart + (yearStart.getTimezoneOffset() - now.getTimezoneOffset()) * 60000;
-  const total = year % 4 === 0 ? 366 : 365;
-  const day = Math.floor(diff / 86400000);
-  const percent = ((day / total) * 100).toFixed(1);
+  const { day, total, percent } = yearProgress(now);
   safe(id('day-count'), day);
   safe(id('total-days'), total);
   safe(id('year-percent'), `${percent}%`);
   const bar = id('year-progress-bar');
   if (bar) bar.style.width = `${percent}%`;
+
+  /* Last, and never allowed to stop the clock: a listener that throws must
+     not take the seconds with it. */
+  for (const listener of clockListeners) {
+    try { listener(now); } catch (error) { console.error(error); }
+  }
+}
+
+/**
+ * How far through the year we are: the day, the length of the year and the
+ * share as a string with one decimal.
+ *
+ * Exported because a module may show it too — the sidebar card that replaces
+ * the core's own keeps the year as a thin bar, and two pieces of code working
+ * out the length of a year separately is one too many.
+ */
+export function yearProgress(now = new Date()) {
+  const year = now.getFullYear();
+  const yearStart = new Date(year, 0, 0);
+  const diff = now - yearStart + (yearStart.getTimezoneOffset() - now.getTimezoneOffset()) * 60000;
+  const total = year % 4 === 0 ? 366 : 365;
+  const day = Math.floor(diff / 86400000);
+  return { day, total, percent: ((day / total) * 100).toFixed(1) };
 }
 
 /* -------------------------------- header --------------------------------- */
