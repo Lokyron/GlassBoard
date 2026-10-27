@@ -11,6 +11,44 @@
  * is switched on, because its card is not in the grid. */
 export const MAX_CALENDARS = 12;
 
+/* The loopback redirect, which is also what anything unusable falls back to.
+   Kept here rather than imported from the integration: the manifest is the
+   one file the configuration schema loads, and it must not drag the Google
+   client in behind it. */
+const LOOPBACK = 'http://127.0.0.1:33333/';
+
+/**
+ * A redirect URI, kept to what a redirect URI can be.
+ *
+ * It is an address Google sends somebody back to and nothing else: no query,
+ * no fragment, because Google puts its own parameters there. The obvious
+ * mistake is to paste the address you *landed on* into this field — it is a
+ * URL, it is almost the right one, and it is covered in response parameters.
+ * So rather than store it and fail later, the part that was the redirect URI
+ * is kept and what Google added is dropped, which yields exactly the right
+ * value.
+ *
+ * This matters because the failure it prevents happens at Google, four
+ * clicks away, as "Invalid redirect_uri contains reserved response param
+ * iss" — which tells a reader nothing about which of two boxes they filled
+ * in. An address that is not an http(s) URL at all falls back to the
+ * loopback, so a dashboard can never be left unable to start a sign-in.
+ */
+function redirectUri(v, raw, path) {
+  const text = v.str(raw, path, { max: 400, fallback: '' }).trim();
+  if (!text) return LOOPBACK;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return LOOPBACK;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return LOOPBACK;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
 export default {
   id: 'calendar',
   label: 'Calendar',
@@ -33,7 +71,7 @@ export default {
        https://192.168.1.50 cannot receive the redirect and uses the loopback
        one with a paste instead. server/integrations/google-calendar.js has
        the whole story. */
-    redirectUri: v.str(raw.redirectUri, `${path}.redirectUri`, { max: 400, fallback: 'http://127.0.0.1:33333/' }),
+    redirectUri: redirectUri(v, raw.redirectUri, `${path}.redirectUri`),
 
     /* The calendars the dashboard draws, as the pane last read them from
        Google. Their names and colours are kept so the card can be drawn

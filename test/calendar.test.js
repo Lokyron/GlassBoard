@@ -66,6 +66,47 @@ describe('the months the dashboard keeps warm', () => {
   });
 });
 
+describe('the redirect URI', () => {
+  /* The failure this prevents happens at Google, four clicks away, as
+     "Invalid redirect_uri contains reserved response param iss" — which tells
+     a reader nothing about which of the settings' two URL boxes they filled
+     in. Both take a URL and one of them is the address you land on. */
+  const saved = (redirectUri) =>
+    validateConfig({ integrations: { calendar: { redirectUri } } }).value.integrations.calendar.redirectUri;
+
+  const LOOPBACK = 'http://127.0.0.1:33333/';
+
+  it('keeps an address that is one', () => {
+    assert.equal(saved('https://glassboard.example.com/api/m/calendar/oauth/callback'),
+      'https://glassboard.example.com/api/m/calendar/oauth/callback');
+    assert.equal(saved(LOOPBACK), LOOPBACK);
+  });
+
+  it('keeps only the redirect URI out of the address Google sent you back to', () => {
+    assert.equal(
+      saved('http://127.0.0.1:33333/?state=AbC&code=4%2F0AX&scope=x&iss=https%3A%2F%2Faccounts.google.com'),
+      LOOPBACK
+    );
+    assert.equal(
+      saved('https://glassboard.example.com/api/m/calendar/oauth/callback?code=4%2F0AX#done'),
+      'https://glassboard.example.com/api/m/calendar/oauth/callback'
+    );
+  });
+
+  it('falls back to the loopback rather than leave a sign-in impossible to start', () => {
+    for (const unusable of ['', '   ', 'not a url', 'javascript:alert(1)', 'ftp://example.com/']) {
+      assert.equal(saved(unusable), LOOPBACK, JSON.stringify(unusable));
+    }
+  });
+
+  it('repairs a configuration that was saved before any of this', () => {
+    /* getConfig validates on every read, so an instance that stored the
+       landed address comes back usable without anybody editing anything. */
+    const stored = { integrations: { calendar: { redirectUri: `${LOOPBACK}?code=4%2F0AX&state=z` } } };
+    assert.equal(saved(stored.integrations.calendar.redirectUri), LOOPBACK);
+  });
+});
+
 describe('the OAuth client', () => {
   it('is nothing until both halves are given', () => {
     assert.equal(google.client(USER), null);

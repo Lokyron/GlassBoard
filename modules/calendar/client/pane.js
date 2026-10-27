@@ -74,12 +74,30 @@ export function pane(draft) {
 
   /* --------------------------- the redirect URI -------------------------- */
 
+  /* Said out loud when the address Google sent you back to is pasted here
+     instead of in the box further down. Both fields take a URL and this one
+     is the one you see first, so it is the mistake to expect; the server
+     keeps only the part that was the redirect URI, and this is what says so.
+     Without it the correction would be silent, and a silent correction to a
+     field somebody just filled in is its own kind of wrong. */
+  const misplaced = el('p', { class: 'status cal-misplaced', text: t('set.calRedirectStripped') });
+  misplaced.hidden = true;
+
   const redirect = textInput(calendar.redirectUri, {
     autocomplete: 'off', spellcheck: 'false',
-    oninput: (e) => { calendar.redirectUri = e.target.value.trim(); },
+    oninput: (e) => {
+      const typed = e.target.value.trim();
+      const cleaned = withoutResponseParams(typed);
+      misplaced.hidden = cleaned === typed;
+      calendar.redirectUri = cleaned;
+      // Only once it is clear what happened, and never mid-word: rewriting
+      // the box on every keystroke would fight whoever is typing in it.
+      if (cleaned !== typed) e.target.value = cleaned;
+    },
   });
   const redirectHint = el('p', { class: 'fld-h', text: t('set.calRedirectHint') });
   pane.appendChild(field(t('set.calRedirect'), redirect, t('set.calRedirectWhich')));
+  pane.appendChild(misplaced);
   pane.appendChild(redirectHint);
 
   /* Both of the addresses worth registering in Google's console, as buttons
@@ -245,6 +263,21 @@ export function pane(draft) {
       };
     });
     paintList();
+  }
+
+  /** A redirect URI has no query and no fragment — Google puts its own there.
+   *  The same rule as the server's, so the box shows what will be saved. */
+  function withoutResponseParams(text) {
+    if (!text) return text;
+    try {
+      const url = new URL(text);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return text;
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    } catch {
+      return text;
+    }
   }
 
   /* The configuration takes #rrggbb and Google is not always that tidy. */

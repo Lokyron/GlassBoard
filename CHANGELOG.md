@@ -66,6 +66,21 @@ Notable changes, newest first. The format follows
   called off when the panel is opened again, and only the panel's own animation
   — not one of the links animating in under it — ends the exit.
 
+### Fixed
+
+- **The address Google sends you back to, pasted into the redirect URI box,
+  no longer breaks the sign-in.** Both boxes in **Settings → Calendar** take a
+  URL, one of them is the address you land on, and the one you meet first is
+  the wrong one — so that is the mistake to expect. It used to be stored
+  whole, and the next sign-in died at Google with *"Invalid redirect_uri
+  contains reserved response param iss"*, which says nothing about which box
+  was filled in. A redirect URI now keeps no query and no fragment, because
+  Google puts its own there: the part that is a redirect URI is kept, the rest
+  is dropped, and the pane says so rather than correcting in silence. The
+  configuration is validated on every read, so an instance already holding the
+  landed address repairs itself. Anything that is not an http(s) URL falls
+  back to the loopback, so a sign-in can never become impossible to start.
+
 ### Changed
 
 - **A module may now draw part of the page around the tiles, not only a

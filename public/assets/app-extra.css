@@ -818,3 +818,7 @@ body:not(.editing) .pve.pve-clickable{cursor:pointer}
 .cal-list-row{display:grid;gap:6px;padding:10px 12px;border-radius:13px;
   border:1px solid var(--border);background:var(--surface-soft)}
 .cal-paste{display:grid;gap:10px}
+/* The correction made to a redirect URI somebody has just pasted. Amber and
+   not red: nothing has gone wrong, the value was simply more than a redirect
+   URI and the rest belongs in the box below. */
+.cal-misplaced{border-color:#eab308;color:var(--text)}
