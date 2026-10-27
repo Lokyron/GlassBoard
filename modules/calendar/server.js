@@ -27,9 +27,27 @@ const chosen = (settings) =>
  *  one click, nothing to copy. "paste" otherwise, which is the normal case on
  *  a homelab: Google refuses a raw IP address as a redirect URI, so the
  *  reader lands on a dead loopback page and pastes its address back. */
+/**
+ * The callback address on this instance, as it should be registered.
+ *
+ * https for anything that is not localhost, whatever scheme the request says
+ * it arrived as. Google will not take an http callback on a real hostname, so
+ * offering one is always wrong — and a dashboard behind a reverse proxy that
+ * does not pass X-Forwarded-Proto reports http for a page that was in fact
+ * served over https. Offering an address that cannot work is worse than
+ * offering none.
+ *
+ * Exported, and taking plain strings, because the decision is worth testing
+ * on its own: a request object cannot carry a Host header through fetch.
+ */
+export function callbackUri(host, protocol = 'https') {
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host ?? '');
+  return `${local ? protocol : 'https'}://${host ?? ''}/api/m/calendar/oauth/callback`;
+}
+
 function flow(req, settings) {
   const redirectUri = settings.redirectUri || google.LOOPBACK_REDIRECT;
-  const ours = `${req.protocol}://${req.get('host')}/api/m/calendar/oauth/callback`;
+  const ours = callbackUri(req.get('host'), req.protocol);
   return { redirectUri, ours, mode: redirectUri === ours ? 'callback' : 'paste' };
 }
 

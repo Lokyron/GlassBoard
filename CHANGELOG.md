@@ -81,6 +81,13 @@ Notable changes, newest first. The format follows
   landed address repairs itself. Anything that is not an http(s) URL falls
   back to the loopback, so a sign-in can never become impossible to start.
 
+- **The callback address the calendar settings offer is never an http one on a
+  real hostname.** Google takes no http callback outside localhost, and a
+  dashboard behind a reverse proxy that does not pass `X-Forwarded-Proto`
+  looks from the inside as though it had been reached over plain http — so the
+  button offered an address Google would refuse. Offering one that cannot work
+  is worse than offering none.
+
 ### Changed
 
 - **A module may now draw part of the page around the tiles, not only a

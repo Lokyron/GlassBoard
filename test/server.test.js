@@ -357,6 +357,13 @@ describe('module routes', () => {
     await setModule('calendar', false);
   });
 
+  it('offers its own callback address on a loopback host as it was reached', async () => {
+    await setModule('calendar', true);
+    const direct = await get('/api/m/calendar/status');
+    assert.match(direct.json.callbackUri, /^http:\/\/127\.0\.0\.1(:\d+)?\/api\/m\/calendar\/oauth\/callback$/);
+    await setModule('calendar', false);
+  });
+
   it('refuses a month that is not one, before anything is cached or fetched', async () => {
     await setModule('calendar', true);
     for (const bad of ['2026-13', 'nonsense', '..%2f..%2fetc']) {

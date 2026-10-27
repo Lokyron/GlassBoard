@@ -17,6 +17,7 @@ import { isolate } from './helpers.js';
 isolate('calendar');
 const google = await import('../server/integrations/google-calendar.js');
 const months = await import('../modules/calendar/months.js');
+const { callbackUri } = await import('../modules/calendar/server.js');
 const manifest = (await import('../modules/calendar/manifest.js')).default;
 const { validateConfig } = await import('../server/config-schema.js');
 const { db, now, getSecret } = await import('../server/db.js');
@@ -104,6 +105,32 @@ describe('the redirect URI', () => {
        landed address comes back usable without anybody editing anything. */
     const stored = { integrations: { calendar: { redirectUri: `${LOOPBACK}?code=4%2F0AX&state=z` } } };
     assert.equal(saved(stored.integrations.calendar.redirectUri), LOOPBACK);
+  });
+});
+
+describe('the callback address the settings offer', () => {
+  /* Google takes no http callback outside localhost. A dashboard behind a
+     reverse proxy that does not pass X-Forwarded-Proto looks, from inside, as
+     though it were reached over plain http — and offering an address that
+     cannot work is worse than offering none. */
+  it('is https on a real hostname, whatever the request arrived as', () => {
+    assert.equal(callbackUri('dashboard.example.com', 'http'),
+      'https://dashboard.example.com/api/m/calendar/oauth/callback');
+    assert.equal(callbackUri('dashboard.example.com', 'https'),
+      'https://dashboard.example.com/api/m/calendar/oauth/callback');
+  });
+
+  it('is https on an IP address too, which Google refuses for another reason', () => {
+    // Refused as a raw IP host, not for its scheme — but never offered as http.
+    assert.equal(callbackUri('192.168.1.50', 'http'),
+      'https://192.168.1.50/api/m/calendar/oauth/callback');
+  });
+
+  it('leaves localhost alone, where http is the one that works', () => {
+    assert.equal(callbackUri('127.0.0.1:3000', 'http'),
+      'http://127.0.0.1:3000/api/m/calendar/oauth/callback');
+    assert.equal(callbackUri('localhost:3000', 'http'),
+      'http://localhost:3000/api/m/calendar/oauth/callback');
   });
 });
 
