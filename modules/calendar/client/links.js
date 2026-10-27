@@ -67,8 +67,16 @@ export function linkNodes(raw) {
  *
  * A location field holds either an address or, more and more often, the link
  * to a meeting — so a value that is already a URL is followed as one rather
- * than searched for on a map. Everything else goes to OpenStreetMap, which is
- * the map this application already uses everywhere else.
+ * than searched for on a map. Everything else goes to Google Maps.
+ *
+ * Not OpenStreetMap, which is what the GeoRide map is drawn with: that one is
+ * a map rendered inside the dashboard, where the choice is about tiles and a
+ * usage policy. This is a link that leaves, on a phone as often as not, and
+ * there it opens the maps application somebody already has their places and
+ * their traffic in. The two decisions have nothing in common but the word.
+ *
+ * `api=1` is Google's documented, stable form for a search link, so it does
+ * not depend on the shape of a URL that happens to work today.
  */
 export function placeLink(location) {
   const text = String(location ?? '').trim();
@@ -79,5 +87,8 @@ export function placeLink(location) {
   } catch {
     /* not a URL: it is a place */
   }
-  return { href: `https://www.openstreetmap.org/search?query=${encodeURIComponent(text)}`, isMap: true };
+  return {
+    href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}`,
+    isMap: true,
+  };
 }

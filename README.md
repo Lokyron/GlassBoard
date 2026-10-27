@@ -576,8 +576,8 @@ back with **Today**, pick a day to see what is on it beside the grid, and read
 the next few events under **Coming up**. Clicking an event tells you about it:
 when, where, which calendar, and the note it carries.
 
-What it carries is clickable. The place opens in a map — or goes straight to
-the meeting, when the field holds a link rather than an address. A link in the
+What it carries is clickable. The place opens in Google Maps — or goes
+straight to the meeting, when the field holds a link rather than an address. A link in the
 notes is a link, an e-mail address opens a message, a telephone number dials.
 A description written in HTML is turned back into its words, each link's
 address kept beside them.

@@ -22,9 +22,9 @@ Notable changes, newest first. The format follows
   where, which calendar, and the note it carries.
 
   **What an event carries is clickable.** Read-only does not mean inert: most
-  of what a calendar holds is something to act on. The place opens in a map,
-  or goes straight to the meeting when the field holds a link instead of an
-  address; a link in the notes is a link, an e-mail address opens a message
+  of what a calendar holds is something to act on. The place opens in Google
+  Maps, or goes straight to the meeting when the field holds a link instead of
+  an address; a link in the notes is a link, an e-mail address opens a message
   and a telephone number dials. A description written in HTML — some tools do
   that, Google among them — is turned back into its words, with each link's
   address kept beside them.
