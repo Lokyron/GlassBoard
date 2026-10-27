@@ -576,6 +576,17 @@ back with **Today**, pick a day to see what is on it beside the grid, and read
 the next few events under **Coming up**. Clicking an event tells you about it:
 when, where, which calendar, and the note it carries.
 
+What it carries is clickable. The place opens in a map — or goes straight to
+the meeting, when the field holds a link rather than an address. A link in the
+notes is a link, an e-mail address opens a message, a telephone number dials.
+A description written in HTML is turned back into its words, each link's
+address kept beside them.
+
+None of that renders the feed's own markup. A subscribed calendar belongs to
+somebody else, so its text never reaches `innerHTML`: the links are built as
+elements from text that matched a pattern, and only `http` and `https` ever
+become one.
+
 #### Subscribing to a calendar
 
 Glassboard reads calendars you subscribe to. One `.ics` address each, fetched

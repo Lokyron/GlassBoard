@@ -21,6 +21,19 @@ Notable changes, newest first. The format follows
   more than one calendar is drawn. Clicking an event tells you about it: when,
   where, which calendar, and the note it carries.
 
+  **What an event carries is clickable.** Read-only does not mean inert: most
+  of what a calendar holds is something to act on. The place opens in a map,
+  or goes straight to the meeting when the field holds a link instead of an
+  address; a link in the notes is a link, an e-mail address opens a message
+  and a telephone number dials. A description written in HTML — some tools do
+  that, Google among them — is turned back into its words, with each link's
+  address kept beside them.
+
+  None of that is the feed's markup being rendered. A subscribed calendar
+  belongs to somebody else, so its text never reaches `innerHTML`: the links
+  are built as elements from text that matched a pattern, and only `http` and
+  `https` ever become one.
+
   **Calendars are subscribed to, by their `.ics` address** — the one Google
   calls the secret iCal address, and the one Nextcloud, Apple, Outlook and
   most association tools publish as well. Up to eight, each with its own

@@ -24,6 +24,7 @@ import {
   dayKey, fromDayKey, addDays, monthKey, shiftMonth, monthGrid, weekdayNames,
   isSameMonth, byDay, startsAt, endsAt, rangeOf, timeOf, longDay, monthTitle,
 } from './dates.js';
+import { linkNodes, placeLink } from './links.js';
 
 /* How many events fit in a grid cell before the rest become a count. Three
    is what a cell holds at the panel's width without the row growing; past
@@ -377,28 +378,58 @@ function paintLegend(events) {
 
 /* A reading and not a form. The calendar is subscribed to, so there is
    nothing here to save — which is why this is a few lines of text rather than
-   the editor this panel used to open. */
+   the editor this panel used to open.
+ *
+ * Read does not mean inert, though. What a calendar carries is mostly things
+ * to act on: the address of the hall, the link to the meeting, the minutes in
+ * the notes. Those are built as elements by client/links.js and never as
+ * markup — the text belongs to somebody else's calendar. */
 function showEvent(event) {
   const body = el('div', { class: 'pane cal-detail' });
-  const line = (label, value) => {
-    if (!value) return;
+
+  const row = (label, children) => {
     body.appendChild(el('div', { class: 'cal-detail-row' }, [
       el('span', { class: 'fld-l', text: label }),
-      el('span', { text: value }),
+      ...[].concat(children),
     ]));
   };
+  const line = (label, value) => {
+    if (value) row(label, el('span', { text: value }));
+  };
+
   line(t('cal.when'), event.allDay
     ? `${longDay(dayKey(new Date(startsAt(event))), locale())} · ${t('cal.allDay')}`
     : `${longDay(dayKey(new Date(startsAt(event))), locale())} · ${rangeOf(event, locale())}`);
-  line(t('cal.location'), event.location);
+
+  /* The place, as a link: to the meeting when the field holds one, and to a
+     map when it holds an address — which is the thing you actually want from
+     a place on a calendar five minutes before leaving. */
+  const place = placeLink(event.location);
+  if (place) {
+    row(t('cal.location'), el('a', {
+      class: 'cal-detail-link',
+      href: place.href,
+      target: '_blank',
+      rel: 'noopener noreferrer nofollow',
+      title: place.isMap ? t('cal.openMap') : '',
+      text: event.location,
+    }));
+  }
+
+  if (event.link) {
+    row(t('cal.link'), el('a', {
+      class: 'cal-detail-link', href: event.link, target: '_blank',
+      rel: 'noopener noreferrer nofollow', text: event.link,
+    }));
+  }
+
   line(t('cal.calendar'), event.calendarName);
   if (event.recurring) line(t('cal.repeats'), t('cal.repeatsHint'));
+
   if (event.description) {
-    body.appendChild(el('div', { class: 'cal-detail-row' }, [
-      el('span', { class: 'fld-l', text: t('cal.description') }),
-      el('p', { class: 'cal-detail-text', text: event.description }),
-    ]));
+    row(t('cal.description'), el('p', { class: 'cal-detail-text' }, linkNodes(event.description)));
   }
+
   openDialog({ title: event.title || t('cal.untitled'), subtitle: t('cal.readOnly'), body });
 }
 

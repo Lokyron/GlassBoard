@@ -202,6 +202,53 @@ export function eventsInWindow(text, feed, { timeMin, timeMax }) {
 const overlaps = (start, end, from, to) =>
   (end ?? start).compare(from) > 0 && start.compare(to) <= 0;
 
+/** A URL the browser may be handed, or an empty string. Only http(s): a feed
+ *  is a third party, and a `javascript:` URL in an href is a hole. */
+function httpUrl(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString().slice(0, 2000) : '';
+  } catch {
+    return '';
+  }
+}
+
+/* DESCRIPTION is meant to be plain text, and most of the time it is. Some
+ * tools put HTML in it anyway — Google itself does on invitations — and a
+ * reader should see the words rather than the markup around them.
+ *
+ * This turns such a description back into text. It does NOT sanitise HTML for
+ * display, because nothing here is ever displayed as HTML: the browser builds
+ * the links itself out of the text below, which is the only way a calendar
+ * belonging to somebody else cannot put markup on this dashboard.
+ *
+ * A link keeps its address beside its words — "the minutes (https://…)" —
+ * because the address is the part a reader can act on, and dropping it would
+ * lose exactly what this is for. */
+function plainText(raw) {
+  const text = String(raw ?? '');
+  if (!/[<&]/.test(text)) return text;
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (whole, href, label) => {
+      const words = label.replace(/<[^>]*>/g, '').trim();
+      // A link whose words are already the address says it once, not twice.
+      return !words || words === href ? href : `${words} (${href})`;
+    })
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /* What the browser receives: what the calendar draws, and nothing else. An
    iCalendar file carries attendees, organisers and alarms; none of that is on
    screen, so none of it travels. */
@@ -223,8 +270,8 @@ function shape(event, startDate, endDate, feed) {
       ? (endDate ?? startDate).toString().slice(0, 10)
       : (endDate ?? startDate).toJSDate().toISOString(),
     location: String(event.location || '').slice(0, 300),
-    description: String(event.description || '').slice(0, 2000),
-    link: '',
+    description: plainText(event.description).slice(0, 2000),
+    link: httpUrl(event.component?.getFirstPropertyValue('url')),
     recurring: Boolean(event.component?.getFirstPropertyValue('rrule')),
   };
 }

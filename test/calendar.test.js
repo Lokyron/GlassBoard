@@ -63,6 +63,15 @@ const SAMPLE = [
   'RECURRENCE-ID;TZID=Europe/Paris:20261110T190000',
   'UID:cours@test', 'SUMMARY:Cours decale',
   'END:VEVENT',
+  // One with an address of its own and a description written in HTML.
+  'BEGIN:VEVENT',
+  'DTSTART;TZID=Europe/Paris:20261029T093000',
+  'DTEND;TZID=Europe/Paris:20261029T110000',
+  'UID:revue@test', 'SUMMARY:Revue mensuelle',
+  'URL:https://example.com/revue',
+  'DESCRIPTION:<p>Ordre du jour : <a href="https://example.com/odj">le document' +
+    '</a><br>Contact : bureau@example.com</p>',
+  'END:VEVENT',
   // An all-day span of two days.
   'BEGIN:VEVENT',
   'DTSTART;VALUE=DATE:20261101', 'DTEND;VALUE=DATE:20261103',
@@ -121,6 +130,42 @@ describe('reading a feed', () => {
     for (const field of ['attendee', 'organizer', 'valarm']) {
       assert.equal(written.toLowerCase().includes(field), false, field);
     }
+  });
+});
+
+describe('what a reader can act on', () => {
+  const revue = () => parsed().find((e) => e.title === 'Revue mensuelle');
+
+  it('carries the event’s own address when it has one', () => {
+    assert.equal(revue().link, 'https://example.com/revue');
+  });
+
+  it('never carries a link the browser should not follow', () => {
+    /* A feed belongs to somebody else. `javascript:` in an href is the hole
+       this closes, and it is closed here rather than in the browser. */
+    const feed = SAMPLE.replace('URL:https://example.com/revue', 'URL:javascript:alert(1)');
+    const event = ical.eventsInWindow(feed, FEED, WINDOW).find((e) => e.title === 'Revue mensuelle');
+    assert.equal(event.link, '');
+  });
+
+  it('turns a description written in HTML back into its words', () => {
+    /* DESCRIPTION is meant to be plain text and often is not. The markup goes
+       and the words stay — and the address of a link stays beside its words,
+       because the address is the part a reader can act on. */
+    const text = revue().description;
+    assert.ok(!text.includes('<'), `no markup left: ${text}`);
+    assert.ok(text.includes('le document (https://example.com/odj)'), text);
+    assert.ok(text.includes('bureau@example.com'), text);
+    assert.ok(text.startsWith('Ordre du jour'), text);
+  });
+
+  it('leaves a description that was already plain exactly as it was', () => {
+    const feed = SAMPLE.replace(
+      /DESCRIPTION:<p>[\s\S]*?<\/p>/,
+      'DESCRIPTION:Rien de particulier'
+    );
+    const event = ical.eventsInWindow(feed, FEED, WINDOW).find((e) => e.title === 'Revue mensuelle');
+    assert.equal(event.description, 'Rien de particulier');
   });
 });
 

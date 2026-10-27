@@ -820,4 +820,10 @@ body:not(.editing) .pve.pve-clickable{cursor:pointer}
 .cal-detail{gap:12px}
 .cal-detail-row{display:grid;gap:3px}
 .cal-detail-text{font-size:.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text)}
+/* A link in somebody else's calendar: underlined so it reads as one even in
+   the middle of a paragraph, and wrapped anywhere — a meeting URL is longer
+   than this panel and must not push the sheet sideways. */
+.cal-detail a,.cal-detail-link{color:var(--primary);text-decoration:underline;
+  text-underline-offset:2px;overflow-wrap:anywhere}
+.cal-detail a:hover,.cal-detail-link:hover{text-decoration-thickness:2px}
 .cal-danger{color:#ff453a}
