@@ -81,6 +81,17 @@ Notable changes, newest first. The format follows
   landed address repairs itself. Anything that is not an http(s) URL falls
   back to the loopback, so a sign-in can never become impossible to start.
 
+- **A Google sign-in has half an hour to be completed, not ten minutes.** What
+  happens between the click and the callback is not a redirect: it is choosing
+  an account, reading "Google hasn't verified this app", finding *Advanced*
+  under it, deciding to go on, and granting a calendar scope. Ten minutes was
+  a machine's idea of how long a person takes, and running out of them ended
+  at "That sign-in has expired" with no hint that waiting was the problem. The
+  message now says so, and says the same thing for a state already used —
+  from the server they are one fact, and the answer to either is the same
+  click. Nothing is weakened by the wait: the state is 24 random bytes, spent
+  on first use, and tied to the account that asked for it.
+
 - **The callback address the calendar settings offer is never an http one on a
   real hostname.** Google takes no http callback outside localhost, and a
   dashboard behind a reverse proxy that does not pass `X-Forwarded-Proto`

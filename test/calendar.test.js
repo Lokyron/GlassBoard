@@ -206,7 +206,7 @@ describe('finishing a sign-in', () => {
   it('refuses a state nobody started', async () => {
     await assert.rejects(
       google.completeAuth({ code: 'x', state: 'made-up', expectedUserId: USER }),
-      /expired/
+      /Start it again/
     );
   });
 
@@ -226,7 +226,7 @@ describe('finishing a sign-in', () => {
     await assert.rejects(google.completeAuth({ code: 'x', state, expectedUserId: OTHER }), /another account/);
     // The second attempt no longer finds it: an authorization code is good
     // once, and a state left behind is a replay somebody could try.
-    await assert.rejects(google.completeAuth({ code: 'x', state, expectedUserId: USER }), /expired/);
+    await assert.rejects(google.completeAuth({ code: 'x', state, expectedUserId: USER }), /Start it again/);
   });
 
   it('reads the code out of whatever address was pasted', async () => {
@@ -236,7 +236,7 @@ describe('finishing a sign-in', () => {
        the paste. */
     await assert.rejects(
       google.completeFromPaste(USER, `http://127.0.0.1:33333/?state=${state}&code=4/abc-def&scope=x`),
-      (error) => !/authorization code|carries no state|expired/.test(error.message)
+      (error) => !/authorization code|carries no state|Start it again/.test(error.message)
     );
   });
 

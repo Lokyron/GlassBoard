@@ -46,8 +46,19 @@ export const SCOPES = [
    the whole trick. */
 export const LOOPBACK_REDIRECT = 'http://127.0.0.1:33333/';
 
-/** How long a half-finished sign-in is allowed to sit before it is forgotten. */
-const AUTH_TTL_SECONDS = 600;
+/* How long a half-finished sign-in is allowed to sit before it is forgotten.
+ *
+ * Half an hour, and it was ten minutes until somebody timed out on a perfectly
+ * normal first connection. What happens between the click and the callback is
+ * not a redirect: it is choosing an account, reading "Google hasn't verified
+ * this app", finding *Advanced* under it, deciding to go on, and granting a
+ * calendar scope — and that is if nobody is interrupted halfway through. Ten
+ * minutes is a machine's idea of how long a person takes.
+ *
+ * Nothing is weakened by the wait. The state is 24 random bytes, it is spent
+ * on first use, and it is checked against the account that asked for it; the
+ * authorization code it carries has its own, shorter life at Google. */
+const AUTH_TTL_SECONDS = 1800;
 
 /* Google's clock and ours are never quite the same, and an access token used
    in the second it expires fails the whole sync. A minute of margin costs one
@@ -188,7 +199,12 @@ function takeAuth(state) {
  */
 export async function completeAuth({ code, state, expectedUserId = null }) {
   const pending = takeAuth(String(state || ''));
-  if (!pending) throw new Error('That sign-in has expired. Start it again from the settings.');
+  if (!pending) {
+    /* Both cases are one message on purpose: from here they are the same
+       fact — there is no pending sign-in under that state — and the answer to
+       either is the same click. */
+    throw new Error('That sign-in was started over 30 minutes ago, or has already been completed. Start it again from the settings.');
+  }
   if (expectedUserId !== null && pending.userId !== expectedUserId) {
     throw new Error('That sign-in was started by another account.');
   }
