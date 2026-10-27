@@ -333,7 +333,6 @@
   .cal-chip-time { display: none; }
   .cal-upcoming { max-height: none; }
   .cal-head-right .btn { padding: 6px 11px; font-size: .8rem; }
-  .cal-times { grid-template-columns: 1fr; }
 }
 
 /* Narrower still, a chip is a bar: the title has no room left and the colour

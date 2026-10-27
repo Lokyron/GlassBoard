@@ -1,5 +1,5 @@
-/* Which months the dashboard keeps warm, and what a month is as far as Google
- * is concerned.
+/* Which months the dashboard keeps warm, and what a month is as far as a
+ * fetch is concerned.
  *
  * A month and not a sliding window, because paging is how a calendar is read:
  * file the answer under the month and moving back and forth through last

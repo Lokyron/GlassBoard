@@ -810,15 +810,14 @@ body:not(.editing) .pve.pve-clickable{cursor:pointer}
 .cal-legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding-top:9px;border-top:1px solid var(--border)}
 .cal-legend-item{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted)}
 
-/* ------------------------------- the editor ------------------------------- */
+/* --------------------------- feeds and one event -------------------------- */
 
-.cal-times{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.cal-editor .cal-danger{margin-right:auto;color:#ff453a}
-.cal-list{display:grid;gap:8px}
-.cal-list-row{display:grid;gap:6px;padding:10px 12px;border-radius:13px;
+.cal-list{display:grid;gap:10px}
+.cal-list-row{display:grid;gap:8px;padding:12px 13px;border-radius:14px;
   border:1px solid var(--border);background:var(--surface-soft)}
-.cal-paste{display:grid;gap:10px}
-/* The correction made to a redirect URI somebody has just pasted. Amber and
-   not red: nothing has gone wrong, the value was simply more than a redirect
-   URI and the rest belongs in the box below. */
-.cal-misplaced{border-color:#eab308;color:var(--text)}
+/* One event, read rather than edited: a subscription cannot be written to,
+   so this is a few lines of text and no form. */
+.cal-detail{gap:12px}
+.cal-detail-row{display:grid;gap:3px}
+.cal-detail-text{font-size:.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text)}
+.cal-danger{color:#ff453a}

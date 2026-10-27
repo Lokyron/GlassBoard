@@ -1,9 +1,10 @@
 /* Dates, as this module needs them.
  *
- * All of it is local time. The server sends an event exactly as Google stated
- * it — a plain YYYY-MM-DD for an all-day event, an instant for a timed one —
- * and placing either into a day is the browser's job, because the browser is
- * the only part of this that knows what timezone the reader is in.
+ * All of it is local time. The server sends an event exactly as the feed
+ * stated it — a plain YYYY-MM-DD for an all-day event, an instant for a timed
+ * one — and placing either into a day is the browser's job, because the
+ * browser is the only part of this that knows what timezone the reader is
+ * in.
  *
  * Its own file because the card, the grid and the editor all need the same
  * answers, and three slightly different ways of asking "which day is this
@@ -70,7 +71,7 @@ export function weekdayNames(locale, weekStartsMonday) {
 /**
  * Every day an event touches, as day keys.
  *
- * An all-day event's end is the day after the last one, as Google states it,
+ * An all-day event's end is the day after the last one, as iCalendar has it,
  * so a one-day event spans one key and not two. A timed event that runs past
  * midnight shows on both days, which is what a reader expects of a night
  * shift or a long flight.
@@ -148,50 +149,3 @@ export const longDay = (key, locale) =>
 
 export const monthTitle = (label, locale) =>
   firstOfMonth(label).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
-
-/* --------------------------- the editor's values -------------------------- */
-
-/** "YYYY-MM-DDTHH:MM" out of a Date, for a datetime the editor can hold and
- *  Google will take beside a timezone name. */
-export function localStamp(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${dayKey(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** The reader's timezone, so a timed event lands where they are and not in UTC. */
-export const timeZone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-  } catch {
-    return '';
-  }
-};
-
-/** The next whole or half hour: where an event added to today starts. */
-export function nextSlot(now = new Date()) {
-  const slot = new Date(now);
-  slot.setSeconds(0, 0);
-  slot.setMinutes(slot.getMinutes() > 30 ? 60 : 30);
-  return slot;
-}
-
-/* Something added to a day that is not today has no "next half hour" to
-   start at. Half past midnight — which is what the clock gives at one in the
-   morning — is nobody's idea of a default for next Thursday. */
-const WORKING_DAY_START = 9;
-
-/**
- * Where a new event starts on a given day: the next half hour when that day
- * is today, and the start of the working day otherwise.
- */
-export function defaultStart(key, now = new Date()) {
-  const day = fromDayKey(key);
-  if (key === dayKey(now)) {
-    const slot = nextSlot(now);
-    /* Unless the next half hour has fallen into tomorrow, which it does for
-       anyone still up at midnight. */
-    if (dayKey(slot) === key) return slot;
-  }
-  day.setHours(WORKING_DAY_START, 0, 0, 0);
-  return day;
-}

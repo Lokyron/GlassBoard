@@ -5,28 +5,24 @@
  * is today" and never "what is today for" — and the year is still there, as
  * the thin bar along the bottom.
  *
- * The browser never talks to Google: it reads months the server has already
- * fetched and filed, which is what keeps the OAuth grant on the server and
- * the card's load off the request path. A month the reader pages to that the
- * server has not got is fetched once, in its worker, and cached like the
- * rest — so wandering back through last spring costs one call per month and
- * no more, however many times it is paged over.
+ * The browser never fetches a calendar: it reads months the server has
+ * already fetched and parsed, which is what keeps the subscription addresses
+ * on the server and the card's load off the request path. A month the reader
+ * pages to that the server has not got is fetched once, in its worker, and
+ * cached like the rest — so wandering back through last spring costs one
+ * fetch per month and no more, however many times it is paged over.
  *
- * Writing goes the same way round: the panel sends four strings and a flag,
- * and Google's own idea of an event — its attendees, its reminders, its
- * conferencing — is never touched by an edit made here. That is deliberate.
- * An editor that round-trips fields it does not show is an editor that
- * quietly drops them. */
+ * Read-only throughout. There is no button here that could change an event,
+ * because an iCalendar feed is a file you download and there is no route
+ * behind one. Clicking an event tells you about it; that is all. */
 import {
-  id, safe, esc, svg, el, state, moduleState, api, toast,
-  openModal, closeModal, openDialog, closeDialog,
-  field, textInput, checkbox, dialogFooter,
+  id, safe, esc, svg, el, state, moduleState, api,
+  openModal, closeModal, openDialog,
   onClockTick, yearProgress,
 } from '/assets/core/kernel.js';
 import {
   dayKey, fromDayKey, addDays, monthKey, shiftMonth, monthGrid, weekdayNames,
   isSameMonth, byDay, startsAt, endsAt, rangeOf, timeOf, longDay, monthTitle,
-  localStamp, timeZone, defaultStart,
 } from './dates.js';
 
 /* How many events fit in a grid cell before the rest become a count. Three
@@ -51,37 +47,35 @@ Object.assign(own, {
 const settings = () => state.config?.integrations?.calendar ?? {};
 const locale = () => state.config?.site?.locale || 'en';
 const mondayFirst = () => settings().weekStartsMonday !== false;
-const connected = () => own.status?.connected === true;
+/** Whether there is anything to draw at all: a feed with an address behind it. */
+const configured = () => own.status?.configured === true;
 
 /* ------------------------------- the events ------------------------------- */
 
 /** One event, one token: the id alone is not unique once a repeating event
  *  has been expanded into its occurrences. */
-const token = (event) => `${event.calendarId}|${event.id}|${event.start}`;
+const token = (event) => `${event.calendarId}|${event.id}`;
 
-/** The calendars as the settings hold them, for colours and for hiding. */
-const chosenCalendars = () => new Map((settings().calendars ?? []).map((c) => [c.id, c]));
+/** The feeds as the settings hold them, for colours and for hiding. */
+const feedsById = () => new Map((settings().feeds ?? []).map((feed) => [feed.id, feed]));
 
-const colourOf = (event) => chosenCalendars().get(event.calendarId)?.colour || event.colour || '#0a84ff';
+const colourOf = (event) => feedsById().get(event.calendarId)?.colour || event.colour || '#0a84ff';
 
 /**
  * The events of the given months, de-duplicated and filtered to what the
  * reader has asked to see.
  *
  * An event spanning a month boundary comes back in both months' answers, so
- * the token is what keeps it one event. A calendar switched off in the
- * settings is dropped here as well as server side: the cached month predates
- * the switch, and nobody expects to have to wait for a refresh to see a
- * checkbox take effect.
+ * the token is what keeps it one event. A feed switched off in the settings
+ * is dropped here as well as server side: the cached month predates the
+ * switch, and nobody expects to wait for a refresh to see a checkbox work.
  */
 function eventsOf(labels) {
-  const chosen = chosenCalendars();
+  const feeds = feedsById();
   const seen = new Map();
   for (const label of labels) {
     for (const event of own.months.get(label)?.events ?? []) {
-      // Explicitly switched off, and not merely unknown: a calendar added in
-      // Google since the last visit should appear, not vanish.
-      if (chosen.get(event.calendarId)?.shown === false) continue;
+      if (feeds.get(event.calendarId)?.shown === false) continue;
       seen.set(token(event), event);
     }
   }
@@ -155,8 +149,6 @@ function cardMarkup() {
   const year = yearProgress(now);
   const showYear = settings().showYearProgress !== false;
 
-  const head = `<div class="lbl">${esc(t('cal.title'))}</div>`;
-
   const date = `<div class="cal-card-date">
       <div class="cal-card-num">${now.getDate()}</div>
       <div class="cal-card-when">
@@ -165,9 +157,7 @@ function cardMarkup() {
       </div>
     </div>`;
 
-  const mini = miniMonth(monthKey(now), today);
-
-  const nextLine = connected()
+  const nextLine = configured()
     ? (next
       ? `<div class="cal-card-next">
            <span class="cal-dot" style="background:${esc(colourOf(next))}"></span>
@@ -175,7 +165,7 @@ function cardMarkup() {
            <span class="cal-card-next-when">${esc(whenShort(next))}</span>
          </div>`
       : `<div class="cal-card-next muted">${esc(t('cal.nothingUpcoming'))}</div>`)
-    : `<div class="cal-card-next muted">${esc(t('cal.notConnectedShort'))}</div>`;
+    : `<div class="cal-card-next muted">${esc(t('cal.noFeedShort'))}</div>`;
 
   const yearRow = showYear
     ? `<div class="cal-card-year">
@@ -184,7 +174,7 @@ function cardMarkup() {
        </div>`
     : '';
 
-  return `${head}${date}${mini}${nextLine}${yearRow}`;
+  return `<div class="lbl">${esc(t('cal.title'))}</div>${date}${miniMonth(monthKey(now), today)}${nextLine}${yearRow}`;
 }
 
 /** The compact month on the card: the shape of the month, and a dot under
@@ -207,7 +197,7 @@ function miniMonth(label, today) {
     </div>`;
 }
 
-/** "today 18:30", "Thu 09:00", "12 Nov" — as little as says it. */
+/** "18:30", "tomorrow 09:00", "Thu 12" — as little as says it. */
 function whenShort(event) {
   const start = new Date(startsAt(event));
   const key = dayKey(start);
@@ -250,8 +240,6 @@ function buildCard() {
 function openPanel(origin = null) {
   openModal('calendar-modal', origin ?? own.card);
   paintPanel();
-  // Status first: whether there is an account behind this decides most of
-  // what the panel says, and it is one small request.
   loadStatus().then(() => ensureMonths(panelMonths())).then(paint);
 }
 
@@ -280,32 +268,37 @@ function paintPanel() {
   safe(id('cal-title'), monthTitle(own.view, locale()));
   safe(id('cal-sub'), subtitle());
 
-  const names = weekdayNames(locale(), mondayFirst());
-  id('cal-weekdays').innerHTML = names.map((name) => `<div>${esc(name)}</div>`).join('');
+  id('cal-weekdays').innerHTML = weekdayNames(locale(), mondayFirst())
+    .map((name) => `<div>${esc(name)}</div>`).join('');
 
   own.index = new Map(events.map((event) => [token(event), event]));
 
   id('cal-grid').innerHTML = monthGrid(own.view, mondayFirst())
-    .map((date) => cell(date, days))
-    .join('');
+    .map((date) => cell(date, days)).join('');
 
   paintDay(days);
   paintUpcoming();
   paintLegend(events);
-
-  const add = id('cal-add');
-  if (add) add.disabled = !connected();
 }
 
 function subtitle() {
   if (own.error) return own.error;
   if (!own.status) return '';
-  if (!own.status.configured) return t('cal.noClient');
-  if (!own.status.connected) return t('cal.notConnected');
+  if (!configured()) return t('cal.noFeed');
+
+  /* A feed that did not answer is named rather than left to look empty. The
+     months carry the error the worker met on each one. */
+  const broken = new Set();
+  for (const label of panelMonths()) {
+    for (const calendar of own.months.get(label)?.calendars ?? []) {
+      if (calendar.error) broken.add(calendar.name || calendar.id);
+    }
+  }
+  if (broken.size) return t('cal.feedFailed', { names: [...broken].join(', ') });
+
   const stale = panelMonths().some((label) => own.months.get(label)?.stale);
-  return stale
-    ? t('cal.stale', { account: own.status.account || t('cal.yourCalendar') })
-    : (own.status.account || t('cal.yourCalendar'));
+  const shown = (settings().feeds ?? []).filter((feed) => feed.shown).length;
+  return stale ? t('cal.stale') : t('cal.feedCount', { n: shown });
 }
 
 function cell(date, days) {
@@ -338,20 +331,18 @@ function paintDay(days) {
   const list = days.get(own.selected) ?? [];
   id('cal-day').innerHTML = list.length
     ? list.map((event) => eventRow(event)).join('')
-    : `<p class="cal-empty">${esc(connected() ? t('cal.nothingThisDay') : t('cal.notConnectedHint'))}</p>`;
+    : `<p class="cal-empty">${esc(configured() ? t('cal.nothingThisDay') : t('cal.noFeedHint'))}</p>`;
 }
 
 function paintUpcoming() {
   const list = upcoming();
   id('cal-upcoming').innerHTML = list.length
     ? list.map((event) => eventRow(event, { withDay: true })).join('')
-    : `<p class="cal-empty">${esc(connected() ? t('cal.nothingUpcoming') : t('cal.notConnectedHint'))}</p>`;
+    : `<p class="cal-empty">${esc(configured() ? t('cal.nothingUpcoming') : t('cal.noFeedHint'))}</p>`;
 }
 
 function eventRow(event, { withDay = false } = {}) {
-  const when = event.allDay
-    ? t('cal.allDay')
-    : rangeOf(event, locale());
+  const when = event.allDay ? t('cal.allDay') : rangeOf(event, locale());
   /* startsAt gives local midnight for an all-day event and the instant for a
      timed one, so one call answers both. */
   const day = withDay
@@ -382,172 +373,33 @@ function paintLegend(events) {
     .join('');
 }
 
-/* -------------------------------- the editor ------------------------------ */
+/* ------------------------------- one event -------------------------------- */
 
-/** The calendars an event may be put in. Google's own name for the account's
- *  main calendar is "primary", which needs no lookup to use — so there is
- *  always at least one destination, even before the first sync answers. */
-function writableCalendars() {
-  const listed = (own.status?.calendars ?? []).filter((calendar) => calendar.writable);
-  return listed.length ? listed : [{ id: 'primary', name: t('cal.primary'), writable: true }];
-}
-
-/**
- * Open an event, or a new one on the day given.
- *
- * One occurrence of a repeating event is shown and not offered for editing.
- * Changing it here would quietly move one Tuesday and leave the series where
- * it was, which is not what anybody means by dragging an event — so it goes
- * to Google's own interface, where the choice between "this one" and "all of
- * them" is a question the reader gets asked.
- */
-function openEditor(event = null, onDay = null) {
-  const editing = Boolean(event);
-  const readOnly = Boolean(event && (event.recurring || !event.writable));
-  const body = el('div', { class: 'pane cal-editor' });
-
-  const start = event ? new Date(startsAt(event)) : defaultStart(onDay ?? own.selected);
-  const end = event
-    ? new Date(endsAt(event))
-    : new Date(start.getTime() + 3_600_000);
-
-  const draft = {
-    calendarId: event?.calendarId || settings().defaultCalendarId || writableCalendars()[0].id,
-    title: event?.title ?? '',
-    allDay: event?.allDay ?? false,
-    startDate: dayKey(start),
-    startTime: localStamp(start).slice(11),
-    /* An all-day event's end is the day after the last one, as Google states
-       it. The editor shows the last day instead, because "the 3rd to the 4th"
-       for a one-day event on the 3rd is a bug as far as a reader is
-       concerned. */
-    endDate: event?.allDay ? dayKey(addDays(new Date(endsAt(event)), -1)) : dayKey(end),
-    endTime: localStamp(end).slice(11),
-    location: event?.location ?? '',
-    description: event?.description ?? '',
+/* A reading and not a form. The calendar is subscribed to, so there is
+   nothing here to save — which is why this is a few lines of text rather than
+   the editor this panel used to open. */
+function showEvent(event) {
+  const body = el('div', { class: 'pane cal-detail' });
+  const line = (label, value) => {
+    if (!value) return;
+    body.appendChild(el('div', { class: 'cal-detail-row' }, [
+      el('span', { class: 'fld-l', text: label }),
+      el('span', { text: value }),
+    ]));
   };
-
-  const title = textInput(draft.title, {
-    placeholder: t('cal.titlePlaceholder'),
-    oninput: (e) => { draft.title = e.target.value; },
-    ...(readOnly ? { readonly: true } : {}),
-  });
-
-  const startDate = textInput(draft.startDate, { type: 'date', oninput: (e) => { draft.startDate = e.target.value; } });
-  const startTime = textInput(draft.startTime, { type: 'time', oninput: (e) => { draft.startTime = e.target.value; } });
-  const endDate = textInput(draft.endDate, { type: 'date', oninput: (e) => { draft.endDate = e.target.value; } });
-  const endTime = textInput(draft.endTime, { type: 'time', oninput: (e) => { draft.endTime = e.target.value; } });
-
-  const times = el('div', { class: 'cal-times' }, [startTime, endTime]);
-  /* The whole field goes, label and all. Hiding the two inputs and leaving
-     "Time" above the gap they left reads as a form that has broken. */
-  const timeField = field(t('cal.time'), times);
-  const applyAllDay = () => { timeField.hidden = draft.allDay; };
-  const allDay = checkbox(t('cal.allDay'), draft.allDay, (value) => { draft.allDay = value; applyAllDay(); });
-  applyAllDay();
-
-  const calendar = el('select', { class: 'inp', onchange: (e) => { draft.calendarId = e.target.value; } });
-  for (const option of writableCalendars()) {
-    const node = el('option', { value: option.id, text: option.name });
-    if (option.id === draft.calendarId) node.selected = true;
-    calendar.appendChild(node);
+  line(t('cal.when'), event.allDay
+    ? `${longDay(dayKey(new Date(startsAt(event))), locale())} · ${t('cal.allDay')}`
+    : `${longDay(dayKey(new Date(startsAt(event))), locale())} · ${rangeOf(event, locale())}`);
+  line(t('cal.location'), event.location);
+  line(t('cal.calendar'), event.calendarName);
+  if (event.recurring) line(t('cal.repeats'), t('cal.repeatsHint'));
+  if (event.description) {
+    body.appendChild(el('div', { class: 'cal-detail-row' }, [
+      el('span', { class: 'fld-l', text: t('cal.description') }),
+      el('p', { class: 'cal-detail-text', text: event.description }),
+    ]));
   }
-  /* An event does not move between calendars here: Google has no such
-     operation, it is a delete and an insert, and doing that silently behind a
-     dropdown is how an event loses its history. */
-  if (editing) calendar.disabled = true;
-
-  const location = textInput(draft.location, { oninput: (e) => { draft.location = e.target.value; }, ...(readOnly ? { readonly: true } : {}) });
-  const description = el('textarea', {
-    class: 'inp', rows: '3', oninput: (e) => { draft.description = e.target.value; },
-    ...(readOnly ? { readonly: true } : {}),
-  });
-  description.value = draft.description;
-
-  if (readOnly) {
-    body.appendChild(el('p', {
-      class: 'status',
-      text: event.recurring ? t('cal.recurringHint') : t('cal.readOnlyHint'),
-    }));
-  }
-  body.appendChild(field(t('cal.eventTitle'), title));
-  body.appendChild(allDay);
-  body.appendChild(field(t('cal.start'), startDate));
-  body.appendChild(field(t('cal.end'), endDate));
-  body.appendChild(timeField);
-  body.appendChild(field(t('cal.calendar'), calendar));
-  body.appendChild(field(t('cal.location'), location));
-  body.appendChild(field(t('cal.description'), description));
-
-  if (event?.link) {
-    body.appendChild(el('a', {
-      class: 'btn ghost', href: event.link, target: '_blank', rel: 'noopener',
-      text: t('cal.openInGoogle'),
-    }));
-  }
-
-  const payload = () => {
-    const allDayNow = draft.allDay;
-    return {
-      calendarId: draft.calendarId,
-      title: draft.title,
-      allDay: allDayNow,
-      start: allDayNow ? draft.startDate : `${draft.startDate}T${draft.startTime}:00`,
-      // Back to Google's exclusive end for an all-day event.
-      end: allDayNow ? dayKey(addDays(fromDayKey(draft.endDate), 1)) : `${draft.endDate}T${draft.endTime}:00`,
-      location: draft.location,
-      description: draft.description,
-      timeZone: timeZone(),
-    };
-  };
-
-  const save = async () => {
-    try {
-      if (editing) {
-        await api(`/api/m/calendar/events/${encodeURIComponent(event.id)}`, { method: 'PATCH', body: payload() });
-      } else {
-        await api('/api/m/calendar/events', { method: 'POST', body: payload() });
-      }
-      closeDialog();
-      toast(t(editing ? 'cal.updated' : 'cal.created'));
-      await reload();
-    } catch (error) {
-      toast(error.message, 'error');
-    }
-  };
-
-  const remove = async () => {
-    if (!confirm(t('cal.confirmDelete', { name: event.title || t('cal.untitled') }))) return;
-    try {
-      await api(`/api/m/calendar/events/${encodeURIComponent(event.id)}?calendarId=${encodeURIComponent(event.calendarId)}`, { method: 'DELETE' });
-      closeDialog();
-      toast(t('cal.deleted'));
-      await reload();
-    } catch (error) {
-      toast(error.message, 'error');
-    }
-  };
-
-  const footer = dialogFooter(save, closeDialog, t('dlg.save'));
-  if (readOnly) {
-    footer.querySelector('.btn.primary')?.remove();
-  } else if (editing) {
-    footer.prepend(el('button', { class: 'btn ghost cal-danger', type: 'button', text: t('cal.delete'), onclick: remove }));
-  }
-  body.appendChild(footer);
-
-  openDialog({
-    title: editing ? (event.title || t('cal.untitled')) : t('cal.newEvent'),
-    subtitle: editing ? (event.calendarName || '') : longDay(onDay ?? own.selected, locale()),
-    body,
-  });
-}
-
-/** After a write: the server has dropped its cached months, so ours go too. */
-async function reload() {
-  own.months.clear();
-  await ensureMonths([...new Set([...panelMonths(), ...upcomingMonths()])], { force: true });
-  paint();
+  openDialog({ title: event.title || t('cal.untitled'), subtitle: t('cal.readOnly'), body });
 }
 
 /* ------------------------------- the contract ----------------------------- */
@@ -583,7 +435,6 @@ export default {
       paintPanel();
       ensureMonths(panelMonths()).then(paint);
     });
-    id('cal-add')?.addEventListener('click', () => openEditor(null, own.selected));
 
     /* One listener for the grid rather than one per cell: the grid is redrawn
        on every paint, and forty-two cells with chips in them is a lot of
@@ -593,25 +444,21 @@ export default {
       if (chip) {
         click.stopPropagation();
         const event = eventFrom(chip);
-        if (event) openEditor(event);
+        if (event) showEvent(event);
         return;
       }
-      const cell = click.target.closest('[data-day]');
-      if (!cell) return;
-      own.selected = cell.dataset.day;
+      const cell_ = click.target.closest('[data-day]');
+      if (!cell_) return;
+      own.selected = cell_.dataset.day;
       // A day in another month is also a request to go there.
       if (!isSameMonth(own.selected, own.view)) return goToMonth(own.selected.slice(0, 7));
       paintPanel();
-    });
-    id('cal-grid')?.addEventListener('dblclick', (click) => {
-      const cell = click.target.closest('[data-day]');
-      if (cell && connected() && !click.target.closest('[data-ev]')) openEditor(null, cell.dataset.day);
     });
 
     for (const box of ['cal-day', 'cal-upcoming']) {
       id(box)?.addEventListener('click', (click) => {
         const event = eventFrom(click.target.closest('[data-ev]'));
-        if (event) openEditor(event);
+        if (event) showEvent(event);
       });
     }
 

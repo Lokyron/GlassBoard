@@ -18,42 +18,37 @@ Notable changes, newest first. The format follows
   **Clicking the card opens the month.** Page through it with the arrows or
   come back with **Today**; pick a day and its events are listed beside the
   grid, with the next few under **Coming up** and a key to the colours when
-  more than one calendar is drawn. Click an event to open it, **New event** or
-  a double-click on a day to add one: title, all day or a time, where it is, a
-  note, and which calendar it goes in.
+  more than one calendar is drawn. Clicking an event tells you about it: when,
+  where, which calendar, and the note it carries.
 
-  **It connects to a Google account** through an OAuth client of your own —
-  there is no "our" Google project for a self-hosted application to put a
-  shared credential in. The client ID, the client secret and the refresh token
-  are encrypted with `APP_SECRET` and live outside the configuration document,
-  so an exported configuration carries no credential. The README has the steps
-  in the Google Cloud console — including **pressing Publish app**, because
-  Google expires the refresh token of an app left in *Testing* after seven
-  days, which would have the calendar ask to be reconnected every week for
-  ever. Publishing is not being verified: an unverified app in production
-  works, is capped at a hundred users, and shows one warning screen.
+  **Calendars are subscribed to, by their `.ics` address** — the one Google
+  calls the secret iCal address, and the one Nextcloud, Apple, Outlook and
+  most association tools publish as well. Up to eight, each with its own
+  colour, and **Check this address** says whether a link works and what the
+  calendar calls itself before you save it. There is no account to connect, no
+  consent screen and nothing to revoke.
 
-  **Which redirect URI you register depends on how you reach the dashboard,
-  and the settings tell you which.** An instance with a hostname over HTTPS
-  gets its own callback and one click. An instance reached at an IP address —
-  the normal case on a homelab — uses a loopback address and a paste, because
-  Google refuses a redirect URI whose host is a raw IP and requires HTTPS
-  outside localhost. That is a rule at Google's end, not something the
-  dashboard could code its way around, so the settings say so plainly instead
-  of failing at the fourth click.
+  **A subscription is read-only**, and that is the protocol rather than an
+  omission: an iCalendar feed is a file you download, so there is no route in
+  this module that could write to a calendar. Events are added and changed
+  where the calendar actually lives.
 
-  **An edit made here touches the title, the time, the place and the note, and
-  nothing else.** Attendees, reminders and conferencing links are never sent
-  back and so cannot be lost. One occurrence of a repeating event, and a
-  calendar shared with you to read, open read-only with a link to Google
-  Calendar: changing an occurrence here would move that one Tuesday and leave
-  the series alone, which is not what anybody means by moving an event.
+  **An address is a credential** — whoever holds it can read that calendar
+  until it is reset — so each one is encrypted with `APP_SECRET` and kept out
+  of the configuration document, which is a file people mail each other.
 
   **The months are kept warm by a background job**, the one before and the two
   after along with this one, so opening the card is a read off disk rather
-  than a wait on Google; a month paged back to outside that window is fetched
-  once and cached like the rest. When Google cannot be reached, the last month
-  that could be read is shown with a word saying so, instead of an empty grid.
+  than a wait on somebody else's server; a month paged back to outside that
+  window is fetched once and cached like the rest. When a calendar cannot be
+  reached, the last month that could be read is shown with the failing
+  calendar named, instead of an empty grid.
+
+  **Repeating events are expanded properly**, including the week that was
+  cancelled and the occurrence moved to another hour, because getting that
+  wrong in silence is the easiest thing in the world for a calendar to do.
+  That is what the one new dependency buys: `ical.js`, Mozilla's iCalendar
+  parser, MPL-2.0 and pure JavaScript.
 
 ### Fixed
 
@@ -65,39 +60,6 @@ Notable changes, newest first. The format follows
   as its cue, and the folder shut at once. A close that has not finished is now
   called off when the panel is opened again, and only the panel's own animation
   — not one of the links animating in under it — ends the exit.
-
-### Fixed
-
-- **The address Google sends you back to, pasted into the redirect URI box,
-  no longer breaks the sign-in.** Both boxes in **Settings → Calendar** take a
-  URL, one of them is the address you land on, and the one you meet first is
-  the wrong one — so that is the mistake to expect. It used to be stored
-  whole, and the next sign-in died at Google with *"Invalid redirect_uri
-  contains reserved response param iss"*, which says nothing about which box
-  was filled in. A redirect URI now keeps no query and no fragment, because
-  Google puts its own there: the part that is a redirect URI is kept, the rest
-  is dropped, and the pane says so rather than correcting in silence. The
-  configuration is validated on every read, so an instance already holding the
-  landed address repairs itself. Anything that is not an http(s) URL falls
-  back to the loopback, so a sign-in can never become impossible to start.
-
-- **A Google sign-in has half an hour to be completed, not ten minutes.** What
-  happens between the click and the callback is not a redirect: it is choosing
-  an account, reading "Google hasn't verified this app", finding *Advanced*
-  under it, deciding to go on, and granting a calendar scope. Ten minutes was
-  a machine's idea of how long a person takes, and running out of them ended
-  at "That sign-in has expired" with no hint that waiting was the problem. The
-  message now says so, and says the same thing for a state already used —
-  from the server they are one fact, and the answer to either is the same
-  click. Nothing is weakened by the wait: the state is 24 random bytes, spent
-  on first use, and tied to the account that asked for it.
-
-- **The callback address the calendar settings offer is never an http one on a
-  real hostname.** Google takes no http callback outside localhost, and a
-  dashboard behind a reverse proxy that does not pass `X-Forwarded-Proto`
-  looks from the inside as though it had been reached over plain http — so the
-  button offered an address Google would refuse. Offering one that cannot work
-  is worse than offering none.
 
 ### Changed
 

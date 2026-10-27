@@ -40,6 +40,7 @@
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
     "express": "^5.1.0",
+    "ical.js": "^2.2.1",
     "otplib": "^13.5.0",
     "qrcode": "^1.5.4"
   }

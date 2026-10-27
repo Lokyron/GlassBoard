@@ -330,37 +330,54 @@ describe('module routes', () => {
     }
   });
 
-  it('says the calendar has no Google client rather than reaching for Google', async () => {
-    /* No client id, no grant, so every one of these answers off the database
-       — which is what makes them assertable offline, and what keeps a fresh
-       dashboard from waiting on a timeout it was never going to win. */
+  it('says the calendar has nothing to read rather than reaching for one', async () => {
+    /* No feed, so every one of these answers off the database — which is what
+       makes them assertable offline, and what keeps a fresh dashboard from
+       waiting on a timeout it was never going to win. */
     await setModule('calendar', true);
     const status = await get('/api/m/calendar/status');
     assert.equal(status.status, 200);
     assert.equal(status.json.configured, false);
-    assert.equal(status.json.connected, false);
-    assert.equal(status.json.clientId, '');
-    // The paste flow, because a test host is reached by an address Google
-    // would not redirect to either.
-    assert.equal(status.json.mode, 'paste');
-    assert.deepEqual(status.json.calendars, []);
+    assert.deepEqual(status.json.feeds, []);
 
-    // A month with nobody connected is an empty month, not a failure.
+    // A month with nothing subscribed is an empty month, not a failure.
     const month = await get('/api/m/calendar/month/2026-10');
     assert.equal(month.status, 200);
-    assert.equal(month.json.connected, false);
+    assert.equal(month.json.configured, false);
     assert.deepEqual(month.json.events, []);
-
-    // And a sign-in cannot be started without a client to authorise against.
-    const connect = await call('POST', '/api/m/calendar/connect');
-    assert.equal(connect.status, 400);
     await setModule('calendar', false);
   });
 
-  it('offers its own callback address on a loopback host as it was reached', async () => {
+  it('never hands a subscription address back out', async () => {
+    /* A published calendar address is a credential: whoever holds it can read
+       that calendar. It goes in and is never returned, exactly like the
+       Proxmox token secret. */
     await setModule('calendar', true);
-    const direct = await get('/api/m/calendar/status');
-    assert.match(direct.json.callbackUri, /^http:\/\/127\.0\.0\.1(:\d+)?\/api\/m\/calendar\/oauth\/callback$/);
+    const config = (await get('/api/config')).json.config;
+    config.integrations.calendar.feeds = [{ id: 'cal-one', name: 'Mine', colour: '#0a84ff', shown: true }];
+    assert.equal((await call('PUT', '/api/config', { config })).status, 200);
+
+    const put = await call('PUT', '/api/m/calendar/feeds/cal-one/url', { url: 'https://example.com/private-abc/basic.ics' });
+    assert.equal(put.status, 200);
+
+    const status = await get('/api/m/calendar/status');
+    assert.equal(status.json.feeds[0].hasUrl, true, 'it says there is one');
+    assert.equal(status.text.includes('private-abc'), false, 'and never what it is');
+
+    const saved = (await get('/api/config')).json.config;
+    assert.equal(JSON.stringify(saved).includes('private-abc'), false, 'nor in the configuration');
+    await setModule('calendar', false);
+  });
+
+  it('refuses an address that is not a calendar one, before fetching anything', async () => {
+    await setModule('calendar', true);
+    for (const bad of ['', 'not a url', 'javascript:alert(1)', 'file:///etc/passwd']) {
+      const response = await call('PUT', '/api/m/calendar/feeds/cal-one/url', { url: bad });
+      assert.equal(response.status, 400, JSON.stringify(bad));
+    }
+    // And a feed id that is not one cannot become part of a secret's name.
+    const traversal = await call('PUT', '/api/m/calendar/feeds/..%2F..%2Fetc/url', { url: 'https://example.com/x.ics' });
+    assert.ok(traversal.status >= 400, 'a path is not a feed id');
     await setModule('calendar', false);
   });
 
@@ -374,7 +391,7 @@ describe('module routes', () => {
 
   it('shuts the calendar routes with the module', async () => {
     await setModule('calendar', false);
-    for (const route of ['/api/m/calendar/status', '/api/m/calendar/month/2026-10', '/api/m/calendar/calendars']) {
+    for (const route of ['/api/m/calendar/status', '/api/m/calendar/month/2026-10', '/api/m/calendar/warm']) {
       const response = await get(route);
       assert.equal(response.status, 404, route);
       assert.equal(response.json.code, 'module_disabled');

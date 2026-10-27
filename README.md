@@ -44,7 +44,7 @@ reaches the browser, and no request goes out to a service you did not enable.
 - [Using Glassboard](#using-glassboard) — [editing](#editing-the-dashboard), [settings](#settings), [themes](#themes-and-wallpaper), [on a phone](#on-a-phone), [installing it as an app](#installing-it-as-an-app), [languages](#languages)
 - [Signing in](#signing-in) — [with your phone](#signing-in-with-your-phone), [open sessions](#open-sessions)
 - [Accounts](#accounts) — [adding someone](#adding-someone), [the administrator](#the-administrator), [sending invitations](#sending-invitations)
-- [Integrations](#integrations) — [weather](#weather-open-meteo), [calendar](#calendar-google), [Proxmox](#proxmox-ve-read-only), [GeoRide](#georide-motorcycle-tracker), [parcels](#parcels-17track), [your own](#adding-your-own)
+- [Integrations](#integrations) — [weather](#weather-open-meteo), [calendar](#calendar-by-subscription), [Proxmox](#proxmox-ve-read-only), [GeoRide](#georide-motorcycle-tracker), [parcels](#parcels-17track), [your own](#adding-your-own)
 - [Backup and restore](#backup-and-restore)
 - [Behind a reverse proxy](#behind-a-reverse-proxy)
 - [Configuration reference](#configuration-reference)
@@ -78,12 +78,13 @@ reaches the browser, and no request goes out to a service you did not enable.
   shows today's date, the month at a glance with a dot under every day that
   has something on it, and what is coming up next. Clicking it opens a month
   you can page through, with the day you pick and the next few events beside
-  it, and you can add, edit and delete events from there. It connects to a
-  Google account through an OAuth client of your own, and the year progress
-  the card replaced is still there as the thin line along its bottom.
-- **Optional integrations**: weather (Open-Meteo), a Google calendar, parcel
-  tracking (17TRACK), GeoRide motorcycle tracking and a read-only view of a
-  Proxmox VE host. Each
+  it. You subscribe to calendars by their `.ics` link — Google, Nextcloud,
+  Apple, Outlook or an association's own — with no account to connect, and the
+  year progress the card replaced is still there as the thin line along its
+  bottom.
+- **Optional integrations**: weather (Open-Meteo), calendars by subscription,
+  parcel tracking (17TRACK), GeoRide motorcycle tracking and a read-only view
+  of a Proxmox VE host. Each
   tile opens a detail view: seven days of forecast for where you are or for any
   city you follow, the steps a parcel has been through, the rides of the period
   on an interactive map, or every virtual machine and container on the
@@ -562,7 +563,7 @@ tab to it and the arrow keys walk the hours, Escape drops the reading.
 
 ![The detailed forecast, on one of the followed cities](docs/images/forecast.png)
 
-### Calendar, Google
+### Calendar, by subscription
 
 The sidebar card that showed how far through the year we were now shows the
 date, the month at a glance, and what is coming up. A percentage answers
@@ -572,98 +573,65 @@ in **Settings → Calendar** by anyone who would rather have the room.
 
 Clicking the card opens the month. Page through it with the arrows or come
 back with **Today**, pick a day to see what is on it beside the grid, and read
-the next few events under **Coming up**. Click an event to open it, click
-**New event** — or double-click a day — to add one. Title, all day or a time,
-where it is, a note, and which calendar it goes in; saving sends it to Google
-and the month redraws.
+the next few events under **Coming up**. Clicking an event tells you about it:
+when, where, which calendar, and the note it carries.
 
-Two things are deliberately shown and not edited. One occurrence of a
-repeating event opens read-only, with a link to Google Calendar: changing it
-here would move that one Tuesday and leave the series alone, which is not what
-anybody means by moving an event, and Google's own interface is where you get
-asked which you meant. A calendar shared with you to read is the same story,
-for the obvious reason.
+#### Subscribing to a calendar
 
-An edit made here touches the title, the time, the place and the note, and
-nothing else. Your attendees, reminders and conferencing links are not sent
-back and so cannot be lost — an editor that round-trips fields it does not
-show is an editor that quietly drops them.
+Glassboard reads calendars you subscribe to. One `.ics` address each, fetched
+and kept up to date on its own — there is no account to connect, no consent
+screen, no token to refresh and nothing to revoke.
 
-#### Connecting a Google account
+In **Settings → Calendar**, **Add a calendar**, paste its subscription link,
+and press **Check this address**: that is the step that tells you whether the
+address works, how many events it holds, and what the calendar calls itself.
+Give it a colour, and you are done. Up to eight of them.
 
-Glassboard talks to Google through an OAuth client **of your own**. There is
-no "our" Google project for a self-hosted application to put a shared
-credential in, and a credential shared across installations would be one quota
-and one thing to revoke for everybody at once.
+Where the link lives, in the places that publish one:
 
-In the [Google Cloud console](https://console.cloud.google.com/), once:
+| | Where to find it |
+|---|---|
+| Google Calendar | That calendar's settings → **Secret address in iCal format** |
+| Nextcloud | The calendar's ⋯ menu → **Copy subscription link** |
+| Apple iCloud | Share the calendar → **Public Calendar** → copy the link |
+| Outlook / Microsoft 365 | Calendar settings → **Publish a calendar** → the ICS link |
 
-1. Create a project — any name.
-2. **APIs & Services → Library**, find **Google Calendar API**, enable it.
-3. **Google Auth Platform → Branding** (older consoles: *APIs & Services →
-   OAuth consent screen*): fill in the application name and your address.
-4. **Google Auth Platform → Audience**: user type **External**, then press
-   **Publish app** so the status reads *In production*.
+A `webcal://` link works too: it is https in everything but name, and
+Glassboard rewrites it rather than asking you to.
 
-   > **Do not leave it in *Testing*.** Google expires the refresh token of a
-   > testing app [after seven days][testing-expiry], so the calendar would
-   > stop a week after you connected it and ask to be reconnected, for ever.
-   > Publishing is not the same as being verified: an unverified app in
-   > production works, is capped at 100 users, and shows a "Google hasn't
-   > verified this app" screen once, where you take **Advanced → Go to …**.
-   > Verification only exists to remove that screen for strangers, and a
-   > dashboard you built for yourself has none.
-
-5. **Google Auth Platform → Clients → Create client**, type **Web
-   application**. Add the redirect URI that **Settings → Calendar** shows you
-   — the pane has a button that fills in each of the two below — and copy the
-   client ID and the client secret into that pane.
-
-[testing-expiry]: https://developers.google.com/identity/protocols/oauth2#expiration
-
-Then **Connect a Google account**. Which of the two redirect URIs you use
-depends on how you reach the dashboard, and the pane says which applies:
-
-- **A hostname over HTTPS** — `https://dashboard.example.com` — register
-  `https://…/api/m/calendar/oauth/callback`. Google sends you straight back to
-  the dashboard; there is nothing to copy. A hostname that resolves to a
-  private address is fine: your browser follows the redirect, not Google.
-- **An IP address** — `https://192.168.1.50`, which is the normal case on a
-  homelab — register `http://127.0.0.1:33333/`, the value the pane starts
-  with. Google [refuses a redirect URI whose host is a raw IP
-  address](https://support.google.com/cloud/answer/15549257) and requires
-  HTTPS for everything but localhost, so it cannot send you back here at all.
-  You authorise in the tab that opens, land on a page that does not load —
-  expected, nothing is listening there — and paste that page's address back
-  into the pane. The address carries the authorization code; the paste is a
-  one-off.
-
-Once connected, **Read my calendars again** lists what the account can see.
-Tick the ones the dashboard should draw and give each a colour; untick a
-holiday feed you would rather not see under every date. **New events go in**
-picks where an event added from a day lands.
+> **A subscription is read-only.** Events appear here; they are added and
+> changed where the calendar actually lives. That is a property of the
+> protocol and not an omission — an iCalendar feed is a file you download, and
+> there is no route in this module that could write to one, because there is
+> nothing to write to.
 
 #### What is stored, and where
 
-The client ID, the client secret and the refresh token are encrypted with
-`APP_SECRET` and kept per account in the database. None of them is in the
-configuration document, so an exported configuration — a file people mail each
-other — carries no credential. The browser never talks to Google: it reads
-months the server has already fetched, which is what keeps the grant on the
-server.
+A subscription link is a credential: Google calls it the *secret* address
+precisely because whoever holds it can read that calendar until it is reset.
+So each one is encrypted with `APP_SECRET` and kept in the database, never in
+the configuration document — an exported configuration carries none of them,
+which matters because that file is the one people mail each other. The browser
+never fetches a calendar either: it reads months the server already has.
 
-The scope asked for is read **and** write on your calendars, because the panel
-creates and edits events, plus your address so the settings can say which
-account is connected. **Disconnect** tells Google to revoke the token as well
-as dropping it here.
+Addresses on your own network are allowed on purpose — a Nextcloud upstairs is
+exactly the case a self-hosted dashboard should serve. What is bounded is what
+a wrong address can cost: http and https only, one timeout, one size limit.
+
+#### How fresh it is
 
 A month is fetched once and filed under its own label. The month before, the
 current one and the two after are kept warm by a background job on the
-interval you set, so opening the card is a read off disk and never a wait on
-Google; a month you page back to outside that window is fetched once and
-cached like the others. When Google cannot be reached, the last month that
-could be read is shown with a word in the panel's heading saying so, rather
-than an empty grid.
+interval you set, so opening the card is a read off disk and never a wait; a
+month you page back to outside that window is fetched once and cached like the
+others. When a calendar cannot be reached, the last month that could be read
+is shown, with the failing calendar named in the panel's heading rather than
+an empty grid.
+
+Repeating events are expanded properly — including the week that was
+cancelled, and the occurrence that was moved to another hour — because
+getting that wrong silently is the easiest thing in the world for a calendar
+to do.
 
 ### Proxmox VE, read-only
 

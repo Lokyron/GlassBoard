@@ -1,23 +1,24 @@
 /* The calendar module.
  *
- * Nothing here opens a socket. What is worth checking without Google is the
- * part that is ours: which months the dashboard keeps warm and what a month
- * is as far as a query is concerned, the OAuth sign-in's own bookkeeping —
- * the state that ties a callback to the account that started it, and the fact
- * that it is good once — and that a stored credential never comes back out of
- * a route in the clear.
+ * Nothing here opens a socket. What is worth checking without somebody else's
+ * calendar server is the part that is ours: which months the dashboard keeps
+ * warm and what a month is as far as a fetch is concerned, that a
+ * subscription address is treated as the credential it is, and — the reason
+ * this module carries a parsing library at all — that a feed's repeating
+ * events are expanded into the occurrences a grid has to draw.
  *
- * The pieces that do talk to Google are the three functions this file does
- * not call. They are reached only through the worker, which test/workers has
- * its own say about. */
+ * The fixture below is the shape a real Google feed has: a VTIMEZONE, a
+ * weekly series, an EXDATE that cancels one week, an occurrence moved to
+ * another hour under a RECURRENCE-ID, an all-day span, and an event crossing
+ * midnight. Every one of those is a thing a hand-written parser gets wrong in
+ * silence, and this is where that would be caught. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolate } from './helpers.js';
 
 isolate('calendar');
-const google = await import('../server/integrations/google-calendar.js');
+const ical = await import('../server/integrations/ical.js');
 const months = await import('../modules/calendar/months.js');
-const { callbackUri } = await import('../modules/calendar/server.js');
 const manifest = (await import('../modules/calendar/manifest.js')).default;
 const { validateConfig } = await import('../server/config-schema.js');
 const { db, now, getSecret } = await import('../server/db.js');
@@ -29,12 +30,133 @@ const makeUser = (name) => db
 const USER = makeUser('tester');
 const OTHER = makeUser('somebody-else');
 
-const CLIENT_ID = '1234567890-abcdefghijklmnop.apps.googleusercontent.com';
+const FEED = { id: 'cal-one', name: 'Agenda de test', colour: '#0a84ff' };
+
+const SAMPLE = [
+  'BEGIN:VCALENDAR',
+  'PRODID:-//Google Inc//Google Calendar 70.9054//EN',
+  'VERSION:2.0',
+  'X-WR-CALNAME:Agenda de test',
+  'BEGIN:VTIMEZONE',
+  'TZID:Europe/Paris',
+  'BEGIN:DAYLIGHT',
+  'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'TZNAME:CEST',
+  'DTSTART:19700329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+  'END:DAYLIGHT',
+  'BEGIN:STANDARD',
+  'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'TZNAME:CET',
+  'DTSTART:19701025T030000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+  'END:STANDARD',
+  'END:VTIMEZONE',
+  // A weekly class, with one week cancelled.
+  'BEGIN:VEVENT',
+  'DTSTART;TZID=Europe/Paris:20261013T190000',
+  'DTEND;TZID=Europe/Paris:20261013T203000',
+  'RRULE:FREQ=WEEKLY;BYDAY=TU',
+  'EXDATE;TZID=Europe/Paris:20261103T190000',
+  'UID:cours@test', 'SUMMARY:Cours parkour', 'LOCATION:Gymnase',
+  'END:VEVENT',
+  // One occurrence of it, moved and renamed.
+  'BEGIN:VEVENT',
+  'DTSTART;TZID=Europe/Paris:20261110T200000',
+  'DTEND;TZID=Europe/Paris:20261110T213000',
+  'RECURRENCE-ID;TZID=Europe/Paris:20261110T190000',
+  'UID:cours@test', 'SUMMARY:Cours decale',
+  'END:VEVENT',
+  // An all-day span of two days.
+  'BEGIN:VEVENT',
+  'DTSTART;VALUE=DATE:20261101', 'DTEND;VALUE=DATE:20261103',
+  'UID:weekend@test', 'SUMMARY:Week-end',
+  'END:VEVENT',
+  'END:VCALENDAR',
+].join('\r\n');
+
+const WINDOW = { timeMin: '2026-10-01T00:00:00Z', timeMax: '2026-12-01T00:00:00Z' };
+const parsed = () => ical.eventsInWindow(SAMPLE, FEED, WINDOW);
+
+describe('reading a feed', () => {
+  it('gives the calendar its own name when it states one', () => {
+    assert.equal(ical.feedName(SAMPLE), 'Agenda de test');
+    assert.equal(ical.feedName('not a calendar at all'), '');
+  });
+
+  it('expands a weekly series into its occurrences', () => {
+    const days = parsed().filter((e) => e.title === 'Cours parkour').map((e) => e.start.slice(0, 10));
+    assert.ok(days.includes('2026-10-13'), 'the first one');
+    assert.ok(days.includes('2026-10-20'));
+    assert.ok(days.length >= 5, `expanded, got ${days.length}`);
+  });
+
+  it('honours an EXDATE, so a cancelled week is really gone', () => {
+    const onThatDay = parsed().filter((e) => e.start.startsWith('2026-11-03'));
+    assert.deepEqual(onThatDay, [], 'the 3rd of November was cancelled');
+  });
+
+  it('shows an occurrence that was moved, once, where it was moved to', () => {
+    const tenth = parsed().filter((e) => e.start.startsWith('2026-11-10'));
+    assert.equal(tenth.length, 1, 'not both the old slot and the new one');
+    assert.equal(tenth[0].title, 'Cours decale');
+    // 20:00 in Paris in November is 19:00 UTC.
+    assert.equal(tenth[0].start, '2026-11-10T19:00:00.000Z');
+  });
+
+  it('keeps an all-day event a day and not an instant', () => {
+    const weekend = parsed().find((e) => e.title === 'Week-end');
+    assert.equal(weekend.allDay, true);
+    assert.equal(weekend.start, '2026-11-01');
+    assert.equal(weekend.end, '2026-11-03');
+  });
+
+  it('carries the feed it came from, for the colour and the legend', () => {
+    for (const event of parsed()) {
+      assert.equal(event.calendarId, FEED.id);
+      assert.equal(event.colour, FEED.colour);
+    }
+  });
+
+  it('leaves out what the dashboard never shows', () => {
+    /* An iCalendar file carries attendees, organisers and alarms. None of
+       that is on screen, so none of it should be on the wire. */
+    const written = JSON.stringify(parsed());
+    for (const field of ['attendee', 'organizer', 'valarm']) {
+      assert.equal(written.toLowerCase().includes(field), false, field);
+    }
+  });
+});
+
+describe('a subscription address', () => {
+  it('is stored encrypted, and never in the configuration', () => {
+    ical.setFeedUrl(USER, FEED.id, 'https://example.com/private-abc/basic.ics');
+    const stored = getSecret(USER, `ical.url.${FEED.id}`);
+    assert.ok(stored.startsWith('v1:'), 'a sealed box');
+    assert.ok(!stored.includes('private-abc'));
+    assert.equal(ical.getFeedUrl(USER, FEED.id), 'https://example.com/private-abc/basic.ics');
+  });
+
+  it('belongs to one account and is invisible to the next', () => {
+    assert.equal(ical.getFeedUrl(OTHER, FEED.id), null);
+  });
+
+  it('takes webcal:, which is what calendar apps hand out', () => {
+    assert.equal(ical.normaliseUrl('webcal://example.com/x.ics'), 'https://example.com/x.ics');
+  });
+
+  it('refuses anything that is not a calendar address', () => {
+    assert.throws(() => ical.normaliseUrl(''), /required/);
+    assert.throws(() => ical.normaliseUrl('not a url'), /valid address/);
+    assert.throws(() => ical.normaliseUrl('javascript:alert(1)'), /https/);
+    assert.throws(() => ical.normaliseUrl('file:///etc/passwd'), /https/);
+  });
+
+  it('is forgotten on request', () => {
+    ical.forgetFeed(USER, FEED.id);
+    assert.equal(ical.getFeedUrl(USER, FEED.id), null);
+  });
+});
 
 describe('the months the dashboard keeps warm', () => {
   it('is the month before, this one and the two after', () => {
-    const warm = months.warmMonths(new Date('2026-10-25T12:00:00Z'));
-    assert.deepEqual(warm, ['2026-09', '2026-10', '2026-11', '2026-12']);
+    assert.deepEqual(months.warmMonths(new Date('2026-10-25T12:00:00Z')), ['2026-09', '2026-10', '2026-11', '2026-12']);
   });
 
   it('carries the year across December', () => {
@@ -57,207 +179,9 @@ describe('the months the dashboard keeps warm', () => {
 
   it('takes a month and refuses anything else', () => {
     assert.equal(months.validMonth('2026-10'), '2026-10');
-    assert.equal(months.validMonth('2026-13'), null);
-    assert.equal(months.validMonth('2026-00'), null);
-    assert.equal(months.validMonth('206-10'), null);
-    assert.equal(months.validMonth('../../etc/passwd'), null);
-    // A century either side of now is plenty, and a year nobody will page to
-    // is a cache entry nobody will ever read.
-    assert.equal(months.validMonth('9999-01'), null);
-  });
-});
-
-describe('the redirect URI', () => {
-  /* The failure this prevents happens at Google, four clicks away, as
-     "Invalid redirect_uri contains reserved response param iss" — which tells
-     a reader nothing about which of the settings' two URL boxes they filled
-     in. Both take a URL and one of them is the address you land on. */
-  const saved = (redirectUri) =>
-    validateConfig({ integrations: { calendar: { redirectUri } } }).value.integrations.calendar.redirectUri;
-
-  const LOOPBACK = 'http://127.0.0.1:33333/';
-
-  it('keeps an address that is one', () => {
-    assert.equal(saved('https://glassboard.example.com/api/m/calendar/oauth/callback'),
-      'https://glassboard.example.com/api/m/calendar/oauth/callback');
-    assert.equal(saved(LOOPBACK), LOOPBACK);
-  });
-
-  it('keeps only the redirect URI out of the address Google sent you back to', () => {
-    assert.equal(
-      saved('http://127.0.0.1:33333/?state=AbC&code=4%2F0AX&scope=x&iss=https%3A%2F%2Faccounts.google.com'),
-      LOOPBACK
-    );
-    assert.equal(
-      saved('https://glassboard.example.com/api/m/calendar/oauth/callback?code=4%2F0AX#done'),
-      'https://glassboard.example.com/api/m/calendar/oauth/callback'
-    );
-  });
-
-  it('falls back to the loopback rather than leave a sign-in impossible to start', () => {
-    for (const unusable of ['', '   ', 'not a url', 'javascript:alert(1)', 'ftp://example.com/']) {
-      assert.equal(saved(unusable), LOOPBACK, JSON.stringify(unusable));
+    for (const bad of ['2026-13', '2026-00', '206-10', '../../etc/passwd', '9999-01']) {
+      assert.equal(months.validMonth(bad), null, bad);
     }
-  });
-
-  it('repairs a configuration that was saved before any of this', () => {
-    /* getConfig validates on every read, so an instance that stored the
-       landed address comes back usable without anybody editing anything. */
-    const stored = { integrations: { calendar: { redirectUri: `${LOOPBACK}?code=4%2F0AX&state=z` } } };
-    assert.equal(saved(stored.integrations.calendar.redirectUri), LOOPBACK);
-  });
-});
-
-describe('the callback address the settings offer', () => {
-  /* Google takes no http callback outside localhost. A dashboard behind a
-     reverse proxy that does not pass X-Forwarded-Proto looks, from inside, as
-     though it were reached over plain http — and offering an address that
-     cannot work is worse than offering none. */
-  it('is https on a real hostname, whatever the request arrived as', () => {
-    assert.equal(callbackUri('dashboard.example.com', 'http'),
-      'https://dashboard.example.com/api/m/calendar/oauth/callback');
-    assert.equal(callbackUri('dashboard.example.com', 'https'),
-      'https://dashboard.example.com/api/m/calendar/oauth/callback');
-  });
-
-  it('is https on an IP address too, which Google refuses for another reason', () => {
-    // Refused as a raw IP host, not for its scheme — but never offered as http.
-    assert.equal(callbackUri('192.168.1.50', 'http'),
-      'https://192.168.1.50/api/m/calendar/oauth/callback');
-  });
-
-  it('leaves localhost alone, where http is the one that works', () => {
-    assert.equal(callbackUri('127.0.0.1:3000', 'http'),
-      'http://127.0.0.1:3000/api/m/calendar/oauth/callback');
-    assert.equal(callbackUri('localhost:3000', 'http'),
-      'http://localhost:3000/api/m/calendar/oauth/callback');
-  });
-});
-
-describe('the OAuth client', () => {
-  it('is nothing until both halves are given', () => {
-    assert.equal(google.client(USER), null);
-    assert.equal(google.credentialStatus(USER).configured, false);
-    assert.throws(() => google.setClient(USER, CLIENT_ID, ''), /client secret/i);
-  });
-
-  it('says so when the client ID is plainly not one', () => {
-    /* Caught here rather than discovered as an opaque "invalid_client" from
-       Google three clicks later. */
-    assert.throws(() => google.setClient(USER, 'my-client', 'secret'), /googleusercontent/);
-  });
-
-  it('is stored encrypted, never in the clear', () => {
-    google.setClient(USER, CLIENT_ID, 'the-secret');
-    const stored = getSecret(USER, 'google.clientSecret');
-    assert.ok(stored.startsWith('v1:'), 'the secret is a sealed box');
-    assert.ok(!stored.includes('the-secret'));
-    assert.equal(google.client(USER).secret, 'the-secret');
-  });
-
-  it('belongs to one account and is invisible to the next', () => {
-    assert.equal(google.client(OTHER), null);
-    assert.equal(google.credentialStatus(OTHER).configured, false);
-  });
-
-  it('reports what it has without handing the secret back', () => {
-    const status = google.credentialStatus(USER);
-    assert.equal(status.configured, true);
-    assert.equal(status.connected, false);
-    assert.equal(status.clientId, CLIENT_ID);
-    assert.equal(JSON.stringify(status).includes('the-secret'), false);
-  });
-});
-
-describe('starting a sign-in', () => {
-  it('refuses before there is a client to authorise against', () => {
-    assert.throws(() => google.startAuth(OTHER, google.LOOPBACK_REDIRECT), /client ID/);
-  });
-
-  it('asks Google for a refresh token and for PKCE', () => {
-    const { url } = google.startAuth(USER, google.LOOPBACK_REDIRECT);
-    const query = new URL(url).searchParams;
-    assert.equal(query.get('client_id'), CLIENT_ID);
-    assert.equal(query.get('redirect_uri'), google.LOOPBACK_REDIRECT);
-    assert.equal(query.get('response_type'), 'code');
-    assert.equal(query.get('code_challenge_method'), 'S256');
-    assert.ok(query.get('code_challenge'));
-    /* Without both of these Google hands back no refresh token on a second
-       authorisation, and the dashboard would work until its first restart. */
-    assert.equal(query.get('access_type'), 'offline');
-    assert.equal(query.get('prompt'), 'consent');
-    assert.ok(query.get('scope').includes('auth/calendar'));
-  });
-
-  it('never puts the client secret in the address the browser opens', () => {
-    const { url } = google.startAuth(USER, google.LOOPBACK_REDIRECT);
-    assert.equal(url.includes('the-secret'), false);
-  });
-
-  it('gives each sign-in a state of its own', () => {
-    const first = google.startAuth(USER, google.LOOPBACK_REDIRECT).state;
-    const second = google.startAuth(USER, google.LOOPBACK_REDIRECT).state;
-    assert.notEqual(first, second);
-    assert.ok(first.length >= 24);
-  });
-});
-
-describe('finishing a sign-in', () => {
-  it('refuses a state nobody started', async () => {
-    await assert.rejects(
-      google.completeAuth({ code: 'x', state: 'made-up', expectedUserId: USER }),
-      /Start it again/
-    );
-  });
-
-  it('refuses a code pasted by another account', async () => {
-    /* The state is what ties a callback back to the account that asked for
-       it. Without this check, a code is an unauthenticated request carrying a
-       grant, and the one question it has to answer is whose grant it is. */
-    const { state } = google.startAuth(USER, google.LOOPBACK_REDIRECT);
-    await assert.rejects(
-      google.completeAuth({ code: 'x', state, expectedUserId: OTHER }),
-      /another account/
-    );
-  });
-
-  it('spends a state once, whatever the outcome', async () => {
-    const { state } = google.startAuth(USER, google.LOOPBACK_REDIRECT);
-    await assert.rejects(google.completeAuth({ code: 'x', state, expectedUserId: OTHER }), /another account/);
-    // The second attempt no longer finds it: an authorization code is good
-    // once, and a state left behind is a replay somebody could try.
-    await assert.rejects(google.completeAuth({ code: 'x', state, expectedUserId: USER }), /Start it again/);
-  });
-
-  it('reads the code out of whatever address was pasted', async () => {
-    const { state } = google.startAuth(USER, google.LOOPBACK_REDIRECT);
-    /* It gets as far as asking Google and fails there, which is the point:
-       the parse found a code and a state, so the complaint is no longer about
-       the paste. */
-    await assert.rejects(
-      google.completeFromPaste(USER, `http://127.0.0.1:33333/?state=${state}&code=4/abc-def&scope=x`),
-      (error) => !/authorization code|carries no state|Start it again/.test(error.message)
-    );
-  });
-
-  it('says what is missing rather than failing obscurely', async () => {
-    await assert.rejects(google.completeFromPaste(USER, ''), /Paste the address/);
-    await assert.rejects(google.completeFromPaste(USER, 'http://127.0.0.1:33333/'), /no authorization code/);
-    await assert.rejects(google.completeFromPaste(USER, 'http://127.0.0.1:33333/?code=abc'), /no state/);
-    await assert.rejects(
-      google.completeFromPaste(USER, 'http://127.0.0.1:33333/?error=access_denied'),
-      /refused the sign-in/
-    );
-  });
-});
-
-describe('disconnecting', () => {
-  it('forgets the client and the grant together', () => {
-    google.setClient(USER, CLIENT_ID, 'the-secret');
-    google.forget(USER);
-    assert.equal(google.client(USER), null);
-    assert.equal(getSecret(USER, 'google.clientSecret'), null);
-    assert.equal(google.isConnected(USER), false);
   });
 });
 
@@ -268,55 +192,32 @@ describe('the module', () => {
   });
 
   it('is off on a dashboard that has never heard of it', () => {
-    const { value } = validateConfig({});
-    assert.equal(value.modules.calendar.enabled, false);
+    assert.equal(validateConfig({}).value.modules.calendar.enabled, false);
   });
 
-  it('starts with a loopback redirect, because Google refuses an IP address', () => {
-    const { value } = validateConfig({});
-    assert.equal(value.integrations.calendar.redirectUri, 'http://127.0.0.1:33333/');
-  });
-
-  it('keeps a calendar a reader has chosen, and drops one with no id', () => {
-    const { value, errors } = validateConfig({
+  it('keeps a feed a reader has set up, without its address', () => {
+    const { value } = validateConfig({
       integrations: {
         calendar: {
-          calendars: [
-            { id: 'work@example.com', name: 'Work', colour: '#FF7A18', shown: false },
-            { name: 'nameless' },
-          ],
-          upcomingCount: 4,
-          weekStartsMonday: false,
+          feeds: [{ id: 'cal-work', name: 'Work', colour: '#FF7A18', shown: false,
+            url: 'https://example.com/secret.ics' }],
+          upcomingCount: 4, weekStartsMonday: false,
         },
       },
     });
-    // A document with no tiles and no links is complained about; the block
-    // under test is not.
-    assert.deepEqual(errors.filter((line) => line.startsWith('integrations.calendar')), []);
-    const calendars = value.integrations.calendar.calendars;
-    assert.equal(calendars.length, 1);
-    assert.deepEqual(calendars[0], {
-      id: 'work@example.com', name: 'Work', colour: '#ff7a18'.toLowerCase(), shown: false,
-    });
+    const feeds = value.integrations.calendar.feeds;
+    assert.deepEqual(feeds, [{ id: 'cal-work', name: 'Work', colour: '#ff7a18', shown: false }]);
+    /* The address is the credential. An exported configuration is a file
+       people mail each other, so it must not be able to carry one. */
+    assert.equal(JSON.stringify(feeds).includes('secret.ics'), false);
     assert.equal(value.integrations.calendar.upcomingCount, 4);
     assert.equal(value.integrations.calendar.weekStartsMonday, false);
   });
 
-  it('holds a reader to a list it can draw', () => {
+  it('holds a reader to a list the card can keep legible', () => {
     const { value } = validateConfig({
-      integrations: { calendar: { calendars: Array.from({ length: 40 }, (_, i) => ({ id: `c${i}` })) } },
+      integrations: { calendar: { feeds: Array.from({ length: 40 }, (_, i) => ({ id: `c${i}` })) } },
     });
-    assert.equal(value.integrations.calendar.calendars.length, 12);
-  });
-
-  it('leaves no credential in the configuration document', () => {
-    /* The client id and secret live in the secrets table, encrypted. An
-       exported configuration is a file people mail each other. */
-    const { value } = validateConfig({
-      integrations: { calendar: { clientId: CLIENT_ID, clientSecret: 'nope' } },
-    });
-    const written = JSON.stringify(value.integrations.calendar);
-    assert.equal(written.includes(CLIENT_ID), false);
-    assert.equal(written.includes('nope'), false);
+    assert.equal(value.integrations.calendar.feeds.length, 8);
   });
 });
