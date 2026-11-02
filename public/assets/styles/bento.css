@@ -370,3 +370,47 @@
   :root[data-style="bento"] #tiles > .card,
   :root[data-style="bento"] #tiles > #side-extra { grid-column: auto !important; grid-row: auto !important; }
 }
+
+/* ========================================================================== */
+/* 4. Tile internals (emitted by each module's bento markup branch)           */
+/* ========================================================================== */
+:root[data-style="bento"] .card.wx,
+:root[data-style="bento"] .card.insight { display: flex; flex-direction: column; gap: 14px; }
+
+/* A tile header: a small icon, the module name, and context to the right. */
+:root[data-style="bento"] .bento-th {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--mu);
+}
+:root[data-style="bento"] .bento-th .i { font-size: 15px; flex: none; }
+:root[data-style="bento"] .bento-th-info {
+  margin-left: auto; color: var(--tx);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* The one big figure. Never a gradient painted into the text — a flat colour,
+   for contrast. */
+:root[data-style="bento"] .bento-num {
+  font-size: 48px; line-height: 1; font-weight: 700; letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums; color: var(--tx);
+  background: none; -webkit-text-fill-color: currentColor;
+}
+
+/* Secondary stats: three columns under a hairline. */
+:root[data-style="bento"] .bento-stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  margin-top: auto; padding-top: 14px; border-top: 1px solid var(--bd);
+}
+:root[data-style="bento"] .bento-stats .bk { font-size: 12px; color: var(--mu); }
+:root[data-style="bento"] .bento-stats .bv { font-size: 14px; font-weight: 650; margin-top: 2px; color: var(--tx); }
+:root[data-style="bento"] .bento-stats .bv strong { font-weight: 650; }
+
+/* Weather specifics. */
+:root[data-style="bento"] .wx-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+:root[data-style="bento"] .wx .emoji { font-size: 36px; line-height: 1; }
+:root[data-style="bento"] .wsun { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+:root[data-style="bento"] .wsun .i { font-size: 13px; }
+
+/* Note specifics. */
+:root[data-style="bento"] .note-title { font-size: 17px; font-weight: 650; color: var(--tx); }
+:root[data-style="bento"] .note-body { margin: 0; font-size: 14px; line-height: 1.55; color: var(--mu); text-wrap: pretty; }

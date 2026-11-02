@@ -38,9 +38,24 @@ const weatherEmoji = (code, day = true) =>
 /** The cities the account follows, as the panel offers them. */
 const followedCities = () => state.config.integrations.weather.cities ?? [];
 
+const bentoStyle = () => (state.config?.appearance?.style || 'bento') === 'bento';
+
 function weatherTileMarkup(tile, index) {
   const delay = `animation-delay:.${String(5 * (index + 1)).padStart(2, '0')}s`;
   const label = esc(tile.settings.label || t('tile.localPosition'));
+  // Bento keeps the same data-role hooks the refresh writes to — only the frame
+  // around them changes: a header with the place to the right, one big figure,
+  // and a bordered row of stats. No decorative sparkline.
+  if (bentoStyle()) {
+    return `<article class="card glass wx rise" style="${delay}" data-tile="${tile.id}" data-type="${tile.type}">
+        <div class="bento-th">${svg('navigation-arrow', 'font-size:15px')}<span>${label}</span><span class="bento-th-info" data-role="place">${esc(t('tile.searching'))}</span></div>
+        <div class="wx-main"><div class="bento-num" data-role="temp">--°</div><div class="emoji" data-role="emoji">🧭</div></div>
+        <div class="bento-stats">
+          <div><div class="bk">${esc(t('tile.wind'))}</div><div class="bv"><strong data-role="wind">--</strong> km/h</div></div>
+          <div><div class="bk">${esc(t('tile.rain'))}</div><div class="bv"><strong data-role="rain">--</strong> %</div></div>
+          <div><div class="bk">${esc(t('tile.sun'))}</div><div class="bv wsun" data-role="sun"></div></div>
+        </div></article>`;
+  }
   return `<article class="card glass wx rise" style="${delay}" data-tile="${tile.id}" data-type="${tile.type}">
         <div class="wtop"><div><div class="lbl">${label}</div><h3 data-role="place">${esc(t('tile.searching'))}</h3></div><div data-role="emoji" class="emoji">🧭</div></div>
         <div class="wmain"><div data-role="temp" class="temp">--°</div><div class="wstats"><span>${esc(t('tile.wind'))} <strong data-role="wind">--</strong> km/h</span><span>${esc(t('tile.rain'))} <strong data-role="rain">--</strong>%</span><span class="wsun" data-role="sun"></span></div></div>
