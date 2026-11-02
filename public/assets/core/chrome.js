@@ -96,7 +96,10 @@ export function renderNav() {
   entries.forEach((entry, index) => {
     const pill = document.createElement('button');
     pill.className = `pill${index === 0 ? ' active' : ''}`;
-    pill.innerHTML = `${svg(entry.icon)}${esc(entry.label)}`;
+    // The label is wrapped so the bento sidebar can hide it when collapsed; the
+    // span is inert in glass, where the pill reads exactly as before.
+    pill.innerHTML = `${svg(entry.icon)}<span class="pill-label">${esc(entry.label)}</span>`;
+    pill.setAttribute('title', entry.label);
     pill.addEventListener('click', () => entry.run(pill));
     nav.appendChild(pill);
 

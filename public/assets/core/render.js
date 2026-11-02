@@ -5,6 +5,7 @@
  * leaving them together made the two files import each other. */
 import { renderChrome, renderNav, renderLinks, renderSidebar, updateTime } from './chrome.js';
 import { renderTiles, refreshModules } from './tiles.js';
+import { applyBentoLayout } from './bento.js';
 
 export function renderAll() {
   renderChrome();
@@ -13,6 +14,9 @@ export function renderAll() {
   renderSidebar();
   renderLinks();
   updateTime();
+  // Last: the bento frame rearranges the pieces the renderers just drew. In
+  // glass it is a no-op, so read mode there stays exactly as it was.
+  applyBentoLayout();
 }
 
 /* When the data last came in, so returning to a tab that has been hidden for

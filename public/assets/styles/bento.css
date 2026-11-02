@@ -156,3 +156,217 @@
 :root[data-style="bento"] #toast.glass {
   box-shadow: var(--shadow);
 }
+
+/* ========================================================================== */
+/* 3. Desktop layout                                                          */
+/* ========================================================================== */
+/* The floating top bar is gone: its brand moves into the sidebar, its controls
+   into the header the main column grows for itself. */
+:root[data-style="bento"] .topbar { display: none; }
+
+/* The shell becomes sidebar + main, edge to edge, no top offset. */
+:root[data-style="bento"] .shell {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  align-items: stretch;
+}
+
+/* --- sidebar ------------------------------------------------------------- */
+:root[data-style="bento"] .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  width: 240px;
+  box-sizing: border-box;
+  padding: 20px 12px;
+  border: none;
+  border-right: 1px solid var(--bd);
+  border-radius: 0;
+  background: var(--s1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  transition: width .25s;
+}
+:root[data-style="bento"] .sidebar.bento-collapsed { width: 72px; }
+
+/* Everything the glass sidebar carried that bento shows elsewhere (or drops):
+   the head block, the search / clock / year cards. */
+:root[data-style="bento"] .sidebar > .side-head,
+:root[data-style="bento"] .sidebar > .wcard-s,
+:root[data-style="bento"] .sidebar > #year-card { display: none; }
+
+:root[data-style="bento"] .bento-brand {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 6px 22px; min-height: 44px;
+}
+:root[data-style="bento"] .bento-mark {
+  width: 36px; height: 36px; border-radius: 10px; flex: none;
+  background: var(--acbg); color: #fff; display: grid; place-items: center;
+}
+:root[data-style="bento"] .bento-brand-txt { min-width: 0; flex: 1; }
+:root[data-style="bento"] .bento-brand-title { font-size: 15px; font-weight: 650; color: var(--tx); }
+:root[data-style="bento"] .bento-brand-sub { font-size: 12px; color: var(--mu); }
+
+/* Nav items. */
+:root[data-style="bento"] .sidebar .nav { display: flex; flex-direction: column; gap: 2px; }
+:root[data-style="bento"] .sidebar .pill {
+  height: 40px; padding: 0 12px; gap: 12px; border-radius: 10px;
+  font-size: 14px; font-weight: 550; color: var(--tx);
+  background: transparent; border: 1px solid transparent; transition: none;
+}
+:root[data-style="bento"] .sidebar .pill .i { font-size: 18px; color: inherit; }
+:root[data-style="bento"] .sidebar .pill:hover { background: transparent; box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .sidebar .pill.active { background: var(--acsoft); color: var(--ac); }
+:root[data-style="bento"] .sidebar .pill.active .i { color: var(--ac); }
+:root[data-style="bento"] .sidebar .pill:focus-visible { outline: 2px solid var(--ac); outline-offset: -2px; }
+
+/* Footer: settings and collapse. */
+:root[data-style="bento"] .bento-foot {
+  margin-top: auto; display: flex; flex-direction: column; gap: 2px;
+  padding-top: 12px; border-top: 1px solid var(--bd);
+}
+:root[data-style="bento"] .bento-foot-btn {
+  display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px;
+  border-radius: 10px; border: none; background: transparent; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 550; color: var(--mu); text-align: left;
+}
+:root[data-style="bento"] .bento-foot-btn .i { font-size: 18px; flex: none; }
+:root[data-style="bento"] .bento-foot-btn:hover { color: var(--tx); box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .bento-foot-btn:focus-visible { outline: 2px solid var(--ac); outline-offset: -2px; }
+:root[data-style="bento"] .bento-collapse .i { transition: transform .25s; }
+:root[data-style="bento"] .sidebar:not(.bento-collapsed) .bento-collapse .i { transform: rotate(180deg); }
+
+/* Collapsed: labels hidden, icons centred. */
+:root[data-style="bento"] .sidebar.bento-collapsed .pill-label,
+:root[data-style="bento"] .sidebar.bento-collapsed .bento-brand-txt,
+:root[data-style="bento"] .sidebar.bento-collapsed .bento-foot-btn span { display: none; }
+:root[data-style="bento"] .sidebar.bento-collapsed .pill,
+:root[data-style="bento"] .sidebar.bento-collapsed .bento-foot-btn,
+:root[data-style="bento"] .sidebar.bento-collapsed .bento-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+
+/* --- the main column and its header ------------------------------------- */
+:root[data-style="bento"] .stack { display: block; }
+:root[data-style="bento"] main.shell > .stack,
+:root[data-style="bento"] .shell #overview { padding: 28px 32px 100px; box-sizing: border-box; }
+
+:root[data-style="bento"] .bento-head { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+:root[data-style="bento"] .bento-head-l { flex: 1; min-width: 0; }
+:root[data-style="bento"] .bento-head-l #greeting {
+  margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.025em; color: var(--tx);
+}
+:root[data-style="bento"] .bento-dateline {
+  margin-top: 4px; font-size: 14px; color: var(--mu);
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+:root[data-style="bento"] .bento-dateline #header-date {
+  margin: 0; text-transform: capitalize; white-space: nowrap; color: var(--mu); font-size: 14px;
+}
+:root[data-style="bento"] .bento-dateline #digital-clock {
+  font-weight: 600; color: var(--tx); font-variant-numeric: tabular-nums;
+}
+:root[data-style="bento"] .bento-dateline #alt-clock-row {
+  display: flex; gap: 4px; padding: 0; color: var(--mu); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+:root[data-style="bento"] .bento-dateline #alt-clock-row .minik,
+:root[data-style="bento"] .bento-dateline #alt-clock-row .miniv { font-size: 14px; color: inherit; font-weight: inherit; }
+:root[data-style="bento"] .bento-sep { color: var(--mu); }
+
+:root[data-style="bento"] .bento-head-r { display: flex; align-items: center; gap: 12px; }
+:root[data-style="bento"] .bento-head-r #search-form {
+  position: relative; width: 300px; margin: 0; display: block;
+}
+:root[data-style="bento"] .bento-head-r #search-form .i { position: absolute; left: 13px; top: 12px; font-size: 16px; color: var(--mu); }
+:root[data-style="bento"] .bento-head-r #search-form input {
+  box-sizing: border-box; width: 100%; height: 40px; border-radius: 10px;
+  border: 1px solid var(--bd); background: var(--s1); color: var(--tx);
+  padding: 0 12px 0 38px; font: inherit; font-size: 14px;
+}
+:root[data-style="bento"] .bento-head-r #search-form input:focus {
+  border-color: var(--ac); box-shadow: 0 0 0 3px var(--acsoft);
+}
+:root[data-style="bento"] .bento-edit {
+  height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--bd2);
+  background: transparent; color: var(--tx); cursor: pointer;
+  display: flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; font-weight: 600;
+}
+:root[data-style="bento"] .bento-edit:hover { box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .bento-edit:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+
+:root[data-style="bento"] .bento-head-r .iconbtn {
+  width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--bd);
+  background: transparent; color: var(--tx);
+}
+:root[data-style="bento"] .bento-head-r .iconbtn:hover { transform: none; box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .bento-head-r #account-toggle {
+  border-radius: 999px; border: none; background: var(--s2); position: relative;
+}
+:root[data-style="bento"] .bento-head-r #account-toggle.has-badge::after {
+  content: ""; position: absolute; top: 2px; right: 2px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--ac); border: 2px solid var(--bg);
+}
+
+/* --- the grid ----------------------------------------------------------- */
+:root[data-style="bento"] .wgrid { gap: 16px; }
+:root[data-style="bento"] .wgrid > .card {
+  border-radius: 18px; padding: 20px; overflow: visible;
+}
+/* The calendar card, moved into the grid from the sidebar slot. Empty when its
+   module is off, it takes no room. */
+:root[data-style="bento"] #tiles > #side-extra { grid-column: span 3; grid-row: span 2; }
+:root[data-style="bento"] #tiles > #side-extra:empty { display: none; }
+
+/* --- applications ------------------------------------------------------- */
+:root[data-style="bento"] #apps-section.glass {
+  margin-top: 32px; padding: 0; background: transparent; border: none; box-shadow: none;
+}
+:root[data-style="bento"] .apps-head { margin-bottom: 14px; }
+:root[data-style="bento"] .apps-head h3 { font-size: 18px; font-weight: 650; letter-spacing: -.015em; }
+:root[data-style="bento"] .apps .count {
+  padding: 0; border: none; background: transparent; color: var(--mu); font-size: 13px; font-weight: 500;
+}
+:root[data-style="bento"] .links { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+:root[data-style="bento"] .app {
+  min-height: 0; height: 64px; flex-direction: row; align-items: center; gap: 12px;
+  padding: 0 14px; border-radius: 14px; background: var(--s1); border: 1px solid var(--bd); box-shadow: none;
+}
+:root[data-style="bento"] .app:hover { transform: none; box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .app:active { transform: scale(.98); }
+:root[data-style="bento"] .app > div { flex: 1; min-width: 0; }
+:root[data-style="bento"] .app .appic { width: 38px; height: 38px; border-radius: 10px; font-size: 19px; box-shadow: none; }
+:root[data-style="bento"] .app:hover .appic { transform: none; }
+:root[data-style="bento"] .app .sheen { display: none; }
+:root[data-style="bento"] .app-tt { font-size: 14px; font-weight: 600; }
+:root[data-style="bento"] .app-sub { font-size: 12px; }
+:root[data-style="bento"] .app .caret { top: 50%; transform: translateY(-50%); right: 14px; }
+
+/* --- account menu, editbar ---------------------------------------------- */
+:root[data-style="bento"] #account-menu {
+  top: 72px; right: 32px; left: auto; bottom: auto;
+  width: 260px; padding: 6px; border-radius: 14px;
+  background: var(--s1); border: 1px solid var(--bd2);
+}
+:root[data-style="bento"] #editbar {
+  left: 50%; right: auto; top: auto; bottom: 24px; transform: translateX(-50%);
+  background: var(--s2); border: 1px solid var(--bd2); border-radius: 14px;
+}
+
+/* Between 821 and 1180: sidebar collapses to the rail, the grid wraps on a
+   readable width rather than obeying the inline spans. */
+@media (max-width: 1180px) {
+  :root[data-style="bento"] .sidebar { width: 72px; }
+  :root[data-style="bento"] .sidebar .pill-label,
+  :root[data-style="bento"] .sidebar .bento-brand-txt,
+  :root[data-style="bento"] .sidebar .bento-foot-btn span { display: none; }
+  :root[data-style="bento"] .sidebar .pill,
+  :root[data-style="bento"] .sidebar .bento-foot-btn,
+  :root[data-style="bento"] .sidebar .bento-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  :root[data-style="bento"] .wgrid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important; }
+  :root[data-style="bento"] #tiles > .card,
+  :root[data-style="bento"] #tiles > #side-extra { grid-column: auto !important; grid-row: auto !important; }
+}

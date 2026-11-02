@@ -15,6 +15,10 @@ import { uid, field, textInput, checkbox, colourPicker, iconPicker, slider, dial
 
 const isDirty = () => JSON.stringify(state.config) !== JSON.stringify(state.saved);
 
+/** The active interface style. Bento lays tiles on a fixed twelve-column grid;
+ *  glass lays them on a free track of their spans. Both read the same spans. */
+const isBentoStyle = () => (state.config?.appearance?.style || 'bento') === 'bento';
+
 export function setEditing(on) {
   if (!on && isDirty() && !confirm(t('edit.unsaved'))) return;
   state.editing = on;
@@ -350,7 +354,15 @@ export function decorateTilesForEditing() {
 
   const add = el('button', { class: 'card glass tile-add', html: `${svg('plus', 'font-size:26px')}<span>${esc(t('edit.addTile'))}</span>`, onclick: openAddTileDialog });
   grid.appendChild(add);
-  grid.style.gridTemplateColumns = `${visibleTiles().map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
+  // Bento keeps its fixed twelve-column track (renderTiles set it and each
+  // tile's span); the add slot is a span-3 card. Glass lays the editable grid
+  // out on the spans themselves, with a half-column trailing slot for the add.
+  if (isBentoStyle()) {
+    grid.style.gridTemplateColumns = 'repeat(12, minmax(0, 1fr))';
+    add.style.gridColumn = 'span 3';
+  } else {
+    grid.style.gridTemplateColumns = `${visibleTiles().map((tile) => `${tile.span}fr`).join(' ')} .5fr`;
+  }
 
   makeArrangeable(grid, '.editable', {
     onReorder: (order) => {
@@ -365,12 +377,25 @@ function startResize(event, index) {
   event.preventDefault();
   event.stopPropagation();
   const grid = id('tiles');
+  const bento = isBentoStyle();
   const startX = event.clientX;
   const startSpan = state.config.tiles[index].span;
   const totalSpan = visibleTiles().reduce((sum, tile) => sum + tile.span, 0) + 0.5;
   const pxPerFr = grid.getBoundingClientRect().width / totalSpan;
+  // Bento resizes by whole columns of the twelve, the tile's span (0.4–4) being
+  // a third of that count — so dragging snaps to the same grid the tiles live on.
+  const pxPerCol = grid.getBoundingClientRect().width / 12;
 
   const move = (moveEvent) => {
+    if (bento) {
+      const startCol = Math.min(12, Math.max(3, Math.round(startSpan * 3)));
+      const col = Math.min(12, Math.max(3, Math.round(startCol + (moveEvent.clientX - startX) / pxPerCol)));
+      state.config.tiles[index].span = col / 3;
+      const node = tileElement(state.config.tiles[index].id);
+      if (node) node.style.gridColumn = `span ${col}`;
+      resizeModules();
+      return;
+    }
     const delta = (moveEvent.clientX - startX) / pxPerFr;
     const span = Math.min(4, Math.max(0.4, Math.round((startSpan + delta) * 20) / 20));
     state.config.tiles[index].span = span;

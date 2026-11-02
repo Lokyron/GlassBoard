@@ -107,10 +107,25 @@ export function renderTiles() {
   // before its element does.
   loaded.forEach((client) => client.unmount?.());
 
-  grid.style.gridTemplateColumns = tiles.length ? tiles.map((tile) => `${tile.span}fr`).join(' ') : '1fr';
+  // Two ways to read the same spans. Glass lays the tiles on a free-form track
+  // whose columns are the spans themselves; bento lays them on a fixed twelve,
+  // each tile taking round(span × 3) of them, between a third and the whole row.
+  const bento = (state.config?.appearance?.style || 'bento') === 'bento';
+  grid.style.gridTemplateColumns = bento
+    ? 'repeat(12, minmax(0, 1fr))'
+    : (tiles.length ? tiles.map((tile) => `${tile.span}fr`).join(' ') : '1fr');
+
   grid.innerHTML = tiles
     .map((tile, index) => tileSpecFor(tile.type)?.markup(tile, index) ?? missingMarkup(tile, index))
     .join('');
+
+  if (bento) {
+    tiles.forEach((tile) => {
+      const span = Math.min(12, Math.max(3, Math.round((tile.span || 1) * 3)));
+      const node = tileElement(tile.id);
+      if (node) node.style.gridColumn = `span ${span}`;
+    });
+  }
 
   // Opening a tile's own panel. Never in edit mode: there, a click is a grab.
   tiles.forEach((tile) => {

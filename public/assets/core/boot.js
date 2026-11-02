@@ -17,6 +17,7 @@ import {
   toggleAccountMenu, doLogout,
 } from './shell.js';
 import { setEditing, openSettings, openExportDialog, openImportDialog, bindEditor } from '../edit.js';
+import { setBentoHandlers } from './bento.js';
 
 /* --------------------------------- timers -------------------------------- */
 /* Nothing ticks while the tab is hidden: on a phone that is battery, and on a
@@ -115,6 +116,13 @@ async function boot() {
 
   installParallax();
   bindEditor();
+  // The bento header's Edit and Settings buttons borrow the editor's own
+  // actions, injected here so the layout module imports neither (which would
+  // close an import cycle).
+  setBentoHandlers({
+    toggleEdit: () => (state.editing ? id('edit-save').click() : setEditing(true)),
+    openSettings,
+  });
   pwa.onChange = syncInstallItem;
   syncInstallItem();
   checkForUpdateBadge();
