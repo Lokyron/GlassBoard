@@ -22,10 +22,14 @@ export function defaultConfig() {
       newTab: true,
     },
     appearance: {
+      // A brand-new instance opens on the dark bento. An existing one keeps the
+      // glass it always had — that migration lives in config-schema's toVersion3.
+      style: 'bento',
       preset: 'default',
       orbs: true,
       wallpaper: { enabled: false, dim: 0.4, blur: 0 },
     },
+    layout: { mobileHidden: [] },
     tiles: [
       { id: 'tile-weather-local', type: 'weather-local', span: 1.1, settings: { label: '' } },
       {

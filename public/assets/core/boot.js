@@ -138,6 +138,7 @@ async function boot() {
   state.tileTypes = payload.tileTypes;
   state.modules = payload.modules || {};
   state.themePresets = payload.themePresets || {};
+  state.themeStyles = payload.themeStyles || {};
   if (payload.config.appearance?.wallpaper?.enabled) await loadWallpaperVersion();
 
   // The modules this dashboard needs, and only those. Awaited: a tile cannot

@@ -4,7 +4,7 @@ Glassboard stores its whole configuration as a single JSON document. Exports
 wrap that document with a little metadata. Both are versioned independently:
 
 - `formatVersion` — the envelope of an export file. Currently `1`.
-- `version` (inside `config`) — the configuration document itself. Currently `2`.
+- `version` (inside `config`) — the configuration document itself. Currently `3`.
 
 An instance refuses a file whose `formatVersion` is higher than it understands,
 and migrates older documents forward on import.
@@ -15,7 +15,7 @@ and migrates older documents forward on import.
 {
   "app": "glassboard",
   "formatVersion": 1,
-  "configVersion": 2,
+  "configVersion": 3,
   "exportedAt": "2026-01-31T09:12:44.081Z",
   "containsSecrets": false,
   "config": { "...": "the document below" },
@@ -46,7 +46,7 @@ An import only restores secrets when it is explicitly asked to.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "site": {
     "title": "Dashboard",
     "subtitle": "Home",
@@ -64,9 +64,13 @@ An import only restores secrets when it is explicitly asked to.
     "newTab": true
   },
   "appearance": {
+    "style": "bento",
     "preset": "default",
     "orbs": true,
     "wallpaper": { "enabled": false, "dim": 0.4, "blur": 0 }
+  },
+  "layout": {
+    "mobileHidden": []
   },
   "tiles": [
     { "id": "tile-local", "type": "weather-local", "span": 1.1, "settings": { "label": "" } }
@@ -110,11 +114,28 @@ An import only restores secrets when it is explicitly asked to.
 
 ### Appearance
 
+`style` is the surface language: `bento` (the dark bento grid, the default a
+new instance starts on) or `glass` (the original liquid glass). It is a
+separate axis from the colour `preset`, which applies to whichever style is on.
+An unknown value is refused. A document written before version 3 carried no
+`style`; the migration gives it `glass`, so upgrading never silently repaints an
+existing dashboard.
+
 `preset` is one of `default`, `ember`, `forest`, `violet`, `rose`, `slate`. An
 unknown value is refused rather than silently reset, so a typo in a hand-edited
-file is reported. `orbs` toggles the animated background shapes. Under
-`wallpaper`, `dim` is between `0` and `0.9` and `blur` between `0` and `24`
-pixels; both only apply when `enabled` is true and an image has been uploaded.
+file is reported. `orbs` toggles the animated background shapes (ignored by the
+bento style). Under `wallpaper`, `dim` is between `0` and `0.9` and `blur`
+between `0` and `24` pixels; both only apply when `enabled` is true and an image
+has been uploaded.
+
+### Layout
+
+`layout.mobileHidden` lists the cards hidden below 820 px — a per-account phone
+view that leaves the desktop view untouched. Each entry is either the `id` of a
+tile that exists, or one of the reserved card keys `search`, `calendar` and
+`apps`. The list is deduplicated, capped at 64, and cleaned of anything that no
+longer points at a real tile — so deleting a tile from the dashboard also drops
+it from here. An empty list (the default) shows every card.
 
 The image itself is not part of the configuration document — it lives as a file
 in the data directory. Exports carry it separately, in the `wallpaper` field of

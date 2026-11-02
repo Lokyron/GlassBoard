@@ -4,7 +4,7 @@ import { requireAuth, instanceId } from '../auth.js';
 import {
   getConfig, saveConfig, listRevisions, getRevision, buildExport, importExport, writeBackup,
 } from '../store.js';
-import { TILE_TYPES, THEME_PRESETS } from '../config-schema.js';
+import { TILE_TYPES, THEME_PRESETS, THEME_STYLES } from '../config-schema.js';
 import { moduleSummary } from '../modules/registry.js';
 
 export const configRouter = express.Router();
@@ -20,6 +20,7 @@ configRouter.get('/', (req, res) => {
     config: getConfig(req.user.id),
     tileTypes: TILE_TYPES,
     themePresets: THEME_PRESETS,
+    themeStyles: THEME_STYLES,
     // What the settings dialog needs to list the modules and their tabs.
     modules: moduleSummary(),
   });

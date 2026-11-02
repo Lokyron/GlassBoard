@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { isolate } from './helpers.js';
 
 isolate('schema');
-const { validateConfig, migrateConfig, CONFIG_VERSION, TILE_TYPES } =
+const { validateConfig, migrateConfig, CONFIG_VERSION, TILE_TYPES, THEME_STYLES } =
   await import('../server/config-schema.js');
 const { defaultConfig } = await import('../server/default-config.js');
 
@@ -158,6 +158,89 @@ describe('migrateConfig', () => {
       const migrated = migrateConfig({ version: 1, tiles: [{ id: 'n', type: 'note' }] });
       assert.equal(migrated.integrations, undefined);
     });
+  });
+});
+
+describe('the interface style', () => {
+  const styleOf = (input) => validateConfig(input).value.appearance.style;
+
+  it('offers both styles', () => {
+    assert.ok(THEME_STYLES.bento);
+    assert.ok(THEME_STYLES.glass);
+  });
+
+  it('keeps a known style', () => {
+    assert.equal(styleOf({ appearance: { style: 'glass' } }), 'glass');
+    assert.equal(styleOf({ appearance: { style: 'bento' } }), 'bento');
+  });
+
+  it('falls back to bento on an unknown style, and says so', () => {
+    const result = validateConfig({ appearance: { style: 'neon' } });
+    assert.equal(result.ok, false);
+    assert.equal(result.value.appearance.style, 'bento');
+    assert.ok(result.errors.some((e) => e.includes('style')));
+  });
+
+  it('gives bento to a config that simply never named one', () => {
+    // validateConfig alone cannot tell an old document from a new one — that is
+    // migrateConfig's job (below). On its own it hands out the new default.
+    assert.equal(styleOf({}), 'bento');
+  });
+
+  it('migrates an older document to glass so its look never changes', () => {
+    const migrated = migrateConfig({ version: 2, appearance: { preset: 'ember' } });
+    assert.equal(migrated.appearance.style, 'glass');
+    assert.equal(migrated.appearance.preset, 'ember', 'the rest of appearance is left alone');
+  });
+
+  it('does not override a style a document already carries', () => {
+    const migrated = migrateConfig({ version: 2, appearance: { style: 'bento' } });
+    assert.equal(migrated.appearance.style, 'bento');
+  });
+
+  it('migrates a document with no appearance block at all', () => {
+    const migrated = migrateConfig({ version: 1 });
+    assert.equal(migrated.appearance.style, 'glass');
+  });
+});
+
+describe('layout.mobileHidden', () => {
+  const hiddenOf = (input) => validateConfig(input).value.layout.mobileHidden;
+
+  it('defaults to an empty list', () => {
+    assert.deepEqual(validateConfig({}).value.layout.mobileHidden, []);
+  });
+
+  it('accepts the reserved card keys', () => {
+    assert.deepEqual(hiddenOf({ layout: { mobileHidden: ['search', 'calendar', 'apps'] } }), ['search', 'calendar', 'apps']);
+  });
+
+  it('keeps the id of a tile that exists', () => {
+    const hidden = hiddenOf({ tiles: [{ id: 'tile-note', type: 'note' }], layout: { mobileHidden: ['tile-note'] } });
+    assert.deepEqual(hidden, ['tile-note']);
+  });
+
+  it('drops an id that points at no tile, so deleting a tile cleans it up', () => {
+    assert.deepEqual(hiddenOf({ tiles: [{ id: 'tile-note', type: 'note' }], layout: { mobileHidden: ['tile-gone'] } }), []);
+  });
+
+  it('removes duplicates', () => {
+    assert.deepEqual(hiddenOf({ layout: { mobileHidden: ['search', 'search', 'apps'] } }), ['search', 'apps']);
+  });
+
+  it('caps the list', () => {
+    const many = Array.from({ length: 80 }, () => 'search');
+    assert.ok(hiddenOf({ layout: { mobileHidden: many } }).length <= 64);
+  });
+
+  it('rejects a value that is not an array', () => {
+    const result = validateConfig({ layout: { mobileHidden: 'search' } });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.value.layout.mobileHidden, []);
+  });
+
+  it('ignores non-string entries', () => {
+    assert.deepEqual(hiddenOf({ layout: { mobileHidden: ['search', 42, null, { x: 1 }] } }), ['search']);
   });
 });
 

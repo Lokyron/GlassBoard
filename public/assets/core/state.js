@@ -11,6 +11,7 @@ export const state = {
   modules: {},   // module id -> { label, hasPane }, as the server lists them
   editing: false,
   themePresets: {},
+  themeStyles: {},
   wallpaperVersion: '',
   me: null,    // the signed-in account: its name, and whether it administers
   news: null,  // the changelog sections this account has not been shown

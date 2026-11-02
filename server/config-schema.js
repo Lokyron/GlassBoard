@@ -4,7 +4,7 @@
 
 import { TILE_TYPES, validateIntegrations, validateTileSettings, validateModules } from './modules/registry.js';
 
-export const CONFIG_VERSION = 2;
+export const CONFIG_VERSION = 3;
 
 /* Tile types and the integrations block are no longer listed here: each module
    declares its own, and the registry composes them. Re-exported so that every
@@ -23,6 +23,21 @@ export const THEME_PRESETS = {
   rose: { label: 'Rose', labelKey: 'theme.rose', swatch: ['#f43f5e', '#c2185b', '#fb7185'] },
   slate: { label: 'Slate', labelKey: 'theme.slate', swatch: ['#64748b', '#475569', '#94a3b8'] },
 };
+
+/** Interface styles. A second, independent axis next to the colour preset: the
+ *  preset is the accent, the style is the whole surface language. Each id matches
+ *  the [data-style] rules in public/assets/styles/<id>.css, and carries a
+ *  translation key beside its English label for the same reason the presets do.
+ *  Adding a style is one entry here, one `styles/<id>.css`, and one i18n key. */
+export const THEME_STYLES = {
+  bento: { label: 'Dark bento', labelKey: 'style.bento' },
+  glass: { label: 'Liquid glass', labelKey: 'style.glass' },
+};
+
+/* Cards that can be hidden on a phone but are not tiles: the search field, the
+   calendar sidebar card and the shortcuts section. A mobileHidden entry is
+   either one of these or the id of a tile that exists. */
+const RESERVED_MOBILE_CARDS = new Set(['search', 'calendar', 'apps']);
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const ID = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -164,6 +179,12 @@ export function validateConfig(input) {
       newTab: v.bool(search.newTab, true),
     },
     appearance: {
+      // The style is the surface language (bento, glass); the preset is the
+      // accent that applies to whichever style is on. A document that never
+      // carried a style is dealt with in migrateConfig, which gives it 'glass'
+      // so an existing instance keeps its look; a brand-new one asks for 'bento'
+      // in default-config.js. The fallback here only catches a malformed value.
+      style: THEME_STYLES[input.appearance?.style] ? input.appearance.style : 'bento',
       preset: THEME_PRESETS[input.appearance?.preset] ? input.appearance.preset : 'default',
       orbs: v.bool(input.appearance?.orbs, true),
       wallpaper: {
@@ -174,6 +195,9 @@ export function validateConfig(input) {
     },
     tiles: [],
     links: [],
+    // Which cards are hidden on a phone. Filled in after the tiles, since it can
+    // only keep ids of tiles that survived validation.
+    layout: { mobileHidden: [] },
     // One switch per module, per account: the single answer to whether a
     // feature is on. See validateModules for what an older document meant.
     modules: validateModules(v, input),
@@ -183,6 +207,9 @@ export function validateConfig(input) {
 
   if (input.appearance?.preset && !THEME_PRESETS[input.appearance.preset]) {
     v.fail('appearance.preset', `unknown theme "${input.appearance.preset}"`);
+  }
+  if (input.appearance?.style && !THEME_STYLES[input.appearance.style]) {
+    v.fail('appearance.style', `unknown style "${input.appearance.style}"`);
   }
 
   if (!Array.isArray(input.tiles)) {
@@ -219,6 +246,22 @@ export function validateConfig(input) {
     }
   });
 
+  // layout.mobileHidden: the cards hidden under 820px. Kept to real tile ids and
+  // the reserved card keys, deduplicated and capped — so deleting a tile from
+  // the dashboard also drops it here, with nothing left to point at a ghost.
+  const rawHidden = input.layout?.mobileHidden;
+  if (rawHidden !== undefined && !Array.isArray(rawHidden)) {
+    v.fail('layout.mobileHidden', 'must be an array');
+  } else if (Array.isArray(rawHidden)) {
+    const tileIds = new Set(value.tiles.map((tile) => tile.id));
+    const seen = new Set();
+    value.layout.mobileHidden = rawHidden
+      .slice(0, 64)
+      .filter((entry) => typeof entry === 'string')
+      .filter((entry) => tileIds.has(entry) || RESERVED_MOBILE_CARDS.has(entry))
+      .filter((entry) => (seen.has(entry) ? false : (seen.add(entry), true)));
+  }
+
   return { ok: v.errors.length === 0, errors: v.errors, value, sourceVersion: version };
 }
 
@@ -236,8 +279,26 @@ export function migrateConfig(raw) {
     );
   }
   if (from < 2) doc = toVersion2(doc);
+  if (from < 3) doc = toVersion3(doc);
   doc.version = CONFIG_VERSION;
   return doc;
+}
+
+/**
+ * Version 3: the interface style becomes an explicit field.
+ *
+ * Before this version there was one look, the liquid glass, and no field named
+ * it. Version 3 adds a second — the dark bento — and makes it the default a
+ * brand-new instance starts on. An existing instance, though, chose nothing: it
+ * simply has the look it always had. Writing 'glass' here is what keeps it, so
+ * an upgrade never silently repaints a dashboard somebody was happy with. A new
+ * instance never reaches this branch, because default-config.js already names
+ * its style.
+ */
+function toVersion3(doc) {
+  const appearance = { ...(doc.appearance ?? {}) };
+  if (!appearance.style) appearance.style = 'glass';
+  return { ...doc, appearance };
 }
 
 /**
