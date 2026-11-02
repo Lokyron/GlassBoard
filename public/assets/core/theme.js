@@ -32,11 +32,13 @@ export function toggleTheme() { setTheme(html.getAttribute('data-theme') !== 'da
 /** Apply a colour preset, the orbs and the wallpaper. Pass a draft to preview it. */
 export function applyAppearance(appearance = state.config?.appearance, version = state.wallpaperVersion) {
   const settings = appearance || {};
+  html.setAttribute('data-style', settings.style || 'bento');
   html.setAttribute('data-preset', settings.preset || 'default');
   html.setAttribute('data-orbs', settings.orbs === false ? 'off' : 'on');
   // The sign-in screens run before any configuration can be read, so the chosen
-  // style is left here for them to find, next to the theme they already read.
+  // look is left here for them to find, next to the theme they already read.
   try {
+    localStorage.setItem('style', settings.style || 'bento');
     localStorage.setItem('preset', settings.preset || 'default');
     localStorage.setItem('orbs', settings.orbs === false ? 'off' : 'on');
   } catch { /* private mode */ }

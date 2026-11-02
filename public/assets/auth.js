@@ -15,6 +15,7 @@ const setTheme = (dark) => root.setAttribute('data-theme', dark ? 'dark' : 'ligh
 try {
   const stored = localStorage.getItem('theme');
   setTheme(stored ? stored === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches);
+  root.setAttribute('data-style', localStorage.getItem('style') || 'bento');
   root.setAttribute('data-preset', localStorage.getItem('preset') || 'default');
   root.setAttribute('data-orbs', localStorage.getItem('orbs') === 'off' ? 'off' : 'on');
 } catch {

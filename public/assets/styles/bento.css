@@ -1,0 +1,158 @@
+/* Glassboard — the "dark bento" interface style.
+ *
+ * A second surface language next to the original liquid glass. Every rule here
+ * is scoped under :root[data-style="bento"], and nothing in base.css is
+ * touched — so an instance on the glass style (data-style="glass", or any value
+ * that is not "bento") renders exactly as it always did. The colour preset is a
+ * separate axis: it keeps driving the accent, which bento maps onto its own
+ * accent tokens below.
+ *
+ * Loaded after themes.css and before mobile.css. Two layers:
+ *   1. design tokens and the remap of base.css's own variables onto them;
+ *   2. the surfaces (glass → solid), the hidden backdrop, and the layout.
+ */
+
+/* ========================================================================== */
+/* 1. Design tokens                                                           */
+/* ========================================================================== */
+
+:root[data-style="bento"] {
+  /* Surfaces, borders, text — the dark palette. */
+  --bg: #0b0d12;
+  --s1: #13161d;
+  --s2: #1a1e27;
+  --s3: #272c37;
+  --bd: rgba(255, 255, 255, .07);
+  --bd2: rgba(255, 255, 255, .15);
+  --tx: #eef1f6;
+  --mu: #9aa3b2;
+  /* Accent — overridden per preset further down. These are the default preset. */
+  --ac: #5aa9ff;
+  --acbg: #1a6fe0;
+  --acsoft: rgba(90, 169, 255, .14);
+  /* Status. */
+  --ok: #32d74b;
+  --warn: #ffb340;
+  --bad: #ff6961;
+  /* Chrome. */
+  --scrim: rgba(3, 5, 10, .62);
+  --shadow: 0 24px 60px -20px rgba(0, 0, 0, .7);
+  --hov: rgba(255, 255, 255, .045);
+
+  /* --- base.css's own tokens, remapped onto the bento palette --------------
+     The markup and base.css still read these names; pointing them at the bento
+     tokens makes every existing component sit on solid surfaces, in the right
+     colours, before a single component is re-laid-out. Each resolves through
+     the tokens above, so it follows light/dark on its own. */
+  --bg-2: var(--bg);
+  --surface: var(--s1);
+  --surface-strong: var(--s1);
+  --surface-soft: var(--s2);
+  --text: var(--tx);
+  --muted: var(--mu);
+  --border: var(--bd);
+  --border-strong: var(--bd2);
+  --hi: transparent;                 /* no glass highlight */
+  --shadow-soft: none;               /* cards carry no shadow in bento */
+  --primary: var(--ac);
+  --primary-2: var(--ac);
+  --primary-3: var(--ac);
+  --primary-soft: var(--acsoft);
+  --accent: var(--acbg);             /* was a gradient; a solid fill in bento */
+}
+
+:root[data-style="bento"][data-theme="light"] {
+  --bg: #f4f5f7;
+  --s1: #ffffff;
+  --s2: #f1f3f6;
+  --s3: #e3e6eb;
+  --bd: rgba(16, 24, 40, .08);
+  --bd2: rgba(16, 24, 40, .16);
+  --tx: #14171f;
+  --mu: #586170;
+  --ac: #0a5fc4;
+  --acbg: #0a63cc;
+  --acsoft: rgba(10, 99, 204, .09);
+  --ok: #1a8f3e;
+  --warn: #a86200;
+  --bad: #c9281d;
+  --scrim: rgba(16, 24, 40, .35);
+  --shadow: 0 24px 60px -24px rgba(16, 24, 40, .3);
+  --hov: rgba(16, 24, 40, .04);
+}
+
+/* --- accent per preset ----------------------------------------------------
+   The colour preset keeps choosing the accent; bento maps --primary of each
+   preset onto its own --ac / --acbg / --acsoft, kept dark enough that white
+   text on --acbg and --ac on --s1 both clear 4.5:1. The surfaces stay neutral.
+   The default preset needs no block — its values are the ones above. The
+   combined [data-style][data-preset][data-theme] selector outranks the plain
+   light block, so a light preset's values win in light mode. */
+
+:root[data-style="bento"][data-preset="ember"] {
+  --ac: #f1803f; --acbg: #c2410c; --acsoft: rgba(241, 128, 63, .14);
+}
+:root[data-style="bento"][data-preset="ember"][data-theme="light"] {
+  --ac: #c2410c; --acbg: #c2410c; --acsoft: rgba(194, 65, 12, .1);
+}
+:root[data-style="bento"][data-preset="forest"] {
+  --ac: #34c98a; --acbg: #0f7a50; --acsoft: rgba(52, 201, 138, .14);
+}
+:root[data-style="bento"][data-preset="forest"][data-theme="light"] {
+  --ac: #0f7a50; --acbg: #0f7a50; --acsoft: rgba(15, 122, 80, .1);
+}
+:root[data-style="bento"][data-preset="violet"] {
+  --ac: #a78bfa; --acbg: #7c3aed; --acsoft: rgba(167, 139, 250, .16);
+}
+:root[data-style="bento"][data-preset="violet"][data-theme="light"] {
+  --ac: #7c3aed; --acbg: #7c3aed; --acsoft: rgba(124, 58, 237, .1);
+}
+:root[data-style="bento"][data-preset="rose"] {
+  --ac: #fb7185; --acbg: #be123c; --acsoft: rgba(251, 113, 133, .14);
+}
+:root[data-style="bento"][data-preset="rose"][data-theme="light"] {
+  --ac: #be123c; --acbg: #be123c; --acsoft: rgba(190, 18, 60, .1);
+}
+:root[data-style="bento"][data-preset="slate"] {
+  --ac: #94a3b8; --acbg: #475569; --acsoft: rgba(148, 163, 184, .16);
+}
+:root[data-style="bento"][data-preset="slate"][data-theme="light"] {
+  --ac: #475569; --acbg: #475569; --acsoft: rgba(71, 85, 105, .1);
+}
+
+/* ========================================================================== */
+/* 2. Surfaces                                                                */
+/* ========================================================================== */
+
+/* A flat page: no generated backdrop, no gradient under the body. */
+:root[data-style="bento"] body {
+  background: var(--bg);
+}
+:root[data-style="bento"] #wall,
+:root[data-style="bento"] .orb {
+  display: none;
+}
+
+/* The glass becomes a plain surface: solid fill, a hairline border, no blur and
+   no inner highlight. The ::before / ::after that paint the glass sheen are
+   removed outright. */
+:root[data-style="bento"] .glass {
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-style="bento"] .glass::before,
+:root[data-style="bento"] .glass::after {
+  display: none;
+}
+
+/* The few surfaces that still float above the page keep a shadow: menus, the
+   panels, the edit bar and the toast. Everything else is flat. */
+:root[data-style="bento"] #account-menu.glass,
+:root[data-style="bento"] .sheet,
+:root[data-style="bento"] #editbar.glass,
+:root[data-style="bento"] #toast.glass {
+  box-shadow: var(--shadow);
+}
