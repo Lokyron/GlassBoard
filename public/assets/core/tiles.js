@@ -115,9 +115,15 @@ export function renderTiles() {
     ? 'repeat(12, minmax(0, 1fr))'
     : (tiles.length ? tiles.map((tile) => `${tile.span}fr`).join(' ') : '1fr');
 
+  // In bento the calendar card is moved into this grid (it is a sidebar card in
+  // glass). Rebuilding the grid's markup would destroy it, so it is detached and
+  // put back — keeping its filled-in content across a standalone renderTiles,
+  // the kind the editor fires when a tile is added, removed or reordered.
+  const keepSideExtra = grid.querySelector('#side-extra');
   grid.innerHTML = tiles
     .map((tile, index) => tileSpecFor(tile.type)?.markup(tile, index) ?? missingMarkup(tile, index))
     .join('');
+  if (keepSideExtra) grid.appendChild(keepSideExtra);
 
   if (bento) {
     tiles.forEach((tile) => {
