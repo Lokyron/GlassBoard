@@ -616,3 +616,109 @@
 :root[data-style="bento"] #side-extra .lbl {
   text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--mu); margin-bottom: 0;
 }
+
+/* ========================================================================== */
+/* 8. Calendar — made easier to read and tap in bento                         */
+/* The glass sizes were tuned for the sidebar card; in the bento panel they    */
+/* read as cramped. Everything here is bigger, with comfortable tap targets.   */
+/* ========================================================================== */
+
+/* A touch more room for the day column, so event titles are not all ellipsis. */
+:root[data-style="bento"] .cal-body { grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; }
+
+/* Month cells: taller, with a clear day number and today marker. */
+:root[data-style="bento"] .cal-cell { min-height: 98px; padding: 8px; border-radius: 12px; gap: 5px; background: var(--s2); }
+:root[data-style="bento"] .cal-cell.out { background: transparent; }
+:root[data-style="bento"] .cal-cell.sel { background: var(--acsoft); border-color: var(--ac); }
+:root[data-style="bento"] .cal-cell-num { font-size: 13px; }
+:root[data-style="bento"] .cal-cell.today .cal-cell-num {
+  min-width: 22px; height: 22px; line-height: 22px; background: var(--acbg); color: #fff; padding: 0 6px;
+}
+
+/* Event chips in a cell: a readable pill, the colour as a tint, the title in
+   full width (the time lives in the day column and the event detail). */
+:root[data-style="bento"] .cal-chip {
+  min-height: 24px; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 7px;
+  border-left: none; background: color-mix(in srgb, var(--chip, var(--ac)) 20%, transparent);
+}
+:root[data-style="bento"] .cal-chip:hover { background: color-mix(in srgb, var(--chip, var(--ac)) 34%, transparent); }
+:root[data-style="bento"] .cal-chip::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--chip, var(--ac));
+}
+:root[data-style="bento"] .cal-chip.all-day::before { display: none; }
+:root[data-style="bento"] .cal-chip-time { display: none; }
+:root[data-style="bento"] .cal-chip-title { font-size: 12px; font-weight: 550; color: var(--tx); }
+:root[data-style="bento"] .cal-chip.all-day .cal-chip-title { color: #fff; }
+:root[data-style="bento"] .cal-more { font-size: 12px; font-weight: 600; padding-left: 4px; }
+
+/* The day column: the heading, and the event rows as the main thing to tap. */
+:root[data-style="bento"] .cal-aside { gap: 14px; }
+:root[data-style="bento"] .cal-aside-head {
+  text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 650; color: var(--mu);
+}
+:root[data-style="bento"] .cal-day, :root[data-style="bento"] .cal-upcoming { gap: 8px; }
+:root[data-style="bento"] .cal-row {
+  align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px; border-radius: 12px;
+  background: var(--s2); border: 1px solid transparent;
+}
+:root[data-style="bento"] .cal-row:hover { border-color: transparent; box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .cal-row:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+:root[data-style="bento"] .cal-row .cal-dot { width: 10px; height: 10px; margin-top: 0; }
+:root[data-style="bento"] .cal-row-title { font-size: 15px; font-weight: 600; }
+:root[data-style="bento"] .cal-row-meta { font-size: 13px; gap: 6px 10px; margin-top: 2px; }
+
+/* The calendar key: readable, with bigger dots. */
+:root[data-style="bento"] .cal-legend { gap: 8px 16px; padding-top: 12px; }
+:root[data-style="bento"] .cal-legend-item { font-size: 13px; gap: 7px; }
+:root[data-style="bento"] .cal-legend-item .cal-dot,
+:root[data-style="bento"] .cal-dot { width: 9px; height: 9px; }
+:root[data-style="bento"] .cal-empty { font-size: 14px; padding: 12px 2px; }
+
+/* One event, read in a dialog: links are the point of it, so they are set as
+   comfortable, obviously tappable rows rather than small underlined text. */
+:root[data-style="bento"] .cal-detail { gap: 16px; }
+:root[data-style="bento"] .cal-detail-row { gap: 5px; }
+:root[data-style="bento"] .cal-detail-row .fld-l {
+  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--mu);
+}
+:root[data-style="bento"] .cal-detail-row > span:not(.fld-l) { font-size: 15px; color: var(--tx); }
+:root[data-style="bento"] .cal-detail a,
+:root[data-style="bento"] .cal-detail-link {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 6px 12px; border-radius: 10px;
+  background: var(--s2); color: var(--ac); font-size: 15px; font-weight: 550; text-decoration: none;
+  word-break: break-word;
+}
+:root[data-style="bento"] .cal-detail a:hover,
+:root[data-style="bento"] .cal-detail-link:hover { box-shadow: inset 0 0 0 100vmax var(--hov); text-decoration: none; }
+:root[data-style="bento"] .cal-detail-text { font-size: 15px; line-height: 1.6; }
+
+/* The sidebar card (in the grid): a little more air in the next-event line. */
+:root[data-style="bento"] .cal-card-next { font-size: 14px; gap: 9px; min-height: 22px; }
+:root[data-style="bento"] .cal-card-next-when { font-size: 13px; }
+:root[data-style="bento"] .cal-card-next .cal-dot { width: 9px; height: 9px; }
+
+/* ========================================================================== */
+/* 9. Shortcuts and folders — bigger, easier to read and tap                  */
+/* The links and folders read small; give them wider cards, a larger icon and  */
+/* title, and a clearer folder affordance.                                     */
+/* ========================================================================== */
+:root[data-style="bento"] .links { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+:root[data-style="bento"] .app { height: 72px; padding: 0 16px; gap: 14px; border-radius: 16px; }
+:root[data-style="bento"] .app .appic { width: 44px; height: 44px; border-radius: 12px; font-size: 22px; }
+:root[data-style="bento"] .app-tt { font-size: 15px; font-weight: 650; }
+:root[data-style="bento"] .app-sub { font-size: 13px; margin-top: 2px; }
+/* The trailing folder chevron, a clear tap affordance at the card's edge. */
+:root[data-style="bento"] .app[data-folder] .caret { font-size: 16px; opacity: .8; right: 16px; }
+
+/* Calendar on a phone: the month and the day column stack, and a cell shows a
+   dot per event rather than a title it has no room for — the day column below
+   carries the readable rows. (These outrank the glass mobile.css that follows.) */
+@media (max-width: 820px) {
+  :root[data-style="bento"] .cal-body { grid-template-columns: 1fr; gap: 16px; }
+  :root[data-style="bento"] .cal-cell { min-height: 54px; padding: 5px; }
+  :root[data-style="bento"] .cal-cell-events { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+  :root[data-style="bento"] .cal-chip { min-height: 0; padding: 0; background: transparent; }
+  :root[data-style="bento"] .cal-chip:hover { background: transparent; }
+  :root[data-style="bento"] .cal-chip::before { width: 6px; height: 6px; }
+  :root[data-style="bento"] .cal-chip-title, :root[data-style="bento"] .cal-more { display: none; }
+}
