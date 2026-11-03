@@ -610,3 +610,9 @@
     left: 16px; right: 16px; transform: none; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); border-radius: 14px;
   }
 }
+
+/* The calendar card, drawn by its module into the grid slot, keeps glass's
+   uppercase label; flatten it like the tile headers. */
+:root[data-style="bento"] #side-extra .lbl {
+  text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--mu); margin-bottom: 0;
+}
