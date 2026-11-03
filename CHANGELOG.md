@@ -99,6 +99,16 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **In bento, the calendar is a full-width landscape band.** In glass it is the
+  tall sidebar card it was built for; in bento the same card lays itself out
+  across the row instead — the date and the year on the left, the month in the
+  middle, and a real **À venir** agenda of the next few events filling the rest,
+  where the sidebar had room for a single line. It fills the row rather than
+  sitting as a narrow column in a void, and the events read at a comfortable
+  size. The whole band is still one click to the full month. Glass is untouched:
+  every rule carries the `data-style="bento"` prefix, and the extra agenda
+  markup is emitted only for bento.
+
 - **A module may now draw part of the page around the tiles, not only a
   tile.** The sidebar gained one slot and the core still knows nothing about
   what goes in it: a module declares `chrome: true`, returns `sidebarCards()`,

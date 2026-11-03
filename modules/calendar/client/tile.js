@@ -47,6 +47,9 @@ Object.assign(own, {
 
 const settings = () => state.config?.integrations?.calendar ?? {};
 const locale = () => state.config?.site?.locale || 'en';
+/** The bento style lays the card out as a wide band, with room for an agenda
+ *  beside the month; glass keeps the tall sidebar card it was built for. */
+const isBento = () => (state.config?.appearance?.style || 'bento') === 'bento';
 const mondayFirst = () => settings().weekStartsMonday !== false;
 /** Whether there is anything to draw at all: a feed with an address behind it. */
 const configured = () => own.status?.configured === true;
@@ -175,7 +178,36 @@ function cardMarkup() {
        </div>`
     : '';
 
-  return `<div class="lbl">${esc(t('cal.title'))}</div>${date}${miniMonth(monthKey(now), today)}${nextLine}${yearRow}`;
+  const lbl = `<div class="lbl">${esc(t('cal.title'))}</div>`;
+  const mini = miniMonth(monthKey(now), today);
+
+  /* In bento the card is a wide landscape band: the date and the year on the
+     left, the month in the middle, and a real agenda on the right where glass
+     has room only for the single next line. Each zone is a named grid area the
+     stylesheet places; the whole card is still one click to the full month. */
+  if (isBento()) {
+    return `${lbl}
+      <div class="cal-card-lead">${date}${yearRow}</div>
+      <div class="cal-card-mini">${mini}</div>
+      <div class="cal-card-agenda">
+        <div class="cal-card-agenda-head">${esc(t('cal.upcoming'))}</div>
+        <div class="cal-card-agenda-list">${agendaMarkup()}</div>
+      </div>`;
+  }
+
+  return `${lbl}${date}${mini}${nextLine}${yearRow}`;
+}
+
+/** The agenda shown beside the month in bento: the next few events as the same
+ *  tappable rows the panel uses, or a quiet line when there is nothing to show
+ *  or no feed yet. Clicking a row opens the full month, like the rest of the
+ *  card — the card is drawn before the index the panel builds, so a row here
+ *  points at the calendar rather than straight at one event. */
+function agendaMarkup() {
+  if (!configured()) return `<p class="cal-card-empty">${esc(t('cal.noFeedShort'))}</p>`;
+  const list = upcoming(settings().upcomingCount ?? 4);
+  if (!list.length) return `<p class="cal-card-empty">${esc(t('cal.nothingUpcoming'))}</p>`;
+  return list.map((event) => eventRow(event, { withDay: true })).join('');
 }
 
 /** The compact month on the card: the shape of the month, and a dot under

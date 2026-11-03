@@ -316,10 +316,12 @@
 :root[data-style="bento"] .wgrid > .card {
   border-radius: 18px; padding: 20px; overflow: visible;
 }
-/* The calendar card, moved into the grid from the sidebar slot. Empty when its
-   module is off, it takes no room. */
-:root[data-style="bento"] #tiles > #side-extra { grid-column: span 3; grid-row: span 2; }
+/* The calendar card, moved into the grid from the sidebar slot. #side-extra is
+   display:contents, so the grid item is the .cal-card inside it — the span goes
+   there. It runs the full width as a landscape band (see §8); empty, it and its
+   wrapper take no room. */
 :root[data-style="bento"] #tiles > #side-extra:empty { display: none; }
+:root[data-style="bento"] #side-extra > .cal-card { grid-column: 1 / -1; }
 
 /* --- applications ------------------------------------------------------- */
 :root[data-style="bento"] #apps-section.glass {
@@ -692,10 +694,62 @@
 :root[data-style="bento"] .cal-detail-link:hover { box-shadow: inset 0 0 0 100vmax var(--hov); text-decoration: none; }
 :root[data-style="bento"] .cal-detail-text { font-size: 15px; line-height: 1.6; }
 
-/* The sidebar card (in the grid): a little more air in the next-event line. */
-:root[data-style="bento"] .cal-card-next { font-size: 14px; gap: 9px; min-height: 22px; }
-:root[data-style="bento"] .cal-card-next-when { font-size: 13px; }
-:root[data-style="bento"] .cal-card-next .cal-dot { width: 9px; height: 9px; }
+/* The card in the grid is a wide landscape band, not the tall sidebar card it
+   is in glass: the date and the year on the left, the month in the middle, and
+   the agenda filling the rest — so the calendar holds its row instead of
+   sitting as a narrow column in a void. The zones are placed by name. */
+:root[data-style="bento"] #side-extra > .cal-card {
+  gap: 12px 32px; padding: 22px 26px; align-items: start;
+  grid-template-columns: minmax(190px, 230px) minmax(220px, 260px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "lbl  lbl   lbl"
+    "lead mini  agenda";
+}
+:root[data-style="bento"] #side-extra > .cal-card > .lbl { grid-area: lbl; }
+:root[data-style="bento"] .cal-card-lead { grid-area: lead; display: flex; flex-direction: column; gap: 20px; }
+:root[data-style="bento"] .cal-card-mini { grid-area: mini; }
+:root[data-style="bento"] .cal-card-agenda {
+  grid-area: agenda; min-width: 0; display: flex; flex-direction: column; gap: 10px;
+  align-self: stretch; padding-left: 32px; border-left: 1px solid var(--bd);
+}
+
+/* The date, bigger now that it leads the band. */
+:root[data-style="bento"] .cal-card-date { gap: 14px; }
+:root[data-style="bento"] .cal-card-num { font-size: 2.7rem; }
+:root[data-style="bento"] .cal-card-when strong { font-size: 1.05rem; }
+:root[data-style="bento"] .cal-card-when span { font-size: .85rem; }
+
+/* The month: readable cells, a filled today, a clear dot on a busy day. */
+:root[data-style="bento"] .cal-card-mini .cal-mini { gap: 6px; }
+:root[data-style="bento"] .cal-card-mini .cal-mini-week span { font-size: .64rem; color: var(--mu); }
+:root[data-style="bento"] .cal-card-mini .cal-mini-day { font-size: 12.5px; border-radius: 9px; }
+:root[data-style="bento"] .cal-card-mini .cal-mini-day.today { background: var(--acbg); color: #fff; }
+:root[data-style="bento"] .cal-card-mini .cal-mini-dot { width: 4px; height: 4px; background: var(--ac); }
+:root[data-style="bento"] .cal-card-mini .cal-mini-day.today .cal-mini-dot { background: #fff; }
+
+/* The agenda: a small heading over the same tappable rows the panel uses. */
+:root[data-style="bento"] .cal-card-agenda-head {
+  font-size: 13px; font-weight: 650; color: var(--mu);
+}
+:root[data-style="bento"] .cal-card-agenda-list { display: flex; flex-direction: column; gap: 8px; }
+:root[data-style="bento"] .cal-card-empty { font-size: 14px; color: var(--mu); padding: 8px 2px; }
+
+/* Between 821 and 1180 the grid wraps on its own; the band becomes an ordinary
+   card again and its zones stack. */
+@media (max-width: 1180px) {
+  :root[data-style="bento"] #side-extra > .cal-card {
+    grid-column: auto; grid-template-columns: 1fr; grid-template-rows: none;
+    grid-template-areas: "lbl" "lead" "mini" "agenda"; gap: 14px; padding: 20px;
+  }
+  :root[data-style="bento"] .cal-card-lead { flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  :root[data-style="bento"] .cal-card-lead .cal-card-year { flex: 1; max-width: 220px; }
+  :root[data-style="bento"] .cal-card-agenda { padding-left: 0; border-left: none; border-top: 1px solid var(--bd); padding-top: 14px; }
+}
+@media (max-width: 560px) {
+  :root[data-style="bento"] .cal-card-lead { flex-direction: column; align-items: stretch; }
+  :root[data-style="bento"] .cal-card-lead .cal-card-year { max-width: none; }
+}
 
 /* ========================================================================== */
 /* 9. Shortcuts and folders — bigger, easier to read and tap                  */
