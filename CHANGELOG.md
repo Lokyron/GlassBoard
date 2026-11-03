@@ -7,6 +7,29 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A second interface style: a dark bento, now the default.** Next to the
+  colour preset, which was the only choice the appearance had, there is a second
+  and independent one — the whole surface language. The original liquid glass is
+  still there, unchanged, under its own name; the new **Dark bento** drops the
+  blur and the glow for flat, solid cards on a twelve-column grid, with the
+  navigation in a left sidebar and the clock, search and account in a header the
+  page grows for itself. The colour presets apply to either style. Choose in
+  **Settings → Appearance**, where the switch previews live on the real
+  dashboard before you save.
+
+  A brand-new instance opens on the bento. **An existing one keeps the glass it
+  already had**: a configuration written before this version named no style, and
+  it is given `glass` on the first read, so an upgrade never repaints a
+  dashboard somebody was happy with. Adding a third style later is one CSS file,
+  one entry in `THEME_STYLES` and one translation key.
+
+- **A phone view you choose.** The desktop dashboard can carry more than a phone
+  wants to scroll. **Settings → Appearance → Phone view** lists every card this
+  dashboard has — the search box, each tile, the calendar and the applications —
+  each with a switch, and the ones you turn off are hidden below 820 px. The
+  desktop view is left exactly as it was, and the choice travels in the
+  configuration export like everything else.
+
 - **A calendar, where the year-progress card used to be.** That card said how
   far through the year we were and nothing else: a percentage answers "what is
   today" and never answers "what is today *for*". In its place the sidebar now
