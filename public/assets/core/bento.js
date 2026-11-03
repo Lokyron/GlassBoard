@@ -190,4 +190,24 @@ export function applyBentoLayout() {
   const style = state.config?.appearance?.style || 'bento';
   if (style === 'bento') { mount(); sync(); }
   else unmount();
+  applyMobileHidden();
+}
+
+/** Mark the cards the phone view hides, so the stylesheet can drop them under
+ *  820px. The attribute is set in both styles; only the bento phone layout acts
+ *  on it. Pass a list to preview a choice before it is saved. */
+export function applyMobileHidden(list = state.config?.layout?.mobileHidden) {
+  const set = new Set(Array.isArray(list) ? list : []);
+  const mark = (node, key) => {
+    if (!node) return;
+    if (set.has(key)) node.setAttribute('data-mobile-hidden', '');
+    else node.removeAttribute('data-mobile-hidden');
+  };
+  mark(id('search-card'), 'search');
+  mark(id('search-form'), 'search');
+  mark(id('apps-section'), 'apps');
+  mark(id('side-extra'), 'calendar');
+  for (const tile of state.config?.tiles || []) {
+    mark(document.querySelector(`[data-tile="${CSS.escape(tile.id)}"]`), tile.id);
+  }
 }

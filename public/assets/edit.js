@@ -9,6 +9,7 @@ import { applyAppearance, withTransition } from './core/theme.js';
 import { renderLinks, openFolder, closeFolder, setEditDecorators } from './core/chrome.js';
 import { renderTiles, resizeModules, visibleTiles, isModuleEnabled } from './core/tiles.js';
 import { renderAll, refreshData } from './core/render.js';
+import { applyMobileHidden } from './core/bento.js';
 import { downloadExport, openNewsHistory } from './core/shell.js';
 import { uid, field, textInput, checkbox, colourPicker, iconPicker, slider, dialogFooter } from './core/forms.js';
 
@@ -1273,7 +1274,14 @@ export async function openSettings(section = 'general') {
     } catch (error) {
       toast(error.details?.length ? `${error.message}: ${error.details[0]}` : error.message, 'error');
     }
-  }, () => { closeDialog(); applyAppearance(); }));
+  }, () => {
+    // Cancel: undo any live preview. The style selector previews by mutating the
+    // running config, so restore it from the saved copy and relay the page out.
+    closeDialog();
+    if (state.saved?.appearance) state.config.appearance.style = state.saved.appearance.style;
+    applyAppearance();
+    renderAll();
+  }));
 
   openDialog({ title: t('set.title'), body });
   show(section);
@@ -1320,6 +1328,86 @@ function generalPane(draft) {
   return pane;
 }
 
+/** The name a tile goes by in the phone-view list: its note's heading, its
+ *  weather label, or the name of its type. */
+function tileCardName(tile, meta) {
+  if (tile.type === 'note') return tile.settings?.heading?.trim() || labelOf(meta);
+  if (tile.type === 'weather-local') return tile.settings?.label?.trim() || t('tile.localPosition');
+  return labelOf(meta);
+}
+
+/** The "Phone view" section of the Appearance pane: one switch per card that a
+ *  phone can be told to hide, previewed live, written on Save with the rest. */
+function mobileViewSection(pane, draft) {
+  const layout = draft.layout || (draft.layout = { mobileHidden: [] });
+  if (!Array.isArray(layout.mobileHidden)) layout.mobileHidden = [];
+  const hidden = new Set(layout.mobileHidden);
+
+  // Only the cards this dashboard actually has: the search box, every tile a
+  // switched-on module draws, the calendar sidebar card, and the apps section.
+  const cards = [];
+  if (draft.search?.enabled) cards.push({ key: 'search', icon: 'magnifying-glass', label: t('card.search'), sub: t('set.mobileViewSearchSub') });
+  for (const tile of draft.tiles || []) {
+    const meta = state.tileTypes?.[tile.type];
+    if (!meta || !isModuleEnabled(meta.module)) continue;
+    cards.push({ key: tile.id, icon: TILE_ICONS[tile.type] || 'navigation-arrow', label: tileCardName(tile, meta), sub: labelOf(meta) });
+  }
+  if (isModuleEnabled('calendar')) cards.push({ key: 'calendar', icon: 'calendar', label: labelOf(state.modules.calendar) || t('card.calendar'), sub: t('set.mobileViewCalendarSub') });
+  cards.push({ key: 'apps', icon: 'folder', label: t('card.apps'), sub: t('set.mobileViewAppsSub') });
+
+  const commit = () => { layout.mobileHidden = [...hidden]; applyMobileHidden(layout.mobileHidden); };
+  const count = el('span', { class: 'mv-count' });
+  const updateCount = () => {
+    const shown = cards.filter((card) => !hidden.has(card.key)).length;
+    count.textContent = t('set.mobileViewCount', { shown, total: cards.length });
+  };
+
+  const list = el('div', { class: 'mv-list' });
+  const rows = cards.map((card) => {
+    const knob = el('span', { class: 'mv-knob' });
+    const track = el('span', { class: 'mv-track' }, [knob]);
+    const row = el('button', {
+      class: 'mv-row', type: 'button', role: 'switch',
+      onclick: () => {
+        if (hidden.has(card.key)) hidden.delete(card.key); else hidden.add(card.key);
+        paint();
+        commit();
+        updateCount();
+      },
+    }, [
+      el('span', { class: 'mv-ic', html: svg(card.icon) }),
+      el('span', { class: 'mv-txt' }, [
+        el('span', { class: 'mv-label', text: card.label }),
+        el('span', { class: 'mv-sub', text: card.sub || '' }),
+      ]),
+      track,
+    ]);
+    return { row, card };
+  });
+  const paint = () => rows.forEach(({ row, card }) => {
+    const on = !hidden.has(card.key);
+    row.setAttribute('aria-checked', String(on));
+    row.classList.toggle('on', on);
+  });
+  rows.forEach(({ row }) => list.appendChild(row));
+  paint();
+  updateCount();
+
+  const reset = el('button', {
+    class: 'mv-reset', type: 'button', text: t('set.mobileViewReset'),
+    onclick: () => { hidden.clear(); paint(); commit(); updateCount(); },
+  });
+
+  pane.appendChild(el('div', { class: 'divider' }));
+  pane.appendChild(el('div', { class: 'mv-head' }, [
+    el('h4', { class: 'mv-title', text: t('set.mobileView') }),
+    count,
+    reset,
+  ]));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.mobileViewHint') }));
+  pane.appendChild(list);
+}
+
 function appearancePane(draft) {
   const appearance = draft.appearance;
   const wallpaper = appearance.wallpaper;
@@ -1328,6 +1416,32 @@ function appearancePane(draft) {
   // real dashboard rather than on a swatch.
   const preview = () => applyAppearance(appearance, state.wallpaperVersion);
   const previewFaded = () => withTransition(preview);
+
+  /* Interface style: a second axis next to the colour preset. Picking one
+     previews the whole layout live, so it mutates the running config too, not
+     only the draft — the dialog's Cancel restores it from the saved copy. */
+  const styleGrid = el('div', { class: 'style-grid' });
+  const paintStyle = () =>
+    styleGrid.querySelectorAll('.style-card').forEach((b) => b.classList.toggle('on', b.dataset.style === appearance.style));
+  const STYLE_SUBS = { bento: 'style.bentoSub', glass: 'style.glassSub' };
+  Object.entries(state.themeStyles).forEach(([key, meta]) => {
+    styleGrid.appendChild(el('button', {
+      class: 'style-card', type: 'button', 'data-style': key,
+      html: `<span class="style-name">${esc(labelOf(meta))}</span><span class="style-sub">${esc(t(STYLE_SUBS[key] || ''))}</span>`,
+      onclick: () => {
+        appearance.style = key;
+        state.config.appearance.style = key;
+        paintStyle();
+        withTransition(() => { applyAppearance(appearance); renderAll(); });
+      },
+    }));
+  });
+  paintStyle();
+  pane.appendChild(field(t('set.style'), styleGrid));
+  pane.appendChild(el('p', { class: 'fld-h', text: t('set.styleHint') }));
+
+  mobileViewSection(pane, draft);
+  pane.appendChild(el('div', { class: 'divider' }));
 
   const themes = el('div', { class: 'themes' });
   const paint = () => themes.querySelectorAll('.theme').forEach((b) => b.classList.toggle('on', b.dataset.preset === appearance.preset));

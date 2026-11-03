@@ -414,3 +414,127 @@
 /* Note specifics. */
 :root[data-style="bento"] .note-title { font-size: 17px; font-weight: 650; color: var(--tx); }
 :root[data-style="bento"] .note-body { margin: 0; font-size: 14px; line-height: 1.55; color: var(--mu); text-wrap: pretty; }
+
+/* Tiles still on their glass markup (pve, georide, parcels) are restyled in
+   place: the uppercase labels become plain headers, the gradient numbers go
+   flat. Weather and note do not reach here — they emit bento markup instead. */
+:root[data-style="bento"] .card .lbl {
+  text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600;
+  color: var(--mu); margin-bottom: 0;
+}
+:root[data-style="bento"] .card.pve,
+:root[data-style="bento"] .card.gr { display: flex; flex-direction: column; gap: 14px; }
+:root[data-style="bento"] .temp,
+:root[data-style="bento"] .year-big,
+:root[data-style="bento"] .big .t {
+  background: none; -webkit-text-fill-color: currentColor; color: var(--tx);
+}
+:root[data-style="bento"] .card .wtop h3 { font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
+
+/* ========================================================================== */
+/* 5. Panels (modals)                                                         */
+/* ========================================================================== */
+:root[data-style="bento"] .modal {
+  background: var(--scrim); -webkit-backdrop-filter: none; backdrop-filter: none; padding: 32px;
+}
+:root[data-style="bento"] .sheet {
+  width: min(980px, 100%); max-height: 100%; border-radius: 20px;
+  border: 1px solid var(--bd); background: var(--s1); --surface: var(--s1);
+  box-shadow: var(--shadow);
+}
+:root[data-style="bento"] #folder-modal .sheet,
+:root[data-style="bento"] #dialog-modal .sheet { width: min(640px, 100%); }
+
+:root[data-style="bento"] .m-head {
+  padding: 16px 20px; border-bottom: 1px solid var(--bd); background: var(--s1);
+  position: sticky; top: 0; z-index: 2; flex-wrap: wrap; gap: 10px;
+}
+:root[data-style="bento"] .m-head h3 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+:root[data-style="bento"] .m-head > div:first-child { flex: 1 1 220px; min-width: 0; }
+:root[data-style="bento"] .m-body { padding: 20px; gap: 20px; }
+
+/* Inner boxes: a soft surface, no border, no shadow. */
+:root[data-style="bento"] .box {
+  background: var(--s2); border: none; border-radius: 14px; padding: 16px; box-shadow: none;
+}
+:root[data-style="bento"] .box .k,
+:root[data-style="bento"] .box .clab,
+:root[data-style="bento"] .cbox .clab {
+  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--mu);
+}
+:root[data-style="bento"] .box.alert { background: var(--acsoft); border: none; }
+
+/* The close button in a panel head. */
+:root[data-style="bento"] .m-head .iconbtn {
+  width: 44px; height: 44px; border-radius: 10px; border: none; background: var(--s2); color: var(--tx);
+}
+:root[data-style="bento"] .m-head .iconbtn:hover { transform: none; box-shadow: inset 0 0 0 100vmax var(--hov); }
+
+/* Day pills and place pills in the weather panel. */
+:root[data-style="bento"] .day-btn {
+  border-radius: 12px; border: 1px solid var(--bd); background: var(--s2); color: var(--mu); min-width: 0;
+}
+:root[data-style="bento"] .day-btn:hover { transform: none; box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .day-btn.active {
+  background: var(--acsoft); border-color: var(--ac); color: var(--ac); box-shadow: none;
+}
+:root[data-style="bento"] .day-btn.active .dd { color: var(--ac); }
+:root[data-style="bento"] .place-btn {
+  border-radius: 999px; border: 1px solid var(--bd2); background: transparent; color: var(--tx); height: 44px;
+}
+:root[data-style="bento"] .place-btn:hover { transform: none; box-shadow: inset 0 0 0 100vmax var(--hov); }
+:root[data-style="bento"] .place-btn.active {
+  background: var(--acbg); border-color: transparent; color: #fff; box-shadow: none;
+}
+:root[data-style="bento"] .place-btn.active .i { opacity: 1; }
+
+/* Buttons inside panels. */
+:root[data-style="bento"] .btn.primary {
+  background: var(--acbg); color: #fff; border: none; box-shadow: none;
+}
+:root[data-style="bento"] .btn.ghost {
+  background: transparent; border: 1px solid var(--bd2); color: var(--tx);
+}
+:root[data-style="bento"] .btn.ghost:hover { box-shadow: inset 0 0 0 100vmax var(--hov); }
+
+/* ========================================================================== */
+/* 6. Settings: interface style selector + phone view                         */
+/* These are new controls, so they are styled for both styles through the      */
+/* legacy token names base.css and the bento remap both define.                */
+/* ========================================================================== */
+.style-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.style-card {
+  min-height: 60px; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  border: 1.5px solid var(--border); background: transparent; font: inherit; text-align: left;
+}
+.style-card.on { border-color: var(--primary); background: var(--primary-soft); }
+.style-name { display: block; font-size: 14px; font-weight: 650; color: var(--text); }
+.style-sub { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.mv-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.mv-title { margin: 0; font-size: 15px; font-weight: 650; }
+.mv-count { font-size: 13px; color: var(--muted); }
+.mv-reset {
+  margin-left: auto; background: transparent; border: none; color: var(--primary);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: 8px;
+}
+.mv-list { display: grid; gap: 2px; border-radius: 14px; background: var(--surface-soft); padding: 4px; margin-top: 8px; }
+.mv-row {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 12px; width: 100%;
+  border-radius: 10px; border: none; background: transparent; cursor: pointer; font: inherit; text-align: left; color: var(--text);
+}
+.mv-row:hover { box-shadow: inset 0 0 0 100vmax var(--hov, rgba(128, 128, 128, .06)); }
+.mv-ic { width: 34px; height: 34px; border-radius: 9px; background: var(--surface-strong); display: grid; place-items: center; font-size: 17px; flex: none; color: var(--text); }
+.mv-txt { flex: 1; min-width: 0; }
+.mv-label { display: block; font-size: 14px; font-weight: 600; }
+.mv-sub { display: block; font-size: 12px; color: var(--muted); }
+.mv-track { width: 44px; height: 24px; border-radius: 12px; flex: none; position: relative; background: var(--surface-strong); transition: background .2s; }
+.mv-row.on .mv-track { background: var(--primary); }
+.mv-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.mv-row.on .mv-knob { transform: translateX(20px); }
+@media (prefers-reduced-motion: reduce) { .mv-track, .mv-knob { transition: none; } }
+
+/* The phone view itself: hide the marked cards under 820px, in bento only. */
+@media (max-width: 820px) {
+  :root[data-style="bento"] [data-mobile-hidden] { display: none !important; }
+}
