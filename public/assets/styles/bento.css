@@ -538,3 +538,75 @@
 @media (max-width: 820px) {
   :root[data-style="bento"] [data-mobile-hidden] { display: none !important; }
 }
+
+/* ========================================================================== */
+/* 7. Phone layout (<= 820px)                                                 */
+/* These rules carry the extra attribute of the data-style prefix, so they    */
+/* outrank the glass mobile.css that loads after this file.                   */
+/* ========================================================================== */
+@media (max-width: 820px) {
+  :root[data-style="bento"] .sidebar { display: none !important; }
+  :root[data-style="bento"] .shell {
+    display: block; grid-template-columns: 1fr; margin: 0; padding: 0; max-width: none;
+  }
+  :root[data-style="bento"] .shell #overview,
+  :root[data-style="bento"] main.shell > .stack {
+    display: block;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px calc(var(--dock-h, 66px) + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+
+  /* Header: greeting and date, then a row of search + the two buttons. The
+     account button lives in the dock on a phone, so it is hidden here. */
+  :root[data-style="bento"] .bento-head { display: block; margin-bottom: 16px; }
+  :root[data-style="bento"] .bento-head-l #greeting { font-size: 26px; }
+  :root[data-style="bento"] .bento-head-r { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  :root[data-style="bento"] .bento-head-r #search-form { width: auto; flex: 1; min-width: 0; }
+  :root[data-style="bento"] .bento-head-r #search-form input { height: 48px; border-radius: 12px; font-size: 16px; }
+  :root[data-style="bento"] .bento-head-r #search-form .i { top: 15px; left: 15px; font-size: 18px; }
+  :root[data-style="bento"] .bento-head-r #account-toggle { display: none; }
+  :root[data-style="bento"] .bento-head-r .bento-edit { width: 48px; height: 48px; padding: 0; justify-content: center; }
+  :root[data-style="bento"] .bento-head-r .bento-edit span { display: none; }
+  :root[data-style="bento"] .bento-head-r .iconbtn { width: 48px; height: 48px; border-radius: 12px; background: var(--s1); border: 1px solid var(--bd); }
+
+  /* One column of cards, in configuration order. */
+  :root[data-style="bento"] .wgrid { grid-template-columns: 1fr !important; gap: 12px; }
+  :root[data-style="bento"] #tiles > .card,
+  :root[data-style="bento"] #tiles > #side-extra { grid-column: auto !important; grid-row: auto !important; }
+
+  /* Applications: a card holding a four-column home-screen grid of icons. */
+  :root[data-style="bento"] #apps-section.glass {
+    margin-top: 12px; padding: 16px 8px; background: var(--s1); border: 1px solid var(--bd); border-radius: 18px;
+  }
+  :root[data-style="bento"] .apps-head { padding: 0 8px; }
+  :root[data-style="bento"] .links { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; }
+  :root[data-style="bento"] .app {
+    flex-direction: column; height: auto; min-height: 80px; gap: 6px; padding: 0; border: none; background: transparent; text-align: center;
+  }
+  :root[data-style="bento"] .app > div { flex: none; width: 100%; text-align: center; }
+  :root[data-style="bento"] .app .appic { width: 56px; height: 56px; border-radius: 15px; font-size: 26px; }
+  :root[data-style="bento"] .app-tt { font-size: 12px; font-weight: 550; }
+  :root[data-style="bento"] .app-sub { display: none; }
+  :root[data-style="bento"] .app .caret { display: none; }
+
+  /* Bottom navigation dock. */
+  :root[data-style="bento"] #dock {
+    background: var(--s1); border-top: 1px solid var(--bd); box-shadow: none;
+  }
+  :root[data-style="bento"] .dock-item { color: var(--mu); }
+  :root[data-style="bento"] .dock-item.active { color: var(--ac); background: transparent; }
+  :root[data-style="bento"] .dock-item.has-badge::after { background: var(--ac); }
+
+  /* Panels become bottom sheets. */
+  :root[data-style="bento"] .modal { align-items: flex-end; padding: 0; }
+  :root[data-style="bento"] .sheet {
+    width: 100%; max-height: 90vh; border-radius: 24px 24px 0 0; border: none;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  }
+  :root[data-style="bento"] .m-head { padding: 16px; }
+  :root[data-style="bento"] .m-body { padding: 16px; }
+
+  /* The edit bar sits above the dock, full width. */
+  :root[data-style="bento"] #editbar {
+    left: 16px; right: 16px; transform: none; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); border-radius: 14px;
+  }
+}
