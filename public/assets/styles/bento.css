@@ -752,17 +752,24 @@
 }
 
 /* ========================================================================== */
-/* 9. Shortcuts and folders — bigger, easier to read and tap                  */
-/* The links and folders read small; give them wider cards, a larger icon and  */
-/* title, and a clearer folder affordance.                                     */
-/* ========================================================================== */
-:root[data-style="bento"] .links { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-:root[data-style="bento"] .app { height: 72px; padding: 0 16px; gap: 14px; border-radius: 16px; }
-:root[data-style="bento"] .app .appic { width: 44px; height: 44px; border-radius: 12px; font-size: 22px; }
-:root[data-style="bento"] .app-tt { font-size: 15px; font-weight: 650; }
-:root[data-style="bento"] .app-sub { font-size: 13px; margin-top: 2px; }
-/* The trailing folder chevron, a clear tap affordance at the card's edge. */
-:root[data-style="bento"] .app[data-folder] .caret { font-size: 16px; opacity: .8; right: 16px; }
+/* 9. Shortcuts and folders — the desktop (wide) layout                        */
+/* The cards stay rectangular, read comfortably, and carry a compact square    */
+/* icon. Desktop only: these must not reach the phone grid in §7, which sets    */
+/* its own icon tiles — a rule here without a query would win by source order   */
+/* (same specificity, and it comes after §7) and flatten the phone grid back    */
+/* to a single column. */
+@media (min-width: 821px) {
+  :root[data-style="bento"] .links { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  :root[data-style="bento"] .app { height: 58px; padding: 0 14px; gap: 12px; border-radius: 14px; }
+  /* A small, square icon — enough to recognise the shortcut, not the bulky
+     tile it was. flex:none keeps it square: the row's `.app > div { flex:1 }`
+     otherwise stretches the icon div to fill the space the title should take. */
+  :root[data-style="bento"] .app .appic { flex: none; width: 34px; height: 34px; border-radius: 9px; font-size: 17px; }
+  :root[data-style="bento"] .app-tt { font-size: 14px; font-weight: 600; }
+  :root[data-style="bento"] .app-sub { font-size: 12.5px; margin-top: 1px; }
+  /* The trailing folder chevron, a clear tap affordance at the card's edge. */
+  :root[data-style="bento"] .app[data-folder] .caret { font-size: 16px; opacity: .8; right: 14px; }
+}
 
 /* Calendar on a phone: the month and the day column stack, and a cell shows a
    dot per event rather than a title it has no room for — the day column below
