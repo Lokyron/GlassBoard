@@ -181,14 +181,14 @@ function cardMarkup() {
   const lbl = `<div class="lbl">${esc(t('cal.title'))}</div>`;
   const mini = miniMonth(monthKey(now), today);
 
-  /* In bento the card is a wide landscape band: the date and the year on the
-     left, the month in the middle, and a real agenda on the right where glass
-     has room only for the single next line. Each zone is a named grid area the
-     stylesheet places; the whole card is still one click to the full month. */
+  /* In bento the card is a wide band of two columns: on the left the date, the
+     month at a glance and the year bar stacked — the month fills the column so
+     it sits under the date rather than leaving it stranded above a void — and on
+     the right a real agenda, where glass has room only for the single next line.
+     The whole card is still one click to the full month. */
   if (isBento()) {
     return `${lbl}
-      <div class="cal-card-lead">${date}${yearRow}</div>
-      <div class="cal-card-mini">${mini}</div>
+      <div class="cal-card-main">${date}<div class="cal-card-mini">${mini}</div>${yearRow}</div>
       <div class="cal-card-agenda">
         <div class="cal-card-agenda-head">${esc(t('cal.upcoming'))}</div>
         <div class="cal-card-agenda-list">${agendaMarkup()}</div>
