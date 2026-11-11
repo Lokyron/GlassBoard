@@ -633,8 +633,16 @@
 :root[data-style="bento"] .cal-cell.out { background: transparent; }
 :root[data-style="bento"] .cal-cell.sel { background: var(--acsoft); border-color: var(--ac); }
 :root[data-style="bento"] .cal-cell-num { font-size: 13px; }
+/* The today pill. It must centre any day number, one digit or two. The base
+   rule inherits text-align:right and the old override added side padding, so a
+   two-digit number was pushed to the right of the circle while a single digit
+   looked centred. Centre it with flex and no horizontal padding, on a fixed
+   circle wide enough for "31". */
 :root[data-style="bento"] .cal-cell.today .cal-cell-num {
-  min-width: 22px; height: 22px; line-height: 22px; background: var(--acbg); color: #fff; padding: 0 6px;
+  width: 22px; min-width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1; text-align: center;
+  background: var(--acbg); color: #fff;
 }
 
 /* Event chips in a cell: a readable pill, the colour as a tint, the title in
